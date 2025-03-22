@@ -10,10 +10,13 @@ using UnityEngine;
 
 public class AIPlayer : Player
 {
+    #region Vars
     private List<Card> Hand = new List<Card>();
     private Card card;
     private Player target;
+    #endregion
 
+    #region Accessor Functions
     public void TakeTurn()
     {
         // Placeholder for AI behavior
@@ -21,7 +24,9 @@ public class AIPlayer : Player
         //need to develop choosing card from hand and selecting target
         //PlayCards();
     }
+    #endregion
 
+    #region Helper Functions
     private void DrawCards()
     {
         // Logic for drawing cards
@@ -29,16 +34,16 @@ public class AIPlayer : Player
 
     private void PlayCards()
     {
-    foreach (Card i in Hand)
-    {
-            if (IsValidPlay(card))
+        foreach (Card i in Hand)
         {
-            //target = ChooseTarget(); // Basic target selection
-            PlayCard(card, target);
-            break; // Play one card per turn in this example
+                if (IsValidPlay(card))
+            {
+                //target = ChooseTarget(); // Basic target selection
+                PlayCard(card, target);
+                break; // Play one card per turn in this example
+            }
+            //GameTurnManager.Instance.EndTurn();
         }
-        //GameTurnManager.Instance.EndTurn();
-    }
     }
 
     private void PlayCard(Card card, Player target)
@@ -52,14 +57,15 @@ public class AIPlayer : Player
         // Define simple rules for valid card plays
         return card.Type != "Black"; // Example: Skip black cards for now
     }
-
-/*
+    
+    /*
     private Player ChooseTarget()
     {
     // Simple targeting logic (can be expanded later)
     List<Player> potentialTargets = GameManager.Instance.GetActivePlayers();
     return potentialTargets[Random.Range(0, potentialTargets.Count)];
     }
-*/
+    */
+    #endregion
 
 }
