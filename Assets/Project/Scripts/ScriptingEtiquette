@@ -1,0 +1,131 @@
+Scripting Etiquette
+As many different team members will be working with, on, or reviewing the various scripts that are created in order to bring functionality to the game, we need to adhere to a strict etiquette when it comes to writing our scripts. Any one member of the team should be able to review a script, understand its functionality, and know who to contact regarding any questions related to said script. Proper notation and uniformed formatting are necessary to accomplish this.
+Each script will start with the following Header:
+/*
+* AUTHOR:
+* REFERENCES:
+* NOTES:
+* TODO: [Planned improvements]
+ * FIXME: [Known bugs or issues]
+*/
+The Body of the script will be broken up into the following regions:
+#region Vars will contain the variables for the script. They should be arranged by Configuration Parameters, States, and Cached References. Headers should be utilized to maintain organization within the Unity Inspector. Tooltips should be included as necessary.
+#region StandardFunctions will contain functions related to Unity standard operations such as Awake, Start, Update, etc.
+#region HelperFunctions will contain functions that are only called from within the current script to manage and update relevant data.
+#region AccessorFunctions will contain functions that are called from other scripts to access information contained within the current script.
+#region MutatorFunctions will contain functions that are called from other scripts to alter data contained within the current script.
+An example script is as follows:
+/*
+Author: Ron Bresett
+Citations:
+Notes:
+ToDo:
+FixMe:
+*/
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class Title_Menu_Manager : MonoBehaviour
+{
+    #region Vars
+    //CONFIG PARAMETERS
+    [Header("Menu Panels & Buttons")]
+	[SerializeField] private GameObject mainMenu;
+	[SerializeField] private GameObject startMenu;
+	[SerializeField] private GameObject backButton;
+
+	[SerializeField] private float delayInSeconds;
+
+    //CACHED REFERENCES
+    int currentSceneIndex;
+    #endregion
+
+    #region StandardFunctions
+    private void Start()
+    {
+        //turn off start menu screens by default
+        startMenu.SetActive(false);
+        //turn off Back button by default
+        backButton.SetActive(false);
+
+        //store a refence to the current scene index
+        currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+        //if we are on our splash scene, wait for the delay and then load the title scene
+        if(currentSceneIndex ==0)
+        {
+            StartCoroutine(WaitAndLoad());
+        }
+    }
+    #endregion
+
+    #region HelperFunctions
+    //the following functions will be assigned to the buttons to provide functionality
+    //to the menu
+    public void MainMenu()
+    {
+        SceneManager.LoadScene(1);
+    }
+
+    public void ShowStartMenu()
+    {
+        //hide the main menu display
+        mainMenu.SetActive(false);
+        //dispaly the start menu and back button
+        startMenu.SetActive(true);
+        backButton.SetActive(true);
+    }
+
+    public void Continue()
+    {
+        // TODO: implement functionality for loading of stored game data
+        // get stored game data
+        // load data, player info, last saved level, etc.
+    }
+
+    public void Options()
+    {
+        SceneManager.LoadScene("Options_Scene");
+    }
+
+    public void Quit()
+    {
+        Application.Quit();
+    }
+
+    public void Back()
+    {
+        //ensure all start menu and back are hidden
+        startMenu.SetActive(false);
+        backButton.SetActive(false);
+        //display Main Menu
+        mainMenu.SetActive(true);
+    }
+
+    //selecting 1 Player or 2 Player
+    public void MultiPlayer ()
+    {
+        // TODO: Reference 3D version for storing and determining 1 or 2 player
+    }
+
+    public void LoadNextScene()
+    {
+        SceneManager.LoadScene(currentSceneIndex + 1);
+    }
+
+    IEnumerator WaitAndLoad()
+    {
+        yield return new WaitForSecondsRealtime(dealyInSeconds);
+        LoadNextScene();
+    }
+    #endregion
+
+    #region AccessorFunctions
+
+    #endregion
+
+    #region MutatorFunctions
+
+    #endregion
+}
