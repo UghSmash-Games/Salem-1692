@@ -12,7 +12,7 @@ using UnityEngine;
 public class GameSetup : MonoBehaviour
 {
     #region Vars
-    private List<TryalCard> TryalDeck;
+    private List<TryalCard> TryalDeck = new List<TryalCard>();
     private DeckManager DeckManager;
     #endregion
 
