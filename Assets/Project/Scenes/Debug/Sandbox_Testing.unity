@@ -505,8 +505,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   handPanel: {fileID: 1923198149}
   tryalCardContainer: {fileID: 1763392679}
-  cardUIPrefab: {fileID: 6556250816245663810, guid: ffb40d7a9fa044a46af57c635f7fb4a9, type: 3}
-  tryalCardPrefab: {fileID: 5697516052896366099, guid: a93f00db28d3b7b4a8030fbac498e412, type: 3}
+  cardUIPrefab: {fileID: 4467613191417449647, guid: 94438f8dd5fcf574f8d899e026a03739, type: 3}
+  tryalCardPrefab: {fileID: 5762611594778432868, guid: 6222cb2bfde9cc3429eeacd9ef5f57cd, type: 3}
 --- !u!1 &1219348381
 GameObject:
   m_ObjectHideFlags: 0
