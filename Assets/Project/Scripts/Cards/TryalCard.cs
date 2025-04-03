@@ -16,6 +16,10 @@ public class TryalCard : Card
     #region Vars
     public TryalCardType TryalCardType;
     public bool IsRevealed;
+    //public Sprite HiddenSprite;
+    //public Sprite RevealedSprite_Witch;
+    //public Sprite RevealedSprite_NotAWitch;
+    //public Sprite RevealedSprite_Constable;
 
     private TryalCardUI tryalCardUI;
     #endregion

@@ -17,7 +17,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &8633208708708672554
 RectTransform:
   m_ObjectHideFlags: 0
@@ -412,11 +412,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ea099f86b98be54ab5fd8f34f458c7b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CardImage: {fileID: 4259956347513329159}
-  HiddenSprite: {fileID: 0}
-  RevealedSprite_Witch: {fileID: 0}
-  RevealedSprite_NotAWitch: {fileID: 0}
-  RevealedSprite_Constable: {fileID: 0}
+  CardImage: {fileID: 1663240326589577749}
 --- !u!114 &8972660425923025927
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -439,8 +435,8 @@ MonoBehaviour:
   m_Transition: 1
   m_Colors:
     m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
-    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
-    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+    m_HighlightedColor: {r: 0.17735851, g: 0.17501603, b: 0.17501603, a: 0.7372549}
+    m_PressedColor: {r: 0.04905659, g: 0.048408672, b: 0.048408672, a: 1}
     m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
     m_DisabledColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.5019608}
     m_ColorMultiplier: 1

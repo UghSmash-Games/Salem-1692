@@ -15,6 +15,7 @@ MonoBehaviour:
   Name: Constable
   Type: Tryal
   Effect: Constable, Not a Witch
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 21300000, guid: a3061c95ea42e864c974740814e954b2, type: 3}
+  RevealedCardImage: {fileID: 21300000, guid: 1688ebbd56e47e34286e3110ff1dd6a1, type: 3}
   TryalCardType: 2
   IsRevealed: 0
