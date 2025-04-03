@@ -12,6 +12,8 @@ using UnityEngine;
 public class GameSetup : MonoBehaviour
 {
     #region Vars
+    [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
+    [SerializeField] private ScriptableObject[] TryalCards;
     private List<TryalCard> TryalDeck = new List<TryalCard>();
     private DeckManager DeckManager;
     #endregion
@@ -41,14 +43,14 @@ public class GameSetup : MonoBehaviour
         int numberOfTryalCardsNeeded = players.Count * 5;
 
         // Add cards to the deck, Start with the Constable
-        TryalCard constableCard = ScriptableObject.CreateInstance<TryalCard>();
+        TryalCard constableCard = (TryalCard)Instantiate(TryalCards[0]);
         constableCard.TryalCardType = TryalCardType.Constable;
         TryalDeck.Add(constableCard);
 
         //Create our Witch Cards
         for (int i = 0; i < numberOfWitches; i++) 
         {
-            TryalCard card = ScriptableObject.CreateInstance<TryalCard>();
+            TryalCard card = (TryalCard)Instantiate(TryalCards[1]);
             card.TryalCardType = TryalCardType.Witch;
             TryalDeck.Add(card);
         }
@@ -56,7 +58,7 @@ public class GameSetup : MonoBehaviour
         //Finish the deck with NotAWitch Cards
         for (int i = TryalDeck.Count; i < numberOfTryalCardsNeeded; i++) 
         {
-            TryalCard card = ScriptableObject.CreateInstance<TryalCard>();
+            TryalCard card = (TryalCard)Instantiate(TryalCards[2]);
             card.TryalCardType = TryalCardType.NotAWitch;
             TryalDeck.Add(card);
         } 

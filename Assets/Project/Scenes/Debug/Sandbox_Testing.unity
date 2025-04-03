@@ -707,6 +707,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 50927294217a9154bb47b92eb13a5002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  TryalCards:
+  - {fileID: 11400000, guid: ad865bcd6243810478a888739223829a, type: 2}
+  - {fileID: 11400000, guid: c8009f4c9b5a6f446bb1cbf6dfb88e4e, type: 2}
+  - {fileID: 11400000, guid: cb372f1797ef6ed4b8d595f454f96848, type: 2}
 --- !u!114 &1291622056
 MonoBehaviour:
   m_ObjectHideFlags: 0

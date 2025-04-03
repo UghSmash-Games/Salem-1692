@@ -13,13 +13,8 @@ public class TryalCardUI : MonoBehaviour
 {
 
     #region Vars
-    [SerializeField] private Image CardImage;
-    [SerializeField] private Sprite HiddenSprite;
-    [SerializeField] private Sprite RevealedSprite_Witch;
-    [SerializeField] private Sprite RevealedSprite_NotAWitch;
-    [SerializeField] private Sprite RevealedSprite_Constable;
-
     //public TextMeshPro cardText;
+    [SerializeField] private Image CardImage;
     private TryalCard assignedCard;
     #endregion
 
@@ -34,22 +29,25 @@ public class TryalCardUI : MonoBehaviour
     {
         if (card.IsRevealed)
         { 
+            CardImage.sprite = card.RevealedCardImage;
+            /*
             switch (card.TryalCardType)
             {
                 case TryalCardType.Witch:
-                    CardImage.sprite = RevealedSprite_Witch;
+                    CardImage.sprite = card.RevealedSprite_Witch;
                     break;
                 case TryalCardType.NotAWitch:
-                    CardImage.sprite = RevealedSprite_NotAWitch;
+                    CardImage.sprite = card.RevealedSprite_NotAWitch;
                     break;
                 case TryalCardType.Constable:
-                    CardImage.sprite = RevealedSprite_Constable;
+                    CardImage.sprite = card.RevealedSprite_Constable;
                     break;
             }
+            */
         }
         else
         {
-            CardImage.sprite = HiddenSprite;
+            CardImage.sprite = card.HiddenCardImage;
         }
     }
     #endregion

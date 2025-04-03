@@ -13,7 +13,8 @@ using UnityEngine.UI;
 public class GameCardUI : MonoBehaviour
 {
     #region Vars
-    public Image cardImage;
+    private Image hiddenCardImage;
+    private Image revealedCardImage;
     //public TextMeshPro cardNameText;
     
     private Card card;
