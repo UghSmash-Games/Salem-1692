@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Arson
   Type: Green
   Effect: Target player must discard their entire hand.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 6656842718856498535, guid: c972f4a6861487a49b93a8152a444c40, type: 3}

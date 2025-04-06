@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Stocks
   Type: Green
   Effect: Target player's next turn is skipped.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -6460681411058318010, guid: 0236c556a278abf469cc12015c87b984, type: 3}

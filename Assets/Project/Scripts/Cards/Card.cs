@@ -16,4 +16,5 @@ public class Card : ScriptableObject
     public string Effect;
     public Sprite HiddenCardImage;
     public Sprite RevealedCardImage;
+    public bool IsPlayed;
 }

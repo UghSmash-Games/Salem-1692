@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Alibi
   Type: Green
   Effect: Discard up to three accusations currently in front of another player.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -7220711262705116633, guid: 6a01ea4d9ae71d94f9f11a2511a2e518, type: 3}

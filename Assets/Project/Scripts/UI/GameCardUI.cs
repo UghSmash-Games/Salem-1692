@@ -13,7 +13,7 @@ using UnityEngine.UI;
 public class GameCardUI : MonoBehaviour
 {
     #region Vars
-    private Image hiddenCardImage;
+    [SerializeField] private Image CardImage;
     private Image revealedCardImage;
     //public TextMeshPro cardNameText;
     
@@ -24,9 +24,19 @@ public class GameCardUI : MonoBehaviour
     public void SetCard(Card newCard)
     {
         card = newCard;
-        //cardNameText.text = card.Name;
-        
-        // Set card visuals if needed
+        UpdatePlayingCardVisual(card); 
+    }
+
+    public void UpdatePlayingCardVisual(Card card)
+    {
+        if (card.IsPlayed)
+        { 
+            CardImage.sprite = card.RevealedCardImage;
+        }
+        else
+        {
+            CardImage.sprite = card.HiddenCardImage;
+        }
     }
     #endregion
 }

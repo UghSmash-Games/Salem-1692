@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Witness
   Type: Red
   Effect: Worth 7 Accusations
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 6880529960334143787, guid: e496ad99df96b5a4ba3e03124cec5228, type: 3}

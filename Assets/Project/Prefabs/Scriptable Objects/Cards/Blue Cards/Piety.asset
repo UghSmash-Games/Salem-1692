@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Piety
   Type: Blue
   Effect: Recipient must receive double the accusations to lose a Tryal Card.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -1566652955878112714, guid: bf7b8500192c2954f9a6e493e45ec0fd, type: 3}

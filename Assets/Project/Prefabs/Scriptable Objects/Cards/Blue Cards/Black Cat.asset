@@ -16,4 +16,5 @@ MonoBehaviour:
   Type: Blue
   Effect: Owner must reveal a Tryal card every time Conspiracy is drawn (Chosen by
     the one that drew Conspiracy)
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 1198703447431812753, guid: db4865affcf2319459728c23428d51b3, type: 3}

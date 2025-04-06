@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Accusations
   Type: Red
   Effect: Worth 1 Accusations
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 6500315174530356579, guid: 92945da9ffe5fef47bdc9c3bf2d21434, type: 3}

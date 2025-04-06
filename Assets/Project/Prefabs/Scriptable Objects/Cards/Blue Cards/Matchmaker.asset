@@ -16,4 +16,5 @@ MonoBehaviour:
   Type: Blue
   Effect: Bound to the other Matchmaker, if one is eliminated, the other is as well.
     (Only has an effect if both cards are in play.)
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -4270100993138209059, guid: e905cc5ce85e00b4c9d3e172f146a945, type: 3}

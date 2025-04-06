@@ -22,28 +22,14 @@ public class TryalCardUI : MonoBehaviour
     public void AssignCard(TryalCard card)
     {
         assignedCard = card;
-        UpdateCardVisual(assignedCard);
+        UpdateTryalCardVisual(assignedCard);
     }
 
-    public void UpdateCardVisual(TryalCard card)
+    public void UpdateTryalCardVisual(TryalCard card)
     {
         if (card.IsRevealed)
         { 
             CardImage.sprite = card.RevealedCardImage;
-            /*
-            switch (card.TryalCardType)
-            {
-                case TryalCardType.Witch:
-                    CardImage.sprite = card.RevealedSprite_Witch;
-                    break;
-                case TryalCardType.NotAWitch:
-                    CardImage.sprite = card.RevealedSprite_NotAWitch;
-                    break;
-                case TryalCardType.Constable:
-                    CardImage.sprite = card.RevealedSprite_Constable;
-                    break;
-            }
-            */
         }
         else
         {

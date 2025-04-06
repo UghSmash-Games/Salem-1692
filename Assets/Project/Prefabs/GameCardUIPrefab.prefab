@@ -127,8 +127,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d7d67c0d268563341908415b8f907371, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cardImage: {fileID: 0}
-  cardNameText: {fileID: 0}
+  CardImage: {fileID: 1755227200462377131}
 --- !u!114 &4429513171271300919
 MonoBehaviour:
   m_ObjectHideFlags: 0
