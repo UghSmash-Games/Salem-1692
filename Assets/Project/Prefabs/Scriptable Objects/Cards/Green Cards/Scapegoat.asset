@@ -16,4 +16,5 @@ MonoBehaviour:
   Type: Green
   Effect: Take all cards in front of any player and place them in front of another
     player.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 5184375383222143722, guid: d07705692b775b24092d3575127c085e, type: 3}

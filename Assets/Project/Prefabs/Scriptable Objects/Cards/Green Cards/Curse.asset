@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Curse
   Type: Green
   Effect: Discard one blue card currently in front of another player.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -5655927028324287619, guid: 0b6bca9e43f569a439621606ebd0d5a9, type: 3}

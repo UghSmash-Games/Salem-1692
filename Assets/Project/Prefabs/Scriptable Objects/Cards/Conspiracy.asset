@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Conspiracy
   Type: White
   Effect: Play Immediately. Reveal a Tryal Card from the owner of Black Cat.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -7068454037866811920, guid: 229804ee113ad424faf7ef3957e6e996, type: 3}

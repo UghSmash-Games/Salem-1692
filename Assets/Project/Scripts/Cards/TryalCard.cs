@@ -36,7 +36,7 @@ public class TryalCard : Card
     {
         IsRevealed = true;
         Debug.Log($"Tryal Card Revealed: {TryalCardType}");
-        tryalCardUI.UpdateCardVisual(this);
+        tryalCardUI.UpdateTryalCardVisual(this);
     }
     #endregion
 }

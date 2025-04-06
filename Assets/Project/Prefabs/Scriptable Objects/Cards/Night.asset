@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Night
   Type: White
   Effect: Play Immediately (Initiate Night Action)
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -4226392715816407447, guid: a7284fb7823daaa45963d626c0feca39, type: 3}

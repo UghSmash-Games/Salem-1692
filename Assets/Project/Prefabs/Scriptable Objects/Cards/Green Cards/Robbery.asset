@@ -15,4 +15,5 @@ MonoBehaviour:
   Name: Robbery
   Type: Green
   Effect: Take all cards from the target player and give them to any other player.
-  CardImage: {fileID: 0}
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 765174467315769199, guid: 98a10a10942ef0b40b1ae394eadca9d8, type: 3}
