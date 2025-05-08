@@ -18,6 +18,8 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using Salem.GameFlow;
+using Salem.Managers.GameState;
 
 namespace Salem.UI
 {

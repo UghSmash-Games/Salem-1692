@@ -16,6 +16,7 @@
 * FIXME: [Known bugs or issues]
 */
 using UnityEngine;
+using Salem.Managers.GameState;
 
 namespace Salem.UI
 {

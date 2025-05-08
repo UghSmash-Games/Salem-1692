@@ -19,6 +19,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Salem.Managers.Hands;
+using Salem.Cards;
 
 namespace Salem.UI
 {
@@ -52,6 +54,7 @@ namespace Salem.UI
         }
 
         //Called In Game Manager At Start
+        /*
         public void PopulateTryalCards(Player player)
         {
             // Clear existing cards
@@ -67,6 +70,7 @@ namespace Salem.UI
                 tryalCardUI.GetComponent<TryalCardUI>().AssignCard(card);
             }
         }
+        */
         #endregion
     }
 }

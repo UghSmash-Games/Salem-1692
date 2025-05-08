@@ -17,6 +17,8 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Salem.Cards;
+using Salem.Players;
 
 namespace Salem.UI
 {
