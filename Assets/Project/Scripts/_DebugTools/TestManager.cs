@@ -15,6 +15,8 @@
 */
 
 using UnityEngine;
+using Salem.Gameplay.Setup;
+using Salem.Players;
 
 namespace Salem.DebugTools
 {

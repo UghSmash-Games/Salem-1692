@@ -18,6 +18,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Salem.Cards;
 
 namespace Salem.UI
 {

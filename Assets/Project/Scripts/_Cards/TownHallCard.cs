@@ -15,6 +15,8 @@
 */
 
 using UnityEngine;
+using Salem.Players;
+using Salem.Gameplay.Setup;
 
 namespace Salem.Cards
 {

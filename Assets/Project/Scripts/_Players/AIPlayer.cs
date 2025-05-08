@@ -17,13 +17,16 @@
 */
 using System.Collections.Generic;
 using UnityEngine;
+using Salem.GameFlow;
+using Salem.Managers.Hands;
+
 namespace Salem.Players
 {
     public class AIPlayer : Player
     {
         #region Vars
-        private List<Card> Hand = new List<Card>();
-        private Card card;
+        //private List<Card> Hand = new List<Card>();
+        //private Card card;
         private Player target;
         #endregion
 
@@ -45,6 +48,7 @@ namespace Salem.Players
 
         private void PlayCards()
         {
+            /*
             foreach (Card i in Hand)
             {
                     if (IsValidPlay(card))
@@ -55,8 +59,10 @@ namespace Salem.Players
                 }
                 //GameTurnManager.Instance.EndTurn();
             }
+            */
         }
 
+        /*
         private void PlayCard(Card card, Player target)
         {
             Debug.Log("Function Not Implemented");
@@ -68,6 +74,7 @@ namespace Salem.Players
             // Define simple rules for valid card plays
             return card.Type != "Black"; // Example: Skip black cards for now
         }
+        */
         
         /*
         private Player ChooseTarget()

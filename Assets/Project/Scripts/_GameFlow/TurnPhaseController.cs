@@ -15,6 +15,7 @@
 * FIXME: [Known bugs or issues]
 */
 using UnityEngine;
+using Salem.UI;
 
 namespace Salem.GameFlow
 {
