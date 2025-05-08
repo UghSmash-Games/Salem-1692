@@ -23,6 +23,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
+using Salem.Managers.GameState;
+using Salem.Managers.Hands;
+using Salem.Cards;
+using Salem.UI;
 
 namespace Salem.Players
 {

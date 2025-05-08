@@ -21,6 +21,9 @@
 */
 using System.Collections.Generic;
 using UnityEngine;
+using Salem.Deck;
+using Salem.Cards;
+using Salem.UI;
 
 namespace Salem.Managers.Hands
 {
@@ -32,11 +35,13 @@ namespace Salem.Managers.Hands
         #endregion
 
         #region Accessor Functions
+        /*
         public void PlayCard(Card card, Player target)
         {
             Hand.Remove(card);
             target.ApplyCardEffect(card);
         }
+        */
 
         public void AddCard(Card card)
         {
