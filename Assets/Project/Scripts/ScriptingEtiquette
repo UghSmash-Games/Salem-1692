@@ -6,7 +6,7 @@ Each script will start with the following Header:
 * REFERENCES:
 * NOTES:
 * TODO: [Planned improvements]
- * FIXME: [Known bugs or issues]
+* FIXME: [Known bugs or issues]
 */
 The Body of the script will be broken up into the following regions:
 #region Vars will contain the variables for the script. They should be arranged by Configuration Parameters, States, and Cached References. Headers should be utilized to maintain organization within the Unity Inspector. Tooltips should be included as necessary.
