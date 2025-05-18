@@ -27,6 +27,7 @@ using UnityEngine;
 using Salem.Players;
 using Salem.Deck;
 using Salem.Cards;
+using Salem.GameFlow;
 
 namespace Salem.Gameplay.Setup
 {
@@ -37,12 +38,14 @@ namespace Salem.Gameplay.Setup
         [SerializeField] private ScriptableObject[] TryalCards;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
+        private GameManager GameManager;
         #endregion
 
         #region Standard Functions
         void Awake()
         {
             DeckManager = GetComponent<DeckManager>();
+            GameManager = GetComponent<GameManager>();
         }
         #endregion
 
@@ -52,6 +55,7 @@ namespace Salem.Gameplay.Setup
         {
             SetupTryalCards(players);
             SetupInitalHand(players, count);
+            GameManager.UpdateLocalPlayerUI();
         }
         #endregion
 
@@ -91,7 +95,7 @@ namespace Salem.Gameplay.Setup
 
             foreach (var player in players)
             {
-                player.TryalCards = DrawCards(5, TryalDeck);
+                player.TryalCards = DrawTryalCards(5, TryalDeck);
                 player.DetermineRole();
             }
         }
@@ -101,12 +105,12 @@ namespace Salem.Gameplay.Setup
         {
             foreach (var player in players)
             {
-                //DeckManager.DrawMultipleCards(player, count);
+                DeckManager.DrawMultipleCards(player.HandManager, count);
             }
         }
 
         //Have players draw their Tryal Cards
-        private List<TryalCard> DrawCards(int count, List<TryalCard> deck)
+        private List<TryalCard> DrawTryalCards(int count, List<TryalCard> deck)
         {
             List<TryalCard> cards = deck.Take(count).ToList();
             deck.RemoveRange(0, count);
@@ -115,7 +119,17 @@ namespace Salem.Gameplay.Setup
 
         private void ShuffleTryalDeck(List<TryalCard> deck)
         {
-            deck = deck.OrderBy(x => Random.value).ToList();
+            for (int i = 0; i < deck.Count; i++)
+            {
+                int randomIndex = Random.Range(i, deck.Count);
+                (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
+            }
+            
+            Debug.Log("Shuffled Tryal Deck:");
+            for (int i = 0; i < TryalDeck.Count; i++)
+            {
+                Debug.Log($"[{i}] {TryalDeck[i].TryalCardType}");
+            }
         }
         #endregion
     }

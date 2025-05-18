@@ -1483,6 +1483,9 @@ GameObject:
   - component: {fileID: 1363304587161663184}
   - component: {fileID: 6050260066558748577}
   - component: {fileID: 6352224870256515071}
+  - component: {fileID: 8528471431597799225}
+  - component: {fileID: 2902660293948693125}
+  - component: {fileID: 2492591441690056825}
   m_Layer: 0
   m_Name: PlayerCard
   m_TagString: Untagged
@@ -1592,6 +1595,54 @@ MonoBehaviour:
   m_ChildScaleWidth: 1
   m_ChildScaleHeight: 1
   m_ReverseArrangement: 0
+--- !u!114 &8528471431597799225
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4048098451824300303}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dfe78f19a958434688acf8445b5abdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  handPanel: {fileID: 0}
+  statusCardContainer: {fileID: 109593151563254173}
+  tryalCardContainer: {fileID: 8654204176497738408}
+  cardUIPrefab: {fileID: 4467613191417449647, guid: 94438f8dd5fcf574f8d899e026a03739, type: 3}
+  tryalCardPrefab: {fileID: 5762611594778432868, guid: 6222cb2bfde9cc3429eeacd9ef5f57cd, type: 3}
+--- !u!114 &2902660293948693125
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4048098451824300303}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a341b051d2a28545950b306a90a76ef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  statusCardPanel: {fileID: 109593151563254173}
+  tryalCardPanel: {fileID: 8654204176497738408}
+  playerNameText: {fileID: 0}
+  cardPrefab: {fileID: 4467613191417449647, guid: 94438f8dd5fcf574f8d899e026a03739, type: 3}
+  tryalCardPrefab: {fileID: 5762611594778432868, guid: 6222cb2bfde9cc3429eeacd9ef5f57cd, type: 3}
+--- !u!114 &2492591441690056825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4048098451824300303}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97d7c8c1b5c6c5d4fa62987004cce168, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  handPanel: {fileID: 0}
+  cardUIPrefab: {fileID: 6556250816245663810, guid: ffb40d7a9fa044a46af57c635f7fb4a9, type: 3}
 --- !u!1 &4168669228294548430
 GameObject:
   m_ObjectHideFlags: 0
@@ -2194,7 +2245,7 @@ MonoBehaviour:
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 1
-  m_PresetInfoIsWorld: 0
+  m_PresetInfoIsWorld: 1
 --- !u!114 &6027080321521680652
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -35,6 +35,10 @@ namespace Salem.Managers.Hands
         #endregion
 
         #region Accessor Functions
+        public List<Card> GetCards()
+        {
+            return new List<Card>(Hand);
+        }
         /*
         public void PlayCard(Card card, Player target)
         {

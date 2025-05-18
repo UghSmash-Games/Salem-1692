@@ -34,18 +34,20 @@ namespace Salem.Players
     {
         #region Vars
         public string PlayerName;
-        public List<TryalCard> TryalCards = new List<TryalCard>();
         public HandManager HandManager;
+        public List<TryalCard> TryalCards = new List<TryalCard>();
+        public List<Card> StatusCards { get; private set; } = new();
+        public PlayerStatusUI StatusUI;
         public bool IsWitch { get; private set; }  // Now determined dynamically
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         #endregion
 
-    #region Standard Functions
+        #region Standard Functions
         void Awake()
         {
             HandManager = GetComponent<HandManager>();
         }
-    #endregion
+        #endregion
 
         #region Accessor Functions
         public void DetermineRole()
@@ -66,6 +68,26 @@ namespace Salem.Players
             }
             CheckElimination();
         }
+        
+        public void AddStatusCard(Card card)
+        {
+            StatusCards.Add(card);
+            StatusUI?.UpdateStatusCards();  // Optional: UI refresh
+        }
+
+        public void RemoveStatusCard(Card card)
+        {
+            if (StatusCards.Remove(card))
+            {
+                StatusUI?.UpdateStatusCards();
+            }
+        }
+
+        public void ClearStatusCards()
+        {
+            StatusCards.Clear();
+            StatusUI?.UpdateStatusCards();
+        }
         #endregion
 
         #region Helper Functions
@@ -74,15 +96,15 @@ namespace Salem.Players
         {
             switch (card.Type)
             {
-            case "Green":
-                // Discard after use
-                break;
-            case "Blue":
-                // Remain in play
-                break;
-            case "Red":
-                // Stack effects until limit
-                break;
+                case "Green":
+                    // Discard after use
+                    break;
+                case "Blue":
+                    // Remain in play
+                    break;
+                case "Red":
+                    // Stack effects until limit
+                    break;
             }
         }
 
