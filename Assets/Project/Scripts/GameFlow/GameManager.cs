@@ -27,18 +27,24 @@ using Salem.GameFlow;
 using Salem.Players;
 using Salem.Deck;
 using Salem.UI;
+using Salem.Data;
 
 namespace Salem.GameFlow
 {
     public class GameManager : MonoBehaviour
     {
         #region Vars
+        //[SerializeField] private PlayerHandUI PlayerHandUI;
+        [SerializeField] private EndGameUI EndGameUI;
+        [SerializeField] private PlayerStatusUI PlayerStatusUI;
+        [SerializeField] private List<PlayerStatusUI> AI_PlayerStatusUIPanels;
+        [SerializeField] private PlayerInputUI PlayerInputUI;
+
+
         //Tracks GameManager
         public static object Instance { get; internal set; }
         public List<Player> players;
     
-        private PlayerHandUI PlayerHandUI;
-        private EndGameUI EndGameUI;
         private bool isGameActive;
         #endregion
 
@@ -46,19 +52,46 @@ namespace Salem.GameFlow
         void Awake()
         {
             HandleInstance();
-            SetReferences();
             PopulatePlayers();
             isGameActive = true;
         }
 
         void Start()
         {
-            UpdateUI();
-            //PlayerHandUI.PopulateTryalCards(players[0]);
+            LinkPlayersToUIPanels(players);
         }
         #endregion
-        
+
         #region Accessor Functions
+        public void LinkPlayersToUIPanels(List<Player> players)
+        {
+            for (int i = 0; i < AI_PlayerStatusUIPanels.Count; i++)
+            {
+                if (i < players.Count-1)
+                {
+                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(true);
+                    AI_PlayerStatusUIPanels[i].Initialize(players[i]);
+                    players[i].StatusUI = AI_PlayerStatusUIPanels[i];
+                    print("Assigned AI UI Pannel for player count " + i);
+                }
+                else
+                {
+                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(false);
+                }
+            }
+        }
+        //Updates CardsUI
+        public void UpdateLocalPlayerUI()
+        {
+            //Update local player's hand
+            var localPlayer = players[0];
+            var data = new PlayerHandData(localPlayer.HandManager.GetCards(), localPlayer.TryalCards);
+            //PlayerHandUI.UpdateFromData(data);
+            //PlayerInputUI.UpdateHand();
+            PlayerStatusUI.Initialize(localPlayer);
+            localPlayer.StatusUI = PlayerStatusUI;
+        }
+        
         public void CheckEndgameConditions()
         {
             int activeVillagers = players.Count(p => !p.IsWitch && !p.IsEliminated);
@@ -102,14 +135,7 @@ namespace Salem.GameFlow
                 return;
             }
         }
-
-        //Sets necessary references
-        private void SetReferences()
-        {
-            EndGameUI = (EndGameUI)FindFirstObjectByType(typeof(EndGameUI));
-            PlayerHandUI = (PlayerHandUI)FindFirstObjectByType(typeof(PlayerHandUI));
-        }
-    
+  
         //Finds ALL Players and stores them in an accessible list
         private void PopulatePlayers()
         {
@@ -134,19 +160,12 @@ namespace Salem.GameFlow
             }
         }
 
-        //Updates CardsUI
-        private void UpdateUI()
-        {
-        //Update local player's hand
-        PlayerHandUI.UpdateHand(players[0].HandManager.Hand);
-        }
-
         private void RestartGame()
         {
-        Debug.Log("Restarting Game...");
-        EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
-        EndGameUI.OnQuit -= QuitGame;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
+            Debug.Log("Restarting Game...");
+            EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
+            EndGameUI.OnQuit -= QuitGame;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
         }
 
         private void QuitGame()
