@@ -62,9 +62,6 @@ sysinfo.txt
 *.unitypackage.meta
 *.app
 
-# Unity2D generated meta files
-*.jpg.meta
-
 # Crashlytics generated file
 crashlytics-build.properties
 
