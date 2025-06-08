@@ -37,10 +37,15 @@ namespace Salem.UI
         {
             Debug.Log($"[{player.PlayerName}] has {player.TryalCards.Count} Tryal cards.");
 
+            Transform tryalCardTransform;
+            tryalCardTransform = tryalCardPanel.GetChild(0).transform;
+
             foreach (Transform child in tryalCardPanel) Destroy(child.gameObject);
             foreach (TryalCard tc in player.TryalCards)
             {
                 var obj = Instantiate(tryalCardPrefab, tryalCardPanel);
+                obj.GetComponent<Transform>().position = tryalCardTransform.position;
+                obj.GetComponent<Transform>().localScale = tryalCardTransform.localScale;
                 obj.GetComponent<TryalCardUI>().AssignCard(tc);
             }
         }
