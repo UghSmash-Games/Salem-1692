@@ -38,30 +38,30 @@ namespace Salem.Deck
         #endregion
 
         #region Accessor Functions
-        /*
-        public void DrawCard(Player player)
+        public void DrawCard(HandManager handManager)
         {
             if (Deck.Count == 0)
             {
                 ReshuffleDiscardPile();
             }
+
             Card drawnCard = Deck[0];
             Deck.RemoveAt(0);
-            player.HandManager.AddCard(drawnCard);
+            handManager.AddCard(drawnCard);
+
             if (drawnCard.Type == "Black")
             {
                 ResolveBlackCardEffect(drawnCard);
             }
         }
 
-        public void DrawMultipleCards(Player player, int count)
+        public void DrawMultipleCards(HandManager handManager, int count)
         {
             for (int i = 0; i < count; i++)
             {
-                DrawCard(player);
+                DrawCard(handManager);
             }
         }
-        */
         #endregion
 
         #region Helper Functions

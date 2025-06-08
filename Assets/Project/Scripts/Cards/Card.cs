@@ -9,7 +9,6 @@
 *   Access Requirements:
 *        • DeckManager
 *        • HandManager
-
 * TODO: 
 *    • Add attributes for special effects (IE Conspiracy / Night)
 *    • Add CardID and CanPlay method

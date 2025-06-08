@@ -169,7 +169,7 @@ namespace Salem.GameFlow
 
         private void StartSetupPhase()
         {
-            GameSetup.SetupNewGame(GameManager.players, 3);
+            GameSetup.SetupNewGame(GameManager.players, GameManager.players.Count);
             // Transition to Dawn phase
             ChangePhase(GamePhase.Dawn);
         }
