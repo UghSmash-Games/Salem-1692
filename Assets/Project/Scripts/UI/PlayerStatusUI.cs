@@ -35,7 +35,7 @@ namespace Salem.UI
 
         public void UpdateTryalCards()
         {
-            Debug.Log($"[{player.PlayerName}] has {player.TryalCards.Count} Tryal cards.");
+            //Debug.Log($"[{player.PlayerName}] has {player.TryalCards.Count} Tryal cards.");
 
             Transform tryalCardTransform;
             tryalCardTransform = tryalCardPanel.GetChild(0).transform;

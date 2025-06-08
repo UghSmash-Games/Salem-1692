@@ -24,14 +24,16 @@ using UnityEngine;
 using Salem.Deck;
 using Salem.Cards;
 using Salem.UI;
+using System;
 
 namespace Salem.Managers.Hands
 {
     public class HandManager : MonoBehaviour
     {
+        public event Action OnHandChanged;
         #region Vars
         public List<Card> Hand = new List<Card>();
-        
+
         #endregion
 
         #region Accessor Functions
@@ -50,6 +52,18 @@ namespace Salem.Managers.Hands
         public void AddCard(Card card)
         {
             Hand.Add(card);
+            OnHandChanged?.Invoke();
+        }
+
+        public void RemoveCard(Card card)
+        {
+            if (Hand.Remove(card)) { OnHandChanged?.Invoke(); }
+        }
+
+        public void ClearHand()
+        {
+            Hand.Clear();
+            OnHandChanged?.Invoke();
         }
         #endregion
     }

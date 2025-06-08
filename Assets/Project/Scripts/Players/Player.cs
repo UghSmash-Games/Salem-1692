@@ -27,6 +27,7 @@ using Salem.Managers.GameState;
 using Salem.Managers.Hands;
 using Salem.Cards;
 using Salem.UI;
+using TMPro;
 
 namespace Salem.Players
 {
@@ -38,6 +39,8 @@ namespace Salem.Players
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public PlayerStatusUI StatusUI;
+        public PlayerInputUI InputUI;
+        public bool IsLocalPlayer = false;
         public bool IsWitch { get; private set; }  // Now determined dynamically
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         #endregion

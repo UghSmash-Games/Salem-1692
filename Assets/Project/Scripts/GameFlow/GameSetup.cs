@@ -63,7 +63,7 @@ namespace Salem.Gameplay.Setup
         private void SetupTryalCards(List<Player> players)
         {
             int numberOfWitches = players.Count / 3; 
-            Debug.Log($"There are {numberOfWitches} Witches.");
+            //Debug.Log($"There are {numberOfWitches} Witches.");
 
             int numberOfTryalCardsNeeded = players.Count * 5;
 
@@ -88,7 +88,7 @@ namespace Salem.Gameplay.Setup
                 TryalDeck.Add(card);
             } 
 
-            Debug.Log($"There are {TryalDeck.Count} total Tryal Cards.");
+            //Debug.Log($"There are {TryalDeck.Count} total Tryal Cards.");
 
             // Shuffle and distribute
             ShuffleTryalDeck(TryalDeck);
@@ -125,11 +125,11 @@ namespace Salem.Gameplay.Setup
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
             
-            Debug.Log("Shuffled Tryal Deck:");
-            for (int i = 0; i < TryalDeck.Count; i++)
+            //Debug.Log("Shuffled Tryal Deck:");
+            /*for (int i = 0; i < TryalDeck.Count; i++)
             {
                 Debug.Log($"[{i}] {TryalDeck[i].TryalCardType}");
-            }
+            }*/
         }
         #endregion
     }

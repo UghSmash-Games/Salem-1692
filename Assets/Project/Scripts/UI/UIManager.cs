@@ -17,21 +17,36 @@
 */
 using UnityEngine;
 using Salem.Managers.GameState;
+using Salem.Players;
 
 namespace Salem.UI
 {
     public class UIManager : MonoBehaviour
     {
+        private PlayerInputUI localPlayerInputUI;
         // Start is called once before the first execution of Update after the MonoBehaviour is created
         void Start()
         {
-            
+
         }
 
         // Update is called once per frame
         void Update()
         {
-            
+
+        }
+
+        public void SetupLocalPlayerUI(Player localPlayer)
+        {
+            if (localPlayer == null)
+            {
+                Debug.LogWarning("UIManager: No local player assigned.");
+                return;
+            }
+
+            localPlayerInputUI = localPlayer.InputUI;
+            localPlayerInputUI.Initialize(localPlayer);
+
         }
     }
 }
