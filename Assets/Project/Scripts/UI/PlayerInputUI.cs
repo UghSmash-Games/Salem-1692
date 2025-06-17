@@ -13,6 +13,7 @@ namespace Salem.UI
 
         public void Initialize(Player p)
         {
+            //Debug.Log("Initializing Player");
             player = p;
             player.HandManager.OnHandChanged += UpdateHand;
             UpdateHand();
@@ -20,7 +21,7 @@ namespace Salem.UI
 
         public void UpdateHand()
         {
-            Debug.Log("Updating Player Hand UI");
+            //Debug.Log("Updating Player Hand UI");
             foreach (Transform child in handPanel) Destroy(child.gameObject);
             foreach (Card card in player.HandManager.Hand)
             {
@@ -29,7 +30,7 @@ namespace Salem.UI
             }
         }
 
-        private void Oestroy()
+        private void Destroy()
         {
             if (player?.HandManager != null)
             {

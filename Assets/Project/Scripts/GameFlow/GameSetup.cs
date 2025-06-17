@@ -51,16 +51,15 @@ namespace Salem.Gameplay.Setup
 
         #region Accessor Functions
         //Called In GamePhaseManager durning Setup
-        public void SetupNewGame(List<Player> players, int count)
+        public void SetupNewGame(IReadOnlyList<Player> players, int count)
         {
             SetupTryalCards(players);
             SetupInitalHand(players, count);
-            GameManager.UpdateLocalPlayerUI();
         }
         #endregion
 
         #region Helper Functions
-        private void SetupTryalCards(List<Player> players)
+        private void SetupTryalCards(IReadOnlyList<Player> players)
         {
             int numberOfWitches = players.Count / 3; 
             //Debug.Log($"There are {numberOfWitches} Witches.");
@@ -101,7 +100,7 @@ namespace Salem.Gameplay.Setup
         }
 
         //Give the players their starting hand
-        private void SetupInitalHand(List<Player> players, int count)
+        private void SetupInitalHand(IReadOnlyList<Player> players, int count)
         {
             foreach (var player in players)
             {

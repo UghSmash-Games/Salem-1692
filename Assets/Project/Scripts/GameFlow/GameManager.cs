@@ -36,15 +36,9 @@ namespace Salem.GameFlow
         #region Vars
         //[SerializeField] private PlayerHandUI PlayerHandUI;
         [SerializeField] private EndGameUI EndGameUI;
-        [SerializeField] private PlayerStatusUI PlayerStatusUI;
-        [SerializeField] private List<PlayerStatusUI> AI_PlayerStatusUIPanels;
-        [SerializeField] private PlayerInputUI PlayerInputUI;
-
 
         //Tracks GameManager
         public static object Instance { get; internal set; }
-        public static Player LocalPlayerReference { get; private set; }
-        public List<Player> players;
 
         private UIManager UIManager;
         private bool isGameActive;
@@ -56,51 +50,21 @@ namespace Salem.GameFlow
             UIManager = GetComponent<UIManager>();
             HandleInstance();
             PopulatePlayers();
-            AssignLocalPlayer();
             isGameActive = true;
         }
 
         void Start()
         {
-            LinkPlayersToUIPanels(players);
+            UIManager.BindAllPlayerStatusUI();
+            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
         }
         #endregion
 
         #region Accessor Functions
-        public void LinkPlayersToUIPanels(List<Player> players)
-        {
-            for (int i = 0; i < AI_PlayerStatusUIPanels.Count; i++)
-            {
-                if (i < players.Count && !players[i].IsLocalPlayer)
-                {
-                        AI_PlayerStatusUIPanels[i].gameObject.SetActive(true);
-                        AI_PlayerStatusUIPanels[i].Initialize(players[i]);
-                        players[i].StatusUI = AI_PlayerStatusUIPanels[i];
-                        //print("Assigned AI UI Pannel for player count " + i);    
-                }
-                else
-                {
-                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(false);
-                }
-            }
-        }
-        //Updates CardsUI
-        public void UpdateLocalPlayerUI()
-        {
-            //Update local player's hand
-            //var data = new PlayerHandData(LocalPlayerReference.HandManager.GetCards(), localPlayer.TryalCards);
-            //PlayerHandUI.UpdateFromData(data);
-            //PlayerInputUI.UpdateHand();
-            LocalPlayerReference.StatusUI = PlayerStatusUI;
-            LocalPlayerReference.InputUI = PlayerInputUI;
-            PlayerStatusUI.Initialize(LocalPlayerReference);
-            UIManager.SetupLocalPlayerUI(LocalPlayerReference);
-        }
-        
         public void CheckEndgameConditions()
         {
-            int activeVillagers = players.Count(p => !p.IsWitch && !p.IsEliminated);
-            int activeWitches = players.Count(p => p.IsWitch && !p.IsEliminated);
+            int activeVillagers = PlayerService.GetAliveVillagers().Count;
+            int activeWitches = PlayerService.GetAliveWitches().Count;
 
             if (activeWitches == 0)
             {
@@ -141,21 +105,11 @@ namespace Salem.GameFlow
             }
         }
 
-        private void AssignLocalPlayer()
-        {
-            Player local = players.FirstOrDefault(p => !(p is AIPlayer));
-            if (local != null)
-            {
-                local.IsLocalPlayer = true;
-                LocalPlayerReference = local;
-                //Debug.Log("Local player is assigned as: " + LocalPlayerReference.name);
-            }
-        }
         //Finds ALL Players and stores them in an accessible list
         private void PopulatePlayers()
         {
             // Ensure the list is empty before populating
-            players.Clear();
+            PlayerService.Clear();
 
             GameObject[] playerObjects = GameObject.FindGameObjectsWithTag("Player");
             GameObject[] aiObjects = GameObject.FindGameObjectsWithTag("AI");
@@ -165,7 +119,7 @@ namespace Salem.GameFlow
                 Player playerComponent = obj.GetComponent<Player>();
                 if (playerComponent != null)
                 {
-                    players.Add(playerComponent);
+                    PlayerService.Register(playerComponent);
                     //Debug.Log($"Added player: {playerComponent.PlayerName}");
                 }
                 else

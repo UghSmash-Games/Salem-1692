@@ -19,18 +19,29 @@ using System.Collections.Generic;
 using UnityEngine;
 using Salem.GameFlow;
 using Salem.Managers.Hands;
+using Salem.Cards;
+using System.Collections;
+using System;
 
 namespace Salem.Players
 {
     public class AIPlayer : Player
     {
         #region Vars
-        //private List<Card> Hand = new List<Card>();
-        //private Card card;
+        [SerializeField] private float aiThinkDelay = 1.5f;
         private Player target;
         #endregion
 
         #region Accessor Functions
+        public void StartTurn(Action onComplete)
+        {
+            StartCoroutine(ExecuteAITurn(onComplete));
+        }
+        public override void ApplyCardEffect(Card card)
+        {
+            // Use generic version or expand later with smarter AI logic
+            base.ApplyCardEffect(card);
+        }
         public void TakeTurn()
         {
             // Placeholder for AI behavior
@@ -41,6 +52,31 @@ namespace Salem.Players
         #endregion
 
         #region Helper Functions
+        private IEnumerator ExecuteAITurn(Action onComplete)
+        {
+            //Sort Delay before Acting
+            yield return new WaitForSeconds(aiThinkDelay);
+            //TODO: Add Real Decision Logic HERE
+            Debug.Log($"[AI] {PlayerName} is taking action...");
+
+            // Example stub: play first card in hand if exists
+            if (HandManager.Hand.Count > 0)
+            {
+                Card chosenCard = HandManager.Hand[0];
+                Debug.Log($"[AI] Playing card: {chosenCard.Name}");
+
+                //Build out ApplyCardEffect logic later
+                ApplyCardEffect(chosenCard);
+
+                // Remove the card from hand
+                HandManager.RemoveCard(chosenCard);
+            }
+
+            // Optional delay after action
+            yield return new WaitForSeconds(1f);
+
+            onComplete?.Invoke();
+        }
         private void DrawCards()
         {
             // Logic for drawing cards

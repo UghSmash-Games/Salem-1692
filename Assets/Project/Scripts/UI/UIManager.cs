@@ -18,22 +18,48 @@
 using UnityEngine;
 using Salem.Managers.GameState;
 using Salem.Players;
+using Salem.GameFlow;
+using Salem.Data;
+using System.Collections.Generic;
 
 namespace Salem.UI
 {
     public class UIManager : MonoBehaviour
     {
-        private PlayerInputUI localPlayerInputUI;
-        // Start is called once before the first execution of Update after the MonoBehaviour is created
-        void Start()
-        {
+        [SerializeField] private List<PlayerStatusUI> statusPanels;
+        [SerializeField] private PlayerInputUI localPlayerInputUI;
+        private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new();
 
+        public void BindAllPlayerStatusUI()
+        {
+            var players = PlayerService.All;
+
+            for (int i = 0; i < statusPanels.Count; i++)
+            {
+                if (i < players.Count)
+                {
+                    statusPanels[i].gameObject.SetActive(true);
+                    BindStatusUI(players[i], statusPanels[i]);
+                }
+                else
+                {
+                    statusPanels[i].gameObject.SetActive(false);
+                }
+            }
         }
-
-        // Update is called once per frame
-        void Update()
+        private void BindStatusUI(Player player, PlayerStatusUI statusUI)
         {
+            // Link the UI to this player's updates
+            player.OnStatusCardsChanged += () =>
+            {
+                statusUI.UpdateStatusCards(player.StatusCards);
+            };
+            statusUI.Initialize(player);
 
+            // Optional: initialize immediately
+            statusUI.UpdateStatusCards(player.StatusCards);
+
+            playerToStatusUI[player] = statusUI;
         }
 
         public void SetupLocalPlayerUI(Player localPlayer)
@@ -44,9 +70,27 @@ namespace Salem.UI
                 return;
             }
 
-            localPlayerInputUI = localPlayer.InputUI;
             localPlayerInputUI.Initialize(localPlayer);
 
+        }
+
+        public void SetPlayerTurnActive()
+        {
+            foreach (var ui in playerToStatusUI.Values)
+            {
+                ui.SetTurnActive(false);
+            }
+
+            var currentPlayer = PlayerService.All[GameTurnManager.CurrentPlayerIndex];
+
+            if (playerToStatusUI.TryGetValue(currentPlayer, out var statusUI))
+            {
+                statusUI.SetTurnActive(true);
+            }
+            else
+            {
+                Debug.LogWarning("UIManager: No StatusUI found for current player.");
+            }
         }
     }
 }
