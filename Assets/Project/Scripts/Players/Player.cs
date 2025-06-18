@@ -26,20 +26,22 @@ using UnityEngine;
 using Salem.Managers.GameState;
 using Salem.Managers.Hands;
 using Salem.Cards;
-using Salem.UI;
+using TMPro;
 
 namespace Salem.Players
 {
     public class Player : MonoBehaviour
     {
         #region Vars
-        public string PlayerName;
+        public event Action OnStatusCardsChanged;
+        public String PlayerNameText;
         public HandManager HandManager;
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
-        public PlayerStatusUI StatusUI;
+        public bool IsLocalPlayer = false;
         public bool IsWitch { get; private set; }  // Now determined dynamically
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
+
         #endregion
 
         #region Standard Functions
@@ -64,35 +66,30 @@ namespace Salem.Players
             if (!card.IsRevealed)
             {
                 card.Reveal();
-                Debug.Log($"{PlayerName} revealed a {card.Type} card!");
+                Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
             }
             CheckElimination();
         }
-        
+
         public void AddStatusCard(Card card)
         {
             StatusCards.Add(card);
-            StatusUI?.UpdateStatusCards();  // Optional: UI refresh
+            OnStatusCardsChanged?.Invoke();
         }
 
         public void RemoveStatusCard(Card card)
         {
-            if (StatusCards.Remove(card))
-            {
-                StatusUI?.UpdateStatusCards();
-            }
+            StatusCards.Remove(card);
+            OnStatusCardsChanged?.Invoke();
         }
 
         public void ClearStatusCards()
         {
             StatusCards.Clear();
-            StatusUI?.UpdateStatusCards();
+            OnStatusCardsChanged?.Invoke();
         }
-        #endregion
-
-        #region Helper Functions
-        //Called in Hand Manager.
-        internal void ApplyCardEffect(Card card)
+        
+        public virtual void ApplyCardEffect(Card card)
         {
             switch (card.Type)
             {
@@ -107,12 +104,15 @@ namespace Salem.Players
                     break;
             }
         }
+        #endregion
+
+        #region Helper Functions
 
         private void CheckElimination()
         {
-            if(IsEliminated)
+            if (IsEliminated)
             {
-                Debug.Log($"{PlayerName} is ELIMINATED!");
+                Debug.Log($"{PlayerNameText} is ELIMINATED!");
                 //UI Update needs to happen here.
             }
         }

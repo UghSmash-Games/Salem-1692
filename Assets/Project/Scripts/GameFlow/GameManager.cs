@@ -36,21 +36,18 @@ namespace Salem.GameFlow
         #region Vars
         //[SerializeField] private PlayerHandUI PlayerHandUI;
         [SerializeField] private EndGameUI EndGameUI;
-        [SerializeField] private PlayerStatusUI PlayerStatusUI;
-        [SerializeField] private List<PlayerStatusUI> AI_PlayerStatusUIPanels;
-        [SerializeField] private PlayerInputUI PlayerInputUI;
-
 
         //Tracks GameManager
         public static object Instance { get; internal set; }
-        public List<Player> players;
-    
+
+        private UIManager UIManager;
         private bool isGameActive;
         #endregion
 
         #region Standard Functions
         void Awake()
         {
+            UIManager = GetComponent<UIManager>();
             HandleInstance();
             PopulatePlayers();
             isGameActive = true;
@@ -58,44 +55,23 @@ namespace Salem.GameFlow
 
         void Start()
         {
-            LinkPlayersToUIPanels(players);
+            //Debug.Log($"[GameManager] Total players registered: {PlayerService.All.Count}");
+            /*foreach (var p in PlayerService.All)
+            {
+                Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
+            }
+            */
+
+            UIManager.BindAllPlayerStatusUI();
+            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
         }
         #endregion
 
         #region Accessor Functions
-        public void LinkPlayersToUIPanels(List<Player> players)
-        {
-            for (int i = 0; i < AI_PlayerStatusUIPanels.Count; i++)
-            {
-                if (i < players.Count-1)
-                {
-                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(true);
-                    AI_PlayerStatusUIPanels[i].Initialize(players[i]);
-                    players[i].StatusUI = AI_PlayerStatusUIPanels[i];
-                    print("Assigned AI UI Pannel for player count " + i);
-                }
-                else
-                {
-                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(false);
-                }
-            }
-        }
-        //Updates CardsUI
-        public void UpdateLocalPlayerUI()
-        {
-            //Update local player's hand
-            var localPlayer = players[0];
-            var data = new PlayerHandData(localPlayer.HandManager.GetCards(), localPlayer.TryalCards);
-            //PlayerHandUI.UpdateFromData(data);
-            //PlayerInputUI.UpdateHand();
-            PlayerStatusUI.Initialize(localPlayer);
-            localPlayer.StatusUI = PlayerStatusUI;
-        }
-        
         public void CheckEndgameConditions()
         {
-            int activeVillagers = players.Count(p => !p.IsWitch && !p.IsEliminated);
-            int activeWitches = players.Count(p => p.IsWitch && !p.IsEliminated);
+            int activeVillagers = PlayerService.GetAliveVillagers().Count;
+            int activeWitches = PlayerService.GetAliveWitches().Count;
 
             if (activeWitches == 0)
             {
@@ -135,12 +111,12 @@ namespace Salem.GameFlow
                 return;
             }
         }
-  
+
         //Finds ALL Players and stores them in an accessible list
         private void PopulatePlayers()
         {
             // Ensure the list is empty before populating
-            players.Clear(); 
+            PlayerService.Clear();
 
             GameObject[] playerObjects = GameObject.FindGameObjectsWithTag("Player");
             GameObject[] aiObjects = GameObject.FindGameObjectsWithTag("AI");
@@ -150,8 +126,7 @@ namespace Salem.GameFlow
                 Player playerComponent = obj.GetComponent<Player>();
                 if (playerComponent != null)
                 {
-                    players.Add(playerComponent);
-                    Debug.Log($"Added player: {playerComponent.PlayerName}");
+                    PlayerService.Register(playerComponent);
                 }
                 else
                 {
