@@ -24,6 +24,7 @@ using UnityEngine;
 using Salem.Deck;
 using Salem.Cards;
 using Salem.UI;
+using System.Linq;
 
 namespace Salem.Managers.Hands
 {
@@ -50,6 +51,11 @@ namespace Salem.Managers.Hands
         public void AddCard(Card card)
         {
             Hand.Add(card);
+        }
+        //overload to append a list to the end
+        public void AddCard(List<Card> cards)
+        {
+            Hand.AddRange(cards);
         }
         #endregion
     }
