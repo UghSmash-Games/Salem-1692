@@ -17,6 +17,11 @@
 *   • Split state/data if needed
 *   • Expose public events for changes
 * FIXME: [Known bugs or issues]
+*   • recognizing what townhall ability the player uses.
+*      • currently has the variables name and PlayerName (what the string variable was when first developing the implementations)
+*      • could switch to just using the PlayerNameText, but what about Martha Corey's ability to copy anothers?
+*      • (also name is just the name of the object it is on, so while it works as a placeholder, this is not useable in function)
+*   
 */
 using System;
 using System.Collections.Generic;
@@ -63,15 +68,15 @@ namespace Salem.Players
         {
             HandManager = GetComponent<HandManager>();
             //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if(PlayerName == "George Burroughs")
+            if(PlayerNameText == "George Burroughs")
             {
                 baseAccusationLimit++;
             }
-            else if(name == "William Phipps" || name == "Tituba")
+            else if(PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
             {
                 townHallAbilityCharges = 1;
             }
-            else if(name == "Samuel Parris")
+            else if(PlayerNameText == "Samuel Parris")
             {
                 townHallAbilityCharges= 2;
             }
@@ -140,11 +145,11 @@ namespace Salem.Players
                     switch (card.name)
                     {
                         case "Arson":
-                            if(name == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            if(PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
                             HandManager.GetCards().Clear();
                             break;
                         case "Robbery":
-                            if (name == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
                             card.target.HandManager.AddCard(HandManager.GetCards());
                             HandManager.GetCards().Clear();
                             break;
@@ -191,7 +196,7 @@ namespace Salem.Players
                             break;
                         case "Evidence":
                             currentAccusationCount += 3;
-                            if(name == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
+                            if(PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
                             CheckAccusations();
                             break;
                         case "Witness":
