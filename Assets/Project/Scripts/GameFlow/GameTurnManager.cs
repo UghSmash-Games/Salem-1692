@@ -65,15 +65,15 @@ namespace Salem.GameFlow
         #region Accessor Functions
         public void Initialize()
         {
-            Debug.Log("Initializing GameTurnManager.");
+            //Debug.Log("Initializing GameTurnManager.");
             StartTurn(0);
         }
         public void StartTurn(int playerIndex)
         {
             turnTimer = turnDuration;
             CurrentPlayerIndex = playerIndex;
-            Player currentPlayer = PlayerService.GetAlivePlayers()[CurrentPlayerIndex];
-            Debug.Log($"Starting turn for {PlayerService.GetAlivePlayers()[playerIndex].PlayerName}");
+            Player currentPlayer = PlayerService.All[CurrentPlayerIndex];
+            Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
 
             //Add In Later For Advance UI
             UIManager.SetPlayerTurnActive();
@@ -87,7 +87,7 @@ namespace Salem.GameFlow
         public void EndTurn()
         {
             isTurnActive = false;
-            Debug.Log($"Ending turn for {PlayerService.GetAlivePlayers()[CurrentPlayerIndex].PlayerName}");
+            Debug.Log($"Ending turn for {PlayerService.GetAlivePlayers()[CurrentPlayerIndex].PlayerNameText}");
 
             //Add In later for Advance UI
             //Players[currentPlayerIndex].EndTurnEffects();

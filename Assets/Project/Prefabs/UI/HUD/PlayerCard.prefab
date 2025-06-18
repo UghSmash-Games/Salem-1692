@@ -1717,6 +1717,7 @@ GameObject:
   - component: {fileID: 6352224870256515071}
   - component: {fileID: 2902660293948693125}
   - component: {fileID: 2492591441690056825}
+  - component: {fileID: 7532856181055114502}
   m_Layer: 0
   m_Name: PlayerCard
   m_TagString: Untagged
@@ -1841,9 +1842,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   statusCardPanel: {fileID: 109593151563254173}
-  tryalCardPanel: {fileID: 8654204176497738408}
-  playerNameText: {fileID: 9039153469180056213}
   cardPrefab: {fileID: 4467613191417449647, guid: 94438f8dd5fcf574f8d899e026a03739, type: 3}
+  tryalCardPanel: {fileID: 8654204176497738408}
   tryalCardPrefab: {fileID: 5762611594778432868, guid: 6222cb2bfde9cc3429eeacd9ef5f57cd, type: 3}
   turnIndicator: {fileID: 2806739937695774722}
   originalColor: {r: 1, g: 1, b: 1, a: 0}
@@ -1862,6 +1862,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   handPanel: {fileID: 0}
   cardUIPrefab: {fileID: 6556250816245663810, guid: ffb40d7a9fa044a46af57c635f7fb4a9, type: 3}
+--- !u!223 &7532856181055114502
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4048098451824300303}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 2
+  m_Camera: {fileID: 0}
+  m_PlaneDistance: 100
+  m_PixelPerfect: 0
+  m_ReceivesEvents: 1
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
+  m_AdditionalShaderChannelsFlag: 25
+  m_UpdateRectTransformForStandalone: 0
+  m_SortingLayerID: 0
+  m_SortingOrder: 0
+  m_TargetDisplay: 0
 --- !u!1 &4168669228294548430
 GameObject:
   m_ObjectHideFlags: 0

@@ -60,6 +60,7 @@ namespace Salem.UI
             statusUI.UpdateStatusCards(player.StatusCards);
 
             playerToStatusUI[player] = statusUI;
+            SetPlayerName(player, statusUI);
         }
 
         public void SetupLocalPlayerUI(Player localPlayer)
@@ -91,6 +92,11 @@ namespace Salem.UI
             {
                 Debug.LogWarning("UIManager: No StatusUI found for current player.");
             }
+        }
+
+        private void SetPlayerName(Player player, PlayerStatusUI statusUI)
+        {
+            statusUI.PlayerName.text = player.PlayerNameText;
         }
     }
 }

@@ -57,7 +57,7 @@ namespace Salem.Players
             //Sort Delay before Acting
             yield return new WaitForSeconds(aiThinkDelay);
             //TODO: Add Real Decision Logic HERE
-            Debug.Log($"[AI] {PlayerName} is taking action...");
+            Debug.Log($"[AI] {PlayerNameText} is taking action...");
 
             // Example stub: play first card in hand if exists
             if (HandManager.Hand.Count > 0)

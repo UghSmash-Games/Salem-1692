@@ -35,7 +35,6 @@ namespace Salem.Players
         #region Vars
         public event Action OnStatusCardsChanged;
         public String PlayerNameText;
-        public TextMeshPro PlayerName;
         public HandManager HandManager;
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
@@ -49,7 +48,6 @@ namespace Salem.Players
         void Awake()
         {
             HandManager = GetComponent<HandManager>();
-            //PlayerName.text = PlayerNameText;
         }
         #endregion
 
@@ -68,7 +66,7 @@ namespace Salem.Players
             if (!card.IsRevealed)
             {
                 card.Reveal();
-                Debug.Log($"{PlayerName} revealed a {card.Type} card!");
+                Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
             }
             CheckElimination();
         }
@@ -114,7 +112,7 @@ namespace Salem.Players
         {
             if (IsEliminated)
             {
-                Debug.Log($"{PlayerName} is ELIMINATED!");
+                Debug.Log($"{PlayerNameText} is ELIMINATED!");
                 //UI Update needs to happen here.
             }
         }

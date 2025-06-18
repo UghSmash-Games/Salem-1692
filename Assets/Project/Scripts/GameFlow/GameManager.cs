@@ -55,6 +55,13 @@ namespace Salem.GameFlow
 
         void Start()
         {
+            //Debug.Log($"[GameManager] Total players registered: {PlayerService.All.Count}");
+            /*foreach (var p in PlayerService.All)
+            {
+                Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
+            }
+            */
+
             UIManager.BindAllPlayerStatusUI();
             UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
         }
@@ -120,7 +127,6 @@ namespace Salem.GameFlow
                 if (playerComponent != null)
                 {
                     PlayerService.Register(playerComponent);
-                    //Debug.Log($"Added player: {playerComponent.PlayerName}");
                 }
                 else
                 {

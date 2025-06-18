@@ -38,14 +38,12 @@ namespace Salem.Gameplay.Setup
         [SerializeField] private ScriptableObject[] TryalCards;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
-        private GameManager GameManager;
         #endregion
 
         #region Standard Functions
         void Awake()
         {
             DeckManager = GetComponent<DeckManager>();
-            GameManager = GetComponent<GameManager>();
         }
         #endregion
 

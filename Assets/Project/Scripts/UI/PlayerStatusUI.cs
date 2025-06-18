@@ -19,10 +19,21 @@ namespace Salem.UI
         [SerializeField] private GameObject turnIndicator;
         [SerializeField] private Color originalColor;
         [SerializeField] private Color flashColor;
+        public TextMeshProUGUI PlayerName;
 
         private Player player;
         private Player currentPlayer;
         private bool isTurnIndicatorActive;
+
+        private void Awake()
+        {
+            PlayerName = GetComponentInChildren<TextMeshProUGUI>();
+        }
+
+        private void Start()
+        {
+            
+        }
 
         private void Update()
         {
@@ -81,7 +92,7 @@ namespace Salem.UI
         public void SetTurnActive(bool isActive)
         {
             turnIndicator.SetActive(isActive);
-            Debug.Log($"[PlayerStatusUI] Turn indicator {(isActive ? "ENABLED" : "DISABLED")} for player panel: {gameObject.name}");
+            //Debug.Log($"[PlayerStatusUI] Turn indicator {(isActive ? "ENABLED" : "DISABLED")} for player panel: {gameObject.name}");
         }
 
 
@@ -98,19 +109,19 @@ namespace Salem.UI
 
         private void FlashTurnStart()
         {
-            currentPlayer.PlayerName.color = flashColor; // or animate via Lerp
+            PlayerName.color = flashColor; // or animate via Lerp
             StartCoroutine(ResetNameColor());
         }
 
         private IEnumerator ResetNameColor()
         {
             yield return new WaitForSeconds(1.5f);
-            currentPlayer.PlayerName.color = originalColor;
+            PlayerName.color = originalColor;
         }
 
         private void ScaleTurnIndicator()
         {
-            float scale = 1f + Mathf.PingPong(Time.time * 0.5f, 0.1f);
+            float scale = 1f + Mathf.PingPong(Time.time * 0.5f, 10f);
             turnIndicator.transform.localScale = Vector3.one * scale;
         }
 
