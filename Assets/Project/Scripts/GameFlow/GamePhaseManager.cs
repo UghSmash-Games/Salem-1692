@@ -18,6 +18,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using Salem.Managers.GameState;
 using Salem.Gameplay.Setup;
+using Salem.Players;
+using Salem.UI;
+using Salem.Data;
+using System.Collections;
 
 namespace Salem.GameFlow
 {
@@ -34,31 +38,38 @@ namespace Salem.GameFlow
     public class GamePhaseManager : MonoBehaviour
     {
         #region Vars
+        [SerializeField] private float PhaseChangeDelay = 0.5f;
         public GamePhase CurrentPhase { get; private set; }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
         public event PhaseChangeHandler OnPhaseChange;
+        public KeyCode DebugAdvancePhaseKey = KeyCode.P;
 
-        private GameManager GameManager;
         private GameSetup GameSetup;
+        private GameTurnManager GameTurnManager;
         #endregion
 
         #region Standard Functions
         void Awake()
         {
-            GameManager = GetComponent<GameManager>();
             GameSetup = GetComponent<GameSetup>();
+            GameTurnManager = GetComponent<GameTurnManager>();
             OnPhaseChange += HandlePhaseChange;
+
         }
 
         void Start()
         {
-            ChangePhase(GamePhase.Setup);
+            StartCoroutine(ChangePhase(GamePhase.Setup, PhaseChangeDelay));
+
         }
         #endregion
 
         #region Accessor Functions
-        public void ChangePhase(GamePhase newPhase)
+        public IEnumerator ChangePhase(GamePhase newPhase, float delay)
         {
+            Debug.Log($"[GamePhaseManager] Changing phase to {newPhase} in {delay} seconds...");
+            yield return new WaitForSeconds(delay);
+
             CurrentPhase = newPhase;
             OnPhaseChange?.Invoke(newPhase);
             Debug.Log($"Game Phase Changed to: {newPhase}");
@@ -75,9 +86,9 @@ namespace Salem.GameFlow
             Player blackCatHolder = witches[Random.Range(0, witches.Count)];
             blackCatHolder.AssignBlackCat();
 
-            // Transition to Day phase
-            GamePhaseManager.ChangePhase(GamePhase.Day);
             */
+            //Transition to Day phase
+            StartCoroutine(ChangePhase(GamePhase.Day,PhaseChangeDelay));
         }
 
         public void StartDayPhase()
@@ -156,6 +167,28 @@ namespace Salem.GameFlow
             }
             */
         }
+
+        public void DebugChangePhase()
+        {
+            switch (CurrentPhase)
+            {
+                case GamePhase.Setup:
+                    StartCoroutine(ChangePhase(GamePhase.Dawn,PhaseChangeDelay));
+                    break;
+                case GamePhase.Dawn:
+                    StartCoroutine(ChangePhase(GamePhase.Day,PhaseChangeDelay));
+                    break;
+                case GamePhase.Day:
+                    StartCoroutine(ChangePhase(GamePhase.Conspiracy,PhaseChangeDelay));
+                    break;
+                case GamePhase.Conspiracy:
+                    StartCoroutine(ChangePhase(GamePhase.Night,PhaseChangeDelay));
+                    break;
+                case GamePhase.Night:
+                    StartCoroutine(ChangePhase(GamePhase.Day,PhaseChangeDelay));
+                    break;
+            }
+        }
         #endregion
 
         #region Helper Fucntions
@@ -169,9 +202,10 @@ namespace Salem.GameFlow
 
         private void StartSetupPhase()
         {
-            GameSetup.SetupNewGame(GameManager.players, GameManager.players.Count);
+            GameSetup.SetupNewGame(PlayerService.All, PlayerService.All.Count);
+            GameTurnManager.Initialize();
             // Transition to Dawn phase
-            ChangePhase(GamePhase.Dawn);
+            StartCoroutine(ChangePhase(GamePhase.Dawn,PhaseChangeDelay));
         }
         #endregion
     }

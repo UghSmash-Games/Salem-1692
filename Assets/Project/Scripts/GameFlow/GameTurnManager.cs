@@ -23,35 +23,86 @@ using UnityEngine;
 using UnityEngine.Events;
 using Salem.Managers.GameState;
 using Salem.Players;
-
+using Salem.UI;
+using Salem.Data;
 namespace Salem.GameFlow
 {
     public class GameTurnManager : MonoBehaviour
     {
         #region Vars
+        [SerializeField] private float turnDuration = 30f;
+
+        public static int CurrentPlayerIndex{ get; private set; }
         public enum GamePhase { Dawn, Day, Night }
         public GamePhase CurrentPhase;
-        public List<Player> Players;
         public UnityEvent OnTurnStart;
         public UnityEvent OnPhaseTransition;
+        public KeyCode debugTurnAdvanceKey = KeyCode.N;
 
-        private int currentPlayerIndex = 0;
+        private UIManager UIManager;
+        private float turnTimer;
+        private bool isTurnActive = false;
         #endregion
+
+        private void Awake()
+        {
+            UIManager = GetComponent<UIManager>();
+
+        }
+
+        private void Update()
+        {
+            if (!isTurnActive) return;
+            turnTimer -= Time.deltaTime;
+            if (turnTimer <= 0f)
+            {
+                Debug.Log("Turn timer expired.");
+                EndTurn();
+            }
+        }
 
 
         #region Accessor Functions
-        public void StartTurn()
+        public void Initialize()
         {
-            Player currentPlayer = Players[currentPlayerIndex];
-            Debug.Log($"Starting turn for {currentPlayer.PlayerName}");
-            //currentPlayer.TakeTurn(); // Player performs their actions
+            //Debug.Log("Initializing GameTurnManager.");
+            StartTurn(0);
+        }
+        public void StartTurn(int playerIndex)
+        {
+            turnTimer = turnDuration;
+            CurrentPlayerIndex = playerIndex;
+            Player currentPlayer = PlayerService.All[CurrentPlayerIndex];
+            //Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
+
+            //Add In Later For Advance UI
+            UIManager.SetPlayerTurnActive();
+
+            isTurnActive = true;
+
+            if (currentPlayer is AIPlayer ai)
+            {
+                ai.StartTurn(() => EndTurn());
+            }
         }
 
         public void EndTurn()
         {
-            Debug.Log($"Ending turn for {Players[currentPlayerIndex].PlayerName}");
-            currentPlayerIndex = (currentPlayerIndex + 1) % Players.Count;
-            StartTurn(); // Move to the next player's turn
+            isTurnActive = false;
+            Debug.Log($"Ending turn for {PlayerService.GetAlivePlayers()[CurrentPlayerIndex].PlayerNameText}");
+
+            //Add In later for Advance UI
+            //Players[currentPlayerIndex].EndTurnEffects();
+
+            int nextIndex = (CurrentPlayerIndex + 1) % PlayerService.GetAlivePlayers().Count;
+
+            StartTurn(nextIndex); // Move to the next player's turn
+        }
+
+        public void SkipTurnDebug()
+        {
+            if (!isTurnActive) return;
+            EndTurn();
         }
 
         public void AdvancePhase()
@@ -85,6 +136,7 @@ namespace Salem.GameFlow
         {
             throw new NotImplementedException();
         }
+
 
         private void NotifyTurnStart()
         {
