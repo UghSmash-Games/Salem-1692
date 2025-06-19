@@ -18,6 +18,8 @@ using Microsoft.Unity.VisualStudio.Editor;
 using UnityEngine;
 using Salem.Deck;
 using Salem.Managers.Hands;
+//addition by Alex Craig-Hastings
+using Salem.Players;
 
 namespace Salem.Cards
 {
@@ -30,5 +32,6 @@ namespace Salem.Cards
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;
         public bool IsPlayed;
+        public Player target; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
     }
 }
