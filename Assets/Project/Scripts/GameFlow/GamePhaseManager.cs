@@ -67,7 +67,7 @@ namespace Salem.GameFlow
         #region Accessor Functions
         public IEnumerator ChangePhase(GamePhase newPhase, float delay)
         {
-            Debug.Log($"[GamePhaseManager] Changing phase to {newPhase} in {delay} seconds...");
+            //Debug.Log($"[GamePhaseManager] Changing phase to {newPhase} in {delay} seconds...");
             yield return new WaitForSeconds(delay);
 
             CurrentPhase = newPhase;
