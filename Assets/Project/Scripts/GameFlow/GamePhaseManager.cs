@@ -54,7 +54,7 @@ namespace Salem.GameFlow
             GameSetup = GetComponent<GameSetup>();
             GameTurnManager = GetComponent<GameTurnManager>();
             OnPhaseChange += HandlePhaseChange;
-
+            StartCoroutine(ChangePhase(GamePhase.Setup, 0f));
         }
 
         void Start()
