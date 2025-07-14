@@ -27,7 +27,6 @@ using UnityEngine;
 using Salem.Players;
 using Salem.Deck;
 using Salem.Cards;
-using Salem.GameFlow;
 
 namespace Salem.Gameplay.Setup
 {
