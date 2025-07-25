@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &310617673486195533
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6515433016833422667}
+  - component: {fileID: 453637763892266643}
+  - component: {fileID: 888482270252131910}
+  - component: {fileID: 10584536985301213}
+  - component: {fileID: 3676762132175056136}
+  m_Layer: 0
+  m_Name: GameManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6515433016833422667
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 310617673486195533}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.7305163, y: 0.8197175, z: -0.10223692}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &453637763892266643
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 310617673486195533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4848732481f21c4387ed677bf49d7f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  EndGameUI: {fileID: 0}
+--- !u!114 &888482270252131910
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 310617673486195533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7157a387441b2ba47957668978f777f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  PhaseChangeDelay: 0.5
+  DebugAdvancePhaseKey: 112
+--- !u!114 &10584536985301213
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 310617673486195533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f403e664fea4d94c803d4805d616010, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  turnDuration: 30
+  CurrentPhase: 0
+  OnTurnStart:
+    m_PersistentCalls:
+      m_Calls: []
+  OnPhaseTransition:
+    m_PersistentCalls:
+      m_Calls: []
+  debugTurnAdvanceKey: 110
+--- !u!114 &3676762132175056136
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 310617673486195533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50927294217a9154bb47b92eb13a5002, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TryalCards:
+  - {fileID: 11400000, guid: ad865bcd6243810478a888739223829a, type: 2}
+  - {fileID: 11400000, guid: c8009f4c9b5a6f446bb1cbf6dfb88e4e, type: 2}
+  - {fileID: 11400000, guid: cb372f1797ef6ed4b8d595f454f96848, type: 2}

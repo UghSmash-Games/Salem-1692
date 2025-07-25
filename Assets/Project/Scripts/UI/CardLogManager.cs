@@ -31,19 +31,19 @@ namespace Salem.UI
 
         private void OnEnable()
         {
-            //CardEffectManager.OnCardPlayed += HandleCardPlayed;
+            CardEffectManager.OnCardPlayed += HandleCardPlayed;
         }
 
 
         private void OnDisable()
         {
-            //CardEffectManager.OnCardPlayed -= HandleCardPlayed;
+            CardEffectManager.OnCardPlayed -= HandleCardPlayed;
         }
 
 
         private void HandleCardPlayed(string message)
         {
-            //AddLogEntry(message);
+            AddLogEntry(message);
         }
 
 

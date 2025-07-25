@@ -26,7 +26,7 @@ namespace Salem.GameFlow
 {
     public class CardEffectManager : MonoBehaviour
     {
-        public static CardEffectManager Instance;
+        public static CardEffectManager Instance { get; private set; }
         public static event Action<string> OnCardPlayed;
 
 
@@ -35,8 +35,13 @@ namespace Salem.GameFlow
 
         private void Awake()
         {
-            if (Instance == null) { Instance = this; }
-            else Destroy(gameObject);
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
         }
 
 
@@ -81,6 +86,7 @@ namespace Salem.GameFlow
 
         private string FormatCardLogMessage(Card card, Player target)
         {
+            UpdateCurrentPlayer();
             // Supports dynamic substitution if used
             string sourceName = CurrentPlayer.PlayerNameText;
             string targetName = target?.PlayerNameText ?? "no target";

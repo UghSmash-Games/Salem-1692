@@ -29,8 +29,9 @@ namespace Salem.Players
     {
         #region Vars
         [SerializeField] private float aiThinkDelay = 1.5f;
-        private Player target;
         #endregion
+
+
 
         #region Accessor Functions
         public void StartTurn(Action onComplete)
@@ -59,15 +60,37 @@ namespace Salem.Players
             //TODO: Add Real Decision Logic HERE
             Debug.Log($"[AI] {PlayerNameText} is taking action...");
 
+            if (HandManager == null)
+            {
+                Debug.LogError($"[AI] HandManager is null on {PlayerNameText}");
+                yield break;
+            }
+
             // Example stub: play first card in hand if exists
             if (HandManager.Hand.Count > 0)
             {
                 Card chosenCard = HandManager.Hand[0];
                 Debug.Log($"[AI] Playing card: {chosenCard.Name}");
 
-                //Build out ApplyCardEffect logic later
-                ApplyCardEffect(chosenCard);
+                if (CardEffectManager.Instance == null)
+                {
+                    Debug.LogError("CardEffectManager.Instance is null!");
+                    yield break;
+                }
 
+                if (chosenCard.RequiresTarget)
+                {
+                    Player target = AITargetingHelper.SelectRandomTarget(this);
+                    if (target != null)
+                    {
+                        CardEffectManager.Instance.ExecuteCardEffect(chosenCard, target);
+                    }
+                    else { Debug.LogWarning("[AI] No valid target found."); }
+                }
+                else
+                {
+                    CardEffectManager.Instance.ExecuteCardEffect(chosenCard, null);
+                }
                 // Remove the card from hand
                 HandManager.RemoveCard(chosenCard);
             }

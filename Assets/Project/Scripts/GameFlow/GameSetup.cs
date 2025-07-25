@@ -43,7 +43,7 @@ namespace Salem.Gameplay.Setup
         #region Standard Functions
         void Awake()
         {
-            DeckManager = GetComponent<DeckManager>();
+            DeckManager = GameObject.FindAnyObjectByType<DeckManager>();
         }
         #endregion
 

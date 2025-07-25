@@ -47,7 +47,7 @@ namespace Salem.GameFlow
         #region Standard Functions
         void Awake()
         {
-            UIManager = GetComponent<UIManager>();
+            UIManager = GameObject.FindAnyObjectByType<UIManager>();
             HandleInstance();
             PopulatePlayers();
             isGameActive = true;

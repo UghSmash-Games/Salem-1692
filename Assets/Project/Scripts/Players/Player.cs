@@ -62,18 +62,23 @@ namespace Salem.Players
         void Awake()
         {
             HandManager = GetComponent<HandManager>();
+            if (HandManager == null)
+            {
+                Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
+            }
+            
             //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if(PlayerNameText == "George Burroughs")
+            if (PlayerNameText == "George Burroughs")
             {
                 baseAccusationLimit++;
             }
-            else if(PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
+            else if (PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
             {
                 townHallAbilityCharges = 1;
             }
-            else if(PlayerNameText == "Samuel Parris")
+            else if (PlayerNameText == "Samuel Parris")
             {
-                townHallAbilityCharges= 2;
+                townHallAbilityCharges = 2;
             }
         }
         #endregion

@@ -57,7 +57,7 @@ namespace Salem.GameFlow
                 return;
             }
 
-            UIManager = GetComponent<UIManager>();
+            UIManager = GameObject.FindAnyObjectByType<UIManager>();
 
         }
 
