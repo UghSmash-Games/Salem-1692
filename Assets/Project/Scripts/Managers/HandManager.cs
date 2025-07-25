@@ -25,7 +25,6 @@ using Salem.Deck;
 using Salem.Cards;
 using Salem.UI;
 using System.Linq;
-using System;
 
 namespace Salem.Managers.Hands
 {

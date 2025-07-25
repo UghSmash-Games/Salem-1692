@@ -23,7 +23,8 @@ namespace Salem.Cards
     public class Card : ScriptableObject
     {
         public string Name;
-        public string Type;
+        public CardType Type;
+        public bool RequiresTarget;
         public string Effect;
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;

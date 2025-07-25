@@ -94,13 +94,52 @@ namespace Salem.Players
             switch (card.Type)
             {
                 case "Green":
-                    // Discard after use
+                    //played then discarded
+                    switch (card.name)
+                    {
+                        case "Arson":
+                            if(PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            HandManager.GetCards().Clear();
+                            break;
+                        case "Robbery":
+                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            card.target.HandManager.AddCard(HandManager.GetCards());
+                            HandManager.GetCards().Clear();
+                            break;
+                        case "Alibi":
+                            currentAccusationCount -= 3;
+                            if(currentAccusationCount < 0) { currentAccusationCount = 0; }
+                            break;
+                        case "Stocks":
+                            skipTurn = true;
+                            break;
+                        case "Scapegoat":
+                            card.target.StatusCards.AddRange(StatusCards);
+                            StatusCards.Clear();
+                            break;
+                    }
                     break;
                 case "Blue":
                     // Remain in play
                     break;
-                case "Red":
-                    // Stack effects until limit
+                case Card.CardType.Red:
+                    //played, then check for tryal reveal
+                    switch (card.name)
+                    {
+                        case "Accusations":
+                            currentAccusationCount++;
+                            CheckAccusations();
+                            break;
+                        case "Evidence":
+                            currentAccusationCount += 3;
+                            if(PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
+                            CheckAccusations();
+                            break;
+                        case "Witness":
+                            currentAccusationCount += 7;
+                            CheckAccusations();
+                            break;
+                    }
                     break;
             }
         }
