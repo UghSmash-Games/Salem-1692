@@ -31,6 +31,7 @@ namespace Salem.Cards
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;
         public bool IsPlayed;
-        public Player target; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
+        public Player target;
+        public string LogMessage = "{source} played {card} on {target}."; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
     }
 }

@@ -86,6 +86,8 @@ namespace Salem.GameFlow
             Player currentPlayer = PlayerService.All[CurrentPlayerIndex];
             Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
 
+            isTurnActive = true;
+
             //Add In Later For Advance UI
             UIManager.SetPlayerTurnActive();
 

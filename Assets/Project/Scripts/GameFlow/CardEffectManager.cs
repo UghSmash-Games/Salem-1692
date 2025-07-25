@@ -19,22 +19,31 @@ using UnityEngine;
 using Salem.Players;
 using Salem.Cards;
 using Salem.Data;
+using System;
+
 
 namespace Salem.GameFlow
 {
     public class CardEffectManager : MonoBehaviour
     {
         public static CardEffectManager Instance;
+        public static event Action<string> OnCardPlayed;
+
+
+        private Player CurrentPlayer;
+
 
         private void Awake()
         {
-            if (Instance == null) Instance = this;
+            if (Instance == null) { Instance = this; }
             else Destroy(gameObject);
         }
+
 
         public void ExecuteCardEffect(Card card, Player target)
         {
             Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
+
 
             switch (card.Name)
             {
@@ -49,11 +58,43 @@ namespace Salem.GameFlow
                     break;
             }
 
+
             // Remove from hand if appropriate
             if (card.Type == Card.CardType.Green)
                 PlayerService.GetLocalPlayer().HandManager.RemoveCard(card);
 
+
+            //Prepare message
+            string message = FormatCardLogMessage(card, target);
+            // Raise event for CardLogManager to listen to
+            OnCardPlayed?.Invoke(message);
             GameTurnManager.Instance.EndTurn();
         }
+
+
+        #region Helper Functions
+        private void UpdateCurrentPlayer()
+        {
+            CurrentPlayer = PlayerService.All[GameTurnManager.CurrentPlayerIndex];
+        }
+
+
+        private string FormatCardLogMessage(Card card, Player target)
+        {
+            // Supports dynamic substitution if used
+            string sourceName = CurrentPlayer.PlayerNameText;
+            string targetName = target?.PlayerNameText ?? "no target";
+
+
+            if (string.IsNullOrEmpty(card.LogMessage))
+                return $"{sourceName} played {card.name} on {targetName}";
+
+
+            // Optional: Replace placeholders in the log message
+            return card.LogMessage
+                .Replace("{source}", sourceName)
+                .Replace("{target}", targetName);
+        }
+        #endregion
     }
 }
