@@ -140,7 +140,7 @@ namespace Salem.Players
         {
             switch (card.Type)
             {
-                case Card.CardType.Green:
+                case "Green":
                     //played then discarded
                     switch (card.name)
                     {
@@ -166,7 +166,7 @@ namespace Salem.Players
                             break;
                     }
                     break;
-                case Card.CardType.Blue:
+                case "Blue":
                     // Remain in play
                     switch (card.name)
                     {
@@ -186,7 +186,7 @@ namespace Salem.Players
                             break;
                     }
                     break;
-                case Card.CardType.Red:
+                case "Red":
                     //played, then check for tryal reveal
                     switch (card.name)
                     {

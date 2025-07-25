@@ -50,7 +50,7 @@ namespace Salem.GameFlow
             }
 
             // Remove from hand if appropriate
-            if (card.Type == Card.CardType.Green)
+            if (card.Type == "Green")
                 PlayerService.GetLocalPlayer().HandManager.RemoveCard(card);
 
             GameTurnManager.Instance.EndTurn();
