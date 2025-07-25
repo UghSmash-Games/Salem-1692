@@ -14,13 +14,12 @@
 *    • Add CardID and CanPlay method
 * FIXME: [Known bugs or issues]
 */
+using Microsoft.Unity.VisualStudio.Editor;
 using UnityEngine;
 using Salem.Deck;
 using Salem.Managers.Hands;
 //addition by Alex Craig-Hastings
 using Salem.Players;
-
-
 
 namespace Salem.Cards
 {
@@ -29,7 +28,6 @@ namespace Salem.Cards
     {
         public string Name;
         public string Type;
-        public bool RequiresTarget;
         public string Effect;
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;

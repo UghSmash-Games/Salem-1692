@@ -30,7 +30,6 @@ namespace Salem.GameFlow
     public class GameTurnManager : MonoBehaviour
     {
         #region Vars
-        public static GameTurnManager Instance;
         [SerializeField] private float turnDuration = 30f;
 
         public static int CurrentPlayerIndex{ get; private set; }
@@ -47,10 +46,8 @@ namespace Salem.GameFlow
 
         private void Awake()
         {
-            if (Instance == null) Instance = this;
-            else Destroy(gameObject);
-
             UIManager = GetComponent<UIManager>();
+
         }
 
         private void Update()
@@ -76,12 +73,10 @@ namespace Salem.GameFlow
             turnTimer = turnDuration;
             CurrentPlayerIndex = playerIndex;
             Player currentPlayer = PlayerService.All[CurrentPlayerIndex];
-            //Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
+            Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
 
             //Add In Later For Advance UI
             UIManager.SetPlayerTurnActive();
-
-            isTurnActive = true;
 
             if (currentPlayer is AIPlayer ai)
             {
