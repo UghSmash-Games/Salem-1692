@@ -66,11 +66,6 @@ namespace Salem.Managers.Hands
             Hand.Clear();
             OnHandChanged?.Invoke();
         }
-        //overload to append a list to the end
-        public void AddCard(List<Card> cards)
-        {
-            Hand.AddRange(cards);
-        }
         #endregion
     }
 }
