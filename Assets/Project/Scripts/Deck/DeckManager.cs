@@ -49,7 +49,7 @@ namespace Salem.Deck
             Deck.RemoveAt(0);
             handManager.AddCard(drawnCard);
 
-            if (drawnCard.Type == "Black")
+            if (drawnCard.Type == Card.CardType.Black)
             {
                 ResolveBlackCardEffect(drawnCard);
             }

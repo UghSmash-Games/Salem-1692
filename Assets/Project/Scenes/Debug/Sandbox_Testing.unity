@@ -4450,10 +4450,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PlayerNameText: AI Player 3
-  PlayerName: {fileID: 0}
   HandManager: {fileID: 0}
   TryalCards: []
   IsLocalPlayer: 0
+  MatchedPlayer: {fileID: 0}
   aiThinkDelay: 1.5
 --- !u!4 &2045448827
 Transform:
@@ -4514,10 +4514,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PlayerNameText: AI Player 2
-  PlayerName: {fileID: 0}
   HandManager: {fileID: 0}
   TryalCards: []
   IsLocalPlayer: 0
+  MatchedPlayer: {fileID: 0}
   aiThinkDelay: 1.5
 --- !u!4 &2072694994
 Transform:

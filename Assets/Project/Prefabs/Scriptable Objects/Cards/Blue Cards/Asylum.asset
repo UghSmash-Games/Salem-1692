@@ -14,6 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Name: Asylum
   Type: Blue
+  RequiresTarget: 0
   Effect: Cannot be eliminated durning the night.
   HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
   RevealedCardImage: {fileID: 7093145446897808993, guid: 43ed99c574777ca48ac2b2dd6f193e82, type: 3}
+  IsPlayed: 0
+  target: {fileID: 0}

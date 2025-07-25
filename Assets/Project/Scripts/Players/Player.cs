@@ -93,7 +93,7 @@ namespace Salem.Players
         {
             switch (card.Type)
             {
-                case "Green":
+                case Card.CardType.Green:
                     //played then discarded
                     switch (card.name)
                     {
@@ -119,7 +119,7 @@ namespace Salem.Players
                             break;
                     }
                     break;
-                case "Blue":
+                case Card.CardType.Blue:
                     // Remain in play
                     break;
                 case Card.CardType.Red:
