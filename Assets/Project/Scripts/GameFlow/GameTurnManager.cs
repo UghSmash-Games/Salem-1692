@@ -30,9 +30,10 @@ namespace Salem.GameFlow
     public class GameTurnManager : MonoBehaviour
     {
         #region Vars
+        public static int CurrentPlayerIndex{ get; private set; }
+        public static GameTurnManager Instance;
         [SerializeField] private float turnDuration = 30f;
 
-        public static int CurrentPlayerIndex{ get; private set; }
         public enum GamePhase { Dawn, Day, Night }
         public GamePhase CurrentPhase;
         public UnityEvent OnTurnStart;
@@ -46,6 +47,16 @@ namespace Salem.GameFlow
 
         private void Awake()
         {
+            if (Instance == null)
+            {
+                Instance = this;
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             UIManager = GetComponent<UIManager>();
 
         }

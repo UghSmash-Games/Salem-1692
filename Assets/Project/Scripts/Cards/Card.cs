@@ -16,13 +16,14 @@
 */
 using Microsoft.Unity.VisualStudio.Editor;
 using UnityEngine;
+using Salem.Players;
 
 namespace Salem.Cards
 {
     [CreateAssetMenu(fileName = "NewCard", menuName = "Card Game/Card")]
     public class Card : ScriptableObject
     {
-        public enum CardType {Green, Blue, Red, Black }
+        public enum CardType { Green, Blue, Red, Black }
         public string Name;
         public CardType Type;
         public bool RequiresTarget;
@@ -30,5 +31,6 @@ namespace Salem.Cards
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;
         public bool IsPlayed;
+        public Player target; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
     }
 }
