@@ -27,8 +27,9 @@ namespace Salem.Cards
     [CreateAssetMenu(fileName = "NewCard", menuName = "Card Game/Card")]
     public class Card : ScriptableObject
     {
+        public enum CardType {Green, Blue, Red, Black }
         public string Name;
-        public string Type;
+        public CardType Type;
         public bool RequiresTarget;
         public string Effect;
         public Sprite HiddenCardImage;
