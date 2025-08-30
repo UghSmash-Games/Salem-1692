@@ -19,13 +19,13 @@
 
 * FIXME: [Known bugs or issues]
 */
-using System.Collections.Generic;
-using UnityEngine;
-using Salem.Deck;
-using Salem.Cards;
-using Salem.UI;
-using System.Linq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Salem.Cards;
+using Salem.Deck;
+using Salem.UI;
+using UnityEngine;
 
 namespace Salem.Managers.Hands
 {

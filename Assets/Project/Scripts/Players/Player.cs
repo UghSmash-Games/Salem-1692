@@ -21,16 +21,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
-using UnityEngine;
+using Salem.Cards;
+using Salem.GameFlow;
 using Salem.Managers.GameState;
 using Salem.Managers.Hands;
-using Salem.Cards;
 using TMPro;
+using Unity.VisualScripting;
+using UnityEngine;
 
 namespace Salem.Players
 {
-    public class Player : MonoBehaviour
+    public class Player : MonoBehaviour, IPlayerController
     {
         #region Vars
         public event Action OnStatusCardsChanged;
@@ -134,28 +135,58 @@ namespace Salem.Players
         }
         #endregion
 
+        #region IPlayerController Implementation
+        public virtual Card SelectCard()
+        {
+            if (HandManager != null && HandManager.Hand.Count > 0)
+            {
+                return HandManager.Hand[0];
+            }
+
+            return null;
+        }
+
+        public virtual void PerformTurnAction(Card selectedCard)
+        {
+            if (selectedCard == null)
+            {
+                return;
+            }
+
+            if (CardEffectManager.Instance == null)
+            {
+                Debug.LogError("CardEffectManager.Instance is null!");
+                return;
+            }
+
+            Player target = selectedCard.RequiresTarget ? selectedCard.target : null;
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+            HandManager?.RemoveCard(selectedCard);
+        }
+        #endregion
+
         #region Helper Functions
         //Called in Hand Manager.
         public virtual void ApplyCardEffect(Card card)
         {
             switch (card.Type)
             {
-                case Card.CardType.Green:
+                case Card.CardColor.Green:
                     //played then discarded
                     switch (card.name)
                     {
                         case "Arson":
-                            if(PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
-                            HandManager.GetCards().Clear();
+                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            HandManager.ClearHand();
                             break;
                         case "Robbery":
                             if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
                             //card.target.HandManager.AddCard(HandManager.GetCards());
-                            HandManager.GetCards().Clear();
+                            HandManager.ClearHand();
                             break;
                         case "Alibi":
                             currentAccusationCount -= 3;
-                            if(currentAccusationCount < 0) { currentAccusationCount = 0; }
+                            if (currentAccusationCount < 0) { currentAccusationCount = 0; }
                             break;
                         case "Stocks":
                             skipTurn = true;
@@ -166,7 +197,7 @@ namespace Salem.Players
                             break;
                     }
                     break;
-                case Card.CardType.Blue:
+                case Card.CardColor.Blue:
                     // Remain in play
                     switch (card.name)
                     {
@@ -179,14 +210,14 @@ namespace Salem.Players
                         case "Matchmaker":
                             //the target of the card will be the other player that has the matchmaker card
                             MatchedPlayer = card.target;
-                            if(MatchedPlayer != null)
+                            if (MatchedPlayer != null)
                             {
                                 MatchedPlayer.MatchedPlayer = this; //create a 2 way link between the 2 players in the case either die
                             }
                             break;
                     }
                     break;
-                case Card.CardType.Red:
+                case Card.CardColor.Red:
                     //played, then check for tryal reveal
                     switch (card.name)
                     {
@@ -196,7 +227,7 @@ namespace Salem.Players
                             break;
                         case "Evidence":
                             currentAccusationCount += 3;
-                            if(PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
+                            if (PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
                             CheckAccusations();
                             break;
                         case "Witness":
@@ -217,6 +248,7 @@ namespace Salem.Players
             {
                 Debug.Log($"{PlayerNameText} is ELIMINATED!");
                 //UI Update needs to happen here.
+                GameTurnManager.Instance?.OnPlayerEliminated(this);
             }
         }
 

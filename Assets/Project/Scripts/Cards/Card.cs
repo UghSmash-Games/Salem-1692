@@ -14,18 +14,25 @@
 *    • Add CardID and CanPlay method
 * FIXME: [Known bugs or issues]
 */
-using Microsoft.Unity.VisualStudio.Editor;
-using UnityEngine;
 using Salem.Players;
+using UnityEngine;
 
 namespace Salem.Cards
 {
     [CreateAssetMenu(fileName = "NewCard", menuName = "Card Game/Card")]
     public class Card : ScriptableObject
     {
-        public enum CardType { Green, Blue, Red, Black }
+        public enum CardColor
+    {
+        Green,
+        Blue,
+        Red,
+        Black,
+        White,
+        Tryal
+    }
         public string Name;
-        public CardType Type;
+        public CardColor Type;
         public bool RequiresTarget;
         public string Effect;
         public Sprite HiddenCardImage;

@@ -76,15 +76,22 @@ namespace Salem.UI
         {
             //Debug.Log($"[{player.PlayerName}] has {player.TryalCards.Count} Tryal cards.");
 
-            Transform tryalCardTransform;
-            tryalCardTransform = tryalCardPanel.GetChild(0).transform;
+            // Determine a template transform to copy position and scale from if one exists.
+            if (tryalCardPanel.childCount == 0)
+            {
+                return;
+            }
+
+            Vector3 tryalCardPosition = tryalCardPanel.position;
+            Vector3 tryalCardScale = tryalCardPanel.localScale;
 
             foreach (Transform child in tryalCardPanel) Destroy(child.gameObject);
             foreach (TryalCard tc in player.TryalCards)
             {
                 var obj = Instantiate(tryalCardPrefab, tryalCardPanel);
-                obj.GetComponent<Transform>().position = tryalCardTransform.position;
-                obj.GetComponent<Transform>().localScale = tryalCardTransform.localScale;
+                Transform objTransform = obj.GetComponent<Transform>();
+                objTransform.position = tryalCardPosition;
+                objTransform.localScale = tryalCardScale;
                 obj.GetComponent<TryalCardUI>().AssignCard(tc);
             }
         }
@@ -98,11 +105,16 @@ namespace Salem.UI
 
         private void TurnIndicatorEffects()
         {
+            bool wasTurnIndicatorActive = isTurnIndicatorActive;
+            UpdateCurrentPlayer();
+
+            if (isTurnIndicatorActive && !wasTurnIndicatorActive)
+            {
+                FlashTurnStart();
+            }
+
             if (isTurnIndicatorActive)
             {
-                Debug.Log("TurnIndicatorEffects Running");
-                UpdateCurrentPlayer();
-                FlashTurnStart();
                 ScaleTurnIndicator();
             }
         }
@@ -121,13 +133,17 @@ namespace Salem.UI
 
         private void ScaleTurnIndicator()
         {
-            float scale = 1f + Mathf.PingPong(Time.time * 0.5f, 10f);
+            float scale = 1f + Mathf.PingPong(Time.time * 0.1f, .05f);
             turnIndicator.transform.localScale = Vector3.one * scale;
         }
 
         private void UpdateCurrentPlayer()
         {
-            currentPlayer = PlayerService.All[GameTurnManager.CurrentPlayerIndex];
+            var players = PlayerService.GetAlivePlayers();
+            if (GameTurnManager.CurrentPlayerIndex < players.Count)
+            {
+                currentPlayer = players[GameTurnManager.CurrentPlayerIndex];
+            }
             isTurnIndicatorActive = turnIndicator.activeSelf;
         }
     }

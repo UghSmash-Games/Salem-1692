@@ -1,34 +1,36 @@
 using System.Linq;
-using Salem.Players;
 using System.Collections.Generic;
 using Salem.Data;
 
-public static class AITargetingHelper
+namespace Salem.Players
 {
-    public static Player SelectRandomTarget(Player self)
+    public static class AITargetingHelper
     {
-        // Get all valid players
-        var validTargets = PlayerService.All
-            .Where(p => p != self && !p.IsEliminated)
-            .ToList();
-
-        if (validTargets.Count == 0)
+        public static Player SelectRandomTarget(Player self)
         {
-            UnityEngine.Debug.LogWarning("No valid AI targets available.");
-            return null;
+            // Get all valid players
+            var validTargets = PlayerService.All
+                .Where(p => p != self && !p.IsEliminated)
+                .ToList();
+
+            if (validTargets.Count == 0)
+            {
+                UnityEngine.Debug.LogWarning("No valid AI targets available.");
+                return null;
+            }
+
+            // Randomly pick one
+            return validTargets[UnityEngine.Random.Range(0, validTargets.Count)];
         }
 
-        // Randomly pick one
-        return validTargets[UnityEngine.Random.Range(0, validTargets.Count)];
+        public static Player SelectSmartAccusationCountTarget(Player self)
+        {
+            var validTargets = PlayerService.All
+                .Where(p => p != self && !p.IsEliminated && !p.hasAsylum)
+                .OrderBy(p => p.currentAccusationCount)
+                .ToList();
+
+            return validTargets.FirstOrDefault();
+        }
     }
-
-    public static Player SelectSmartAccusationCountTarget(Player self)
-{
-    var validTargets = PlayerService.All
-        .Where(p => p != self && !p.IsEliminated && !p.hasAsylum)
-        .OrderBy(p => p.currentAccusationCount)
-        .ToList();
-
-    return validTargets.FirstOrDefault();
-}
 }

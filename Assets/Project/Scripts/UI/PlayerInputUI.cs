@@ -30,7 +30,7 @@ namespace Salem.UI
             }
         }
 
-        private void Destroy()
+        private void OnDestroy()
         {
             if (player?.HandManager != null)
             {

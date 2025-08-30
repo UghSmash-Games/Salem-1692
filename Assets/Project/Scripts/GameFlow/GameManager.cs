@@ -38,7 +38,7 @@ namespace Salem.GameFlow
         [SerializeField] private EndGameUI EndGameUI;
 
         //Tracks GameManager
-        public static object Instance { get; internal set; }
+        public static GameManager Instance { get; private set; }
 
         private UIManager UIManager;
         private bool isGameActive;

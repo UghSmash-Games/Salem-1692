@@ -47,6 +47,7 @@ namespace Salem.GameFlow
 
         public void ExecuteCardEffect(Card card, Player target)
         {
+            UpdateCurrentPlayer();
             Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
 
 
@@ -65,8 +66,8 @@ namespace Salem.GameFlow
 
 
             // Remove from hand if appropriate
-            if (card.Type == Card.CardType.Green)
-                PlayerService.GetLocalPlayer().HandManager.RemoveCard(card);
+            if (card.Type == Card.CardColor.Green)
+                CurrentPlayer.HandManager.RemoveCard(card);
 
 
             //Prepare message
@@ -80,13 +81,16 @@ namespace Salem.GameFlow
         #region Helper Functions
         private void UpdateCurrentPlayer()
         {
-            CurrentPlayer = PlayerService.All[GameTurnManager.CurrentPlayerIndex];
+            var players = PlayerService.GetAlivePlayers();
+            if (GameTurnManager.CurrentPlayerIndex < players.Count)
+            {
+                CurrentPlayer = players[GameTurnManager.CurrentPlayerIndex];
+            }
         }
 
 
         private string FormatCardLogMessage(Card card, Player target)
         {
-            UpdateCurrentPlayer();
             // Supports dynamic substitution if used
             string sourceName = CurrentPlayer.PlayerNameText;
             string targetName = target?.PlayerNameText ?? "no target";
@@ -99,6 +103,7 @@ namespace Salem.GameFlow
             // Optional: Replace placeholders in the log message
             return card.LogMessage
                 .Replace("{source}", sourceName)
+                .Replace("{card}", card.Name)
                 .Replace("{target}", targetName);
         }
         #endregion

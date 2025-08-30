@@ -36,6 +36,8 @@ namespace Salem.Gameplay.Setup
         #region Vars
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
+        [SerializeField, Range(0f, 1f), Tooltip("Proportion of players assigned the Witch role")]
+        private float witchRatio = 1f / 3f;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
         #endregion
@@ -59,7 +61,7 @@ namespace Salem.Gameplay.Setup
         #region Helper Functions
         private void SetupTryalCards(IReadOnlyList<Player> players)
         {
-            int numberOfWitches = players.Count / 3; 
+            int numberOfWitches = Mathf.Max(1, Mathf.RoundToInt(players.Count * witchRatio)); 
             //Debug.Log($"There are {numberOfWitches} Witches.");
 
             int numberOfTryalCardsNeeded = players.Count * 5;

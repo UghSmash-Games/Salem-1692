@@ -34,15 +34,16 @@ namespace Salem.GameFlow
         public static GameTurnManager Instance;
         [SerializeField] private float turnDuration = 30f;
 
-        public enum GamePhase { Dawn, Day, Night }
         public GamePhase CurrentPhase;
         public UnityEvent OnTurnStart;
         public UnityEvent OnPhaseTransition;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
 
+        private GameManager GameManager;
         private UIManager UIManager;
         private float turnTimer;
         private bool isTurnActive = false;
+        private Player currentPlayer;
         #endregion
 
         private void Awake()
@@ -57,7 +58,8 @@ namespace Salem.GameFlow
                 return;
             }
 
-            UIManager = GameObject.FindAnyObjectByType<UIManager>();
+            GameManager = FindFirstObjectByType<GameManager>();
+            UIManager = FindFirstObjectByType<UIManager>();
 
         }
 
@@ -81,10 +83,19 @@ namespace Salem.GameFlow
         }
         public void StartTurn(int playerIndex)
         {
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0)
+                return;
+            
             turnTimer = turnDuration;
+
+            if (playerIndex >= players.Count)
+                playerIndex = 0;
+            
             CurrentPlayerIndex = playerIndex;
-            Player currentPlayer = PlayerService.All[CurrentPlayerIndex];
-            Debug.Log($"Starting turn for {PlayerService.All[playerIndex].PlayerNameText}");
+
+            currentPlayer = players[CurrentPlayerIndex];
+            Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
             isTurnActive = true;
 
@@ -99,15 +110,44 @@ namespace Salem.GameFlow
 
         public void EndTurn()
         {
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0)
+                return;
+            
             isTurnActive = false;
-            Debug.Log($"Ending turn for {PlayerService.GetAlivePlayers()[CurrentPlayerIndex].PlayerNameText}");
+
+            Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
 
             //Add In later for Advance UI
             //Players[currentPlayerIndex].EndTurnEffects();
 
-            int nextIndex = (CurrentPlayerIndex + 1) % PlayerService.GetAlivePlayers().Count;
+            int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
 
             StartTurn(nextIndex); // Move to the next player's turn
+        }
+
+        public void OnPlayerEliminated(Player eliminatedPlayer)
+        {
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0)
+            {
+                CurrentPlayerIndex = 0;
+                currentPlayer = null;
+                return;
+            }
+
+            int newIndex = players.IndexOf(currentPlayer);
+            if (newIndex == -1)
+            {
+                CurrentPlayerIndex %= players.Count;
+                currentPlayer = players[CurrentPlayerIndex];
+            }
+            else
+            {
+                CurrentPlayerIndex = newIndex;
+            }
+
+            UIManager.SetPlayerTurnActive();
         }
 
         public void SkipTurnDebug()

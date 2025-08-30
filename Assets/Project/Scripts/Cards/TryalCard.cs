@@ -14,9 +14,8 @@
 *    • Include Reveal method and IsRevealed flag
 * FIXME: [Known bugs or issues]
 */
+using System;
 using UnityEngine;
-using Salem.Players;
-using Salem.UI;
 
 namespace Salem.Cards
 {
@@ -33,23 +32,16 @@ namespace Salem.Cards
         //public Sprite RevealedSprite_Witch;
         //public Sprite RevealedSprite_NotAWitch;
         //public Sprite RevealedSprite_Constable;
-
-        private TryalCardUI tryalCardUI;
+        public event Action<TryalCard> OnRevealed;
         #endregion
 
-        #region Standard Functions
-        void Awake()
-        {
-            tryalCardUI = (TryalCardUI)FindFirstObjectByType(typeof(TryalCardUI));
-        }
-        #endregion
 
         #region Accessor Functions
         public void Reveal()
         {
             IsRevealed = true;
             Debug.Log($"Tryal Card Revealed: {TryalCardType}");
-            //tryalCardUI.UpdateTryalCardVisual(this);
+            OnRevealed?.Invoke(this);
         }
         #endregion
     }

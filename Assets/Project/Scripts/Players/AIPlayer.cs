@@ -38,11 +38,52 @@ namespace Salem.Players
         {
             StartCoroutine(ExecuteAITurn(onComplete));
         }
+
         public override void ApplyCardEffect(Card card)
         {
             // Use generic version or expand later with smarter AI logic
             base.ApplyCardEffect(card);
         }
+
+        public override Card SelectCard()
+        {
+            if (HandManager == null || HandManager.Hand.Count == 0)
+            {
+                Debug.LogWarning("[AI] No cards to select.");
+                return null;
+            }
+
+            return HandManager.Hand[0];
+        }
+
+        public override void PerformTurnAction(Card selectedCard)
+        {
+            if (selectedCard == null)
+            {
+                return;
+            }
+
+            if (CardEffectManager.Instance == null)
+            {
+                Debug.LogError("CardEffectManager.Instance is null!");
+                return;
+            }
+
+            Player target = null;
+            if (selectedCard.RequiresTarget)
+            {
+                target = AITargetingHelper.SelectRandomTarget(this);
+                if (target == null)
+                {
+                    Debug.LogWarning("[AI] No valid target found.");
+                    return;
+                }
+            }
+
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+            HandManager.RemoveCard(selectedCard);
+        }
+
         public void TakeTurn()
         {
             // Placeholder for AI behavior
@@ -57,42 +98,14 @@ namespace Salem.Players
         {
             //Sort Delay before Acting
             yield return new WaitForSeconds(aiThinkDelay);
-            //TODO: Add Real Decision Logic HERE
             Debug.Log($"[AI] {PlayerNameText} is taking action...");
 
-            if (HandManager == null)
-            {
-                Debug.LogError($"[AI] HandManager is null on {PlayerNameText}");
-                yield break;
-            }
+            Card chosenCard = SelectCard();
 
             // Example stub: play first card in hand if exists
-            if (HandManager.Hand.Count > 0)
+            if (chosenCard != null)
             {
-                Card chosenCard = HandManager.Hand[0];
-                Debug.Log($"[AI] Playing card: {chosenCard.Name}");
-
-                if (CardEffectManager.Instance == null)
-                {
-                    Debug.LogError("CardEffectManager.Instance is null!");
-                    yield break;
-                }
-
-                if (chosenCard.RequiresTarget)
-                {
-                    Player target = AITargetingHelper.SelectRandomTarget(this);
-                    if (target != null)
-                    {
-                        CardEffectManager.Instance.ExecuteCardEffect(chosenCard, target);
-                    }
-                    else { Debug.LogWarning("[AI] No valid target found."); }
-                }
-                else
-                {
-                    CardEffectManager.Instance.ExecuteCardEffect(chosenCard, null);
-                }
-                // Remove the card from hand
-                HandManager.RemoveCard(chosenCard);
+                PerformTurnAction(chosenCard);
             }
 
             // Optional delay after action
