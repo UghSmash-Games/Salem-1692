@@ -95,7 +95,9 @@ namespace Salem.Gameplay.Setup
             foreach (var player in players)
             {
                 player.TryalCards = DrawTryalCards(5, TryalDeck);
+                player.InvokeOnTryalCardsChanged();
                 player.DetermineRole();
+                
             }
         }
 

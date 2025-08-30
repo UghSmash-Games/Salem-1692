@@ -373,6 +373,7 @@ GameObject:
   - component: {fileID: 3086674126259489288}
   - component: {fileID: 8972660425923025927}
   - component: {fileID: 6564706631789937351}
+  - component: {fileID: 1379049307048367027}
   m_Layer: 5
   m_Name: TryalCardUIPrefabPlaceArt
   m_TagString: Untagged
@@ -389,7 +390,7 @@ RectTransform:
   m_GameObject: {fileID: 5762611594778432868}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.0036363641, y: 0.011784652, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2662515210485424793}
@@ -466,3 +467,26 @@ CanvasGroup:
   m_Interactable: 1
   m_BlocksRaycasts: 1
   m_IgnoreParentGroups: 0
+--- !u!223 &1379049307048367027
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5762611594778432868}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 0
+  m_Camera: {fileID: 0}
+  m_PlaneDistance: 100
+  m_PixelPerfect: 0
+  m_ReceivesEvents: 1
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
+  m_AdditionalShaderChannelsFlag: 0
+  m_UpdateRectTransformForStandalone: 0
+  m_SortingLayerID: 0
+  m_SortingOrder: 0
+  m_TargetDisplay: 0

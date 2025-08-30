@@ -77,20 +77,22 @@ namespace Salem.UI
             //Debug.Log($"[{player.PlayerName}] has {player.TryalCards.Count} Tryal cards.");
 
             // Determine a template transform to copy position and scale from if one exists.
-            if (tryalCardPanel.childCount == 0)
-            {
-                return;
-            }
+            Vector3 tryalCardPosition = Vector3.zero;
+            Vector3 tryalCardScale = Vector3.one;
 
-            Vector3 tryalCardPosition = tryalCardPanel.position;
-            Vector3 tryalCardScale = tryalCardPanel.localScale;
+             if (tryalCardPanel.childCount > 0)
+            {
+                Transform template = tryalCardPanel.GetChild(0);
+                tryalCardPosition = template.localPosition;
+                tryalCardScale = template.localScale;
+            }
 
             foreach (Transform child in tryalCardPanel) Destroy(child.gameObject);
             foreach (TryalCard tc in player.TryalCards)
             {
                 var obj = Instantiate(tryalCardPrefab, tryalCardPanel);
                 Transform objTransform = obj.GetComponent<Transform>();
-                objTransform.position = tryalCardPosition;
+                objTransform.localPosition = tryalCardPosition;
                 objTransform.localScale = tryalCardScale;
                 obj.GetComponent<TryalCardUI>().AssignCard(tc);
             }

@@ -54,10 +54,12 @@ namespace Salem.UI
             {
                 statusUI.UpdateStatusCards(player.StatusCards);
             };
+            player.OnTryalCardsChanged += statusUI.UpdateTryalCards;
             statusUI.Initialize(player);
 
             // Optional: initialize immediately
             statusUI.UpdateStatusCards(player.StatusCards);
+            statusUI.UpdateTryalCards();
 
             playerToStatusUI[player] = statusUI;
             SetPlayerName(player, statusUI);

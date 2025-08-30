@@ -35,6 +35,7 @@ namespace Salem.Players
     {
         #region Vars
         public event Action OnStatusCardsChanged;
+        public event Action OnTryalCardsChanged;
         public String PlayerNameText;
         public HandManager HandManager;
         public List<TryalCard> TryalCards = new List<TryalCard>();
@@ -108,6 +109,31 @@ namespace Salem.Players
             }
             //arent we going to need a check if they try to reveal an already revealed card?
             CheckElimination();
+        }
+
+        public void InvokeOnTryalCardsChanged()
+        {
+            OnTryalCardsChanged?.Invoke();
+        }
+
+        public void AddTryalCard(TryalCard card)
+        {
+            TryalCards.Add(card);
+            OnTryalCardsChanged?.Invoke();
+        }
+
+        public void RemoveTryalCard(TryalCard card)
+        {
+            if (TryalCards.Remove(card))
+            {
+                OnTryalCardsChanged?.Invoke();
+            }
+        }
+
+        public void ClearTryalCards()
+        {
+            TryalCards.Clear();
+            OnTryalCardsChanged?.Invoke();
         }
 
         public void AddStatusCard(Card card)
