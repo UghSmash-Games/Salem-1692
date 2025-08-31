@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41d6e0217fd2a104fb4e789c1dea13e1, type: 3}
+  m_Name: Stocks 1
+  m_EditorClassIdentifier: 
+  Name: Stocks
+  Type: 0
+  RequiresTarget: 1
+  Effect: Target player's next turn is skipped.
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: -6460681411058318010, guid: 0236c556a278abf469cc12015c87b984, type: 3}
+  IsPlayed: 0
+  target: {fileID: 0}
+  LogMessage: '{source} played {card} on {target}.'
+  Op: 0
+  NeedsTarget: 1
+  RulesText: Target player's next turn is skipped.

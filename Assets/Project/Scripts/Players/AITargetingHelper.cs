@@ -33,4 +33,5 @@ namespace Salem.Players
             return validTargets.FirstOrDefault();
         }
     }
+
 }

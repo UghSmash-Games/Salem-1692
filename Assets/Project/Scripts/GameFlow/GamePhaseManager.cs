@@ -46,6 +46,7 @@ namespace Salem.GameFlow
 
         private GameSetup GameSetup;
         private GameTurnManager GameTurnManager;
+        private IRng rng;
         #endregion
 
         #region Standard Functions
@@ -54,7 +55,7 @@ namespace Salem.GameFlow
             GameSetup = GetComponent<GameSetup>();
             GameTurnManager = GetComponent<GameTurnManager>();
             OnPhaseChange += HandlePhaseChange;
-
+            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
         }
 
         void Start()
@@ -83,7 +84,7 @@ namespace Salem.GameFlow
             witches.ForEach(w => w.RevealWitchGroup(witches));
 
             // Assign the Black Cat
-            Player blackCatHolder = witches[Random.Range(0, witches.Count)];
+            Player blackCatHolder = witches[rng.NextInt(0, witches.Count)];
             blackCatHolder.AssignBlackCat();
 
             */
@@ -132,26 +133,8 @@ namespace Salem.GameFlow
 
         public void StartNightPhase()
         {
-            /*
-            // Witches vote for elimination
-            Player target = WitchesVote();
-
-            // Constable assigns protection
-            Player constable = FindConstable();
-            Player protectedPlayer = constable?.AssignGavel();
-
-            // Resolve elimination
-            if (protectedPlayer != target)
-            {
-                EliminatePlayer(target);
-            }
-
-            // Shuffle discard pile back into deck and reset Night card
-            ResetDeck();
-
-            // Transition to Day phase
-            GamePhaseManager.ChangePhase(GamePhase.Day);
-            */
+            NightResolver.Resolve(rng);
+            GameManager.Instance.CheckEndgameConditions();
         }
 
         public void StartEndGamePhase()

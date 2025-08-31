@@ -58,6 +58,8 @@ namespace Salem.Players
         public Player MatchedPlayer;
         //the amount of uses a town hall ability has currently
         public byte townHallAbilityCharges { get; private set; }
+        // Black Cat holder flag (keep separate from StatusCards to avoid Scapegoat moving it)
+        public bool IsBlackCatHolder { get; private set; }
         #endregion
 
         #region Standard Functions
@@ -193,6 +195,7 @@ namespace Salem.Players
 
         #region Helper Functions
         //Called in Hand Manager.
+        //leave for backwards compatibiltiy as of 8/31/25
         public virtual void ApplyCardEffect(Card card)
         {
             switch (card.Type)
@@ -264,17 +267,182 @@ namespace Salem.Players
                     break;
             }
         }
-        #endregion
 
-        #region Helper Functions
+        //Called in CardEffectManager
+        // Accusations & turn effects
+        public void ApplyAccusation(int amount)
+        {
+            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount + amount);
+            CheckAccusations(); // you already have this
+        }
+        public void ApplyAlibi(int reduceBy) => currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
+        public void ApplyStocks(int turns = 1) => skipTurn = true; // extend later if you track duration
 
+        // Hand
+        public void ClearHand()
+        {
+            HandManager.ClearHand(); // already raises OnHandChanged
+        }
+        public void TransferEntireHandTo(Player recipient)
+        {
+            var cards = HandManager.GetCards();
+            foreach (var c in cards) recipient.HandManager.AddCard(c);
+            HandManager.ClearHand();
+        }
+
+        // Status (Blue) cards
+        public void PlayStatusCardOnTarget(ActionCardSO statusCard, Player target)
+        {
+            // Remove from my hand (fires OnHandChanged for UI)
+            HandManager.RemoveCard(statusCard);
+
+            // Add to target's statuses and recompute (fires OnStatusCardsChanged + updates derived flags)
+            target.AddStatusCard(statusCard);
+            target.RecomputeStatusFromStatusCards();
+        }
+        public void AddStatusCardAndRecompute(Card status)
+        {
+            AddStatusCard(status);        // existing method
+            RecomputeStatusFromStatusCards();
+        }
+        public bool HasStatus(string name) => StatusCards.Any(c => c.Name == name);
+        public void ClearStatusCardsAndRecompute()
+        {
+            ClearStatusCards();           // existing method
+            RecomputeStatusFromStatusCards();
+        }
+        public void TransferAllStatusesTo(Player recipient)
+        {
+            if (StatusCards.Count == 0) return;
+            foreach (var s in StatusCards.ToList()) recipient.AddStatusCard(s);
+            ClearStatusCards();
+            RecomputeStatusFromStatusCards();
+            recipient.RecomputeStatusFromStatusCards();
+        }
+        public void RemoveStatusByNameAndRecompute(string name)
+        {
+            var idx = StatusCards.FindIndex(c => c.Name == name);
+            if (idx >= 0) StatusCards.RemoveAt(idx);
+            RecomputeStatusFromStatusCards();
+        }
+
+        // Derivations from statuses (call whenever statuses change)
+        public void RecomputeStatusFromStatusCards()
+        {
+            // Reset to base; then re-apply statuses each time
+            currentAccusationLimit = baseAccusationLimit;
+
+            
+            hasAsylum = StatusCards.Any(c => c.Name == "Asylum"); // protected at Night
+
+            bool hasPiety = StatusCards.Any(c => c.Name == "Piety"); // doubles limit
+            if (hasPiety) currentAccusationLimit = (byte)(baseAccusationLimit * 2);
+
+            // Curse makes accusations easier to trigger (limit -1, min 1)
+            bool hasCurse = StatusCards.Any(c => c.Name == "Curse");
+            if (hasCurse) currentAccusationLimit = (byte)Mathf.Max(1, currentAccusationLimit - 1);
+
+            // Asylum blocks Night targeting/elimination
+            hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
+
+            // If Matchmaker status fell off, clear the bond
+            if (!StatusCards.Any(c => c.Name == "Matchmaker") && MatchedPlayer != null)
+                ClearMatch();
+        }
+
+        // Matchmaker link (two-way)
+        public void SetMatchWith(Player other)
+        {
+            MatchedPlayer = other;
+            if (other != null && other.MatchedPlayer != this)
+                other.MatchedPlayer = this;
+        }
+        public void ClearMatch()
+        {
+            if (MatchedPlayer != null && MatchedPlayer.MatchedPlayer == this)
+                MatchedPlayer.MatchedPlayer = null;
+            MatchedPlayer = null;
+        }
+        // Auto-link when both Matchmaker statuses are in play
+        public static void TryFormMatchmakerLink()
+        {
+            var mmHolders = Salem.Data.PlayerService.All
+                .Where(p => p.HasStatus("Matchmaker"))
+                .ToList();
+
+            // Exactly two holders → ensure they are linked
+            if (mmHolders.Count == 2)
+            {
+                var a = mmHolders[0];
+                var b = mmHolders[1];
+                if (a.MatchedPlayer != b || b.MatchedPlayer != a)
+                {
+                    a.SetMatchWith(b);
+                }
+            }
+        }
+
+        //Black Cat
+        public void AssignBlackCat() => IsBlackCatHolder = true;
+        public void ClearBlackCat()  => IsBlackCatHolder = false;
+
+        //For Conspiracy
+        public int? GetRandomUnrevealedTryalIndex(Salem.Data.IRng rng)
+        {
+            if (TryalCards == null || TryalCards.Count == 0) return null;
+            // collect available indices
+            var indices = new List<int>();
+            for (int i = 0; i < TryalCards.Count; i++)
+                if (!TryalCards[i].IsRevealed) indices.Add(i);
+
+            if (indices.Count == 0) return null;
+            int pick = rng.NextInt(0, indices.Count);
+            return indices[pick];
+        }
+
+        public TryalCard RemoveTryalAt(int index)
+        {
+            if (index < 0 || index >= TryalCards.Count) return null;
+            var card = TryalCards[index];
+            TryalCards.RemoveAt(index);
+            OnTryalCardsChanged?.Invoke();
+            return card;
+        }
+
+        public void AddTryalCardAndNotify(TryalCard card)
+        {
+            TryalCards.Add(card);
+            // If this player *gained* a Witch, allow DetermineRole to lock in witchhood
+            DetermineRole();
+            OnTryalCardsChanged?.Invoke();
+        }
+
+       // Eliminate immediately (reveal all remaining Tryals safely)
+        public void EliminateNow()
+        {
+            if (IsEliminated) return;
+            for (int i = 0; i < TryalCards.Count; i++)
+                if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
+        }
+        // After any reveal, if eliminated → cascade to Matchmaker partner (only if both statuses exist)
         private void CheckElimination()
         {
             if (IsEliminated)
             {
                 Debug.Log($"{PlayerNameText} is ELIMINATED!");
-                //UI Update needs to happen here.
                 GameTurnManager.Instance?.OnPlayerEliminated(this);
+
+                if (MatchedPlayer != null &&
+                    HasStatus("Matchmaker") &&
+                    MatchedPlayer.HasStatus("Matchmaker") &&
+                    !MatchedPlayer.IsEliminated)
+                {
+                    // prevent ping-pong; clear link then eliminate partner
+                    var partner = MatchedPlayer;
+                    ClearMatch();
+                    partner.ClearMatch();
+                    partner.EliminateNow();
+                }
             }
         }
 

@@ -19,6 +19,7 @@ using System.Linq;
 using UnityEngine;
 using Salem.Cards;
 using Salem.Managers.Hands;
+using Salem.Data;
 
 namespace Salem.Deck
 {
@@ -28,9 +29,14 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<Card> Deck = new List<Card>();
         private List<Card> DiscardPile = new List<Card>();
+        private IRng rng;
         #endregion
 
         #region Standard Functions
+        void Awake()
+        {
+            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
+        }
         private void Start()
         {
             InitializeDeck();
@@ -76,7 +82,7 @@ namespace Salem.Deck
             for (int i = 0; i < Deck.Count; i++)
             {
                 Card temp = Deck[i];
-                int randomIndex = Random.Range(0, Deck.Count);
+                int randomIndex = rng.NextInt(0, Deck.Count);
                 Deck[i] = Deck[randomIndex];
                 Deck[randomIndex] = temp;
             }

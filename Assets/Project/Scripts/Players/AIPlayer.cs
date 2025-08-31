@@ -22,6 +22,7 @@ using Salem.Managers.Hands;
 using Salem.Cards;
 using System.Collections;
 using System;
+using Salem.Data;
 
 namespace Salem.Players
 {
@@ -29,9 +30,13 @@ namespace Salem.Players
     {
         #region Vars
         [SerializeField] private float aiThinkDelay = 1.5f;
+        private IRng rng;
         #endregion
 
-
+        void Awake()
+        {
+            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
+        }
 
         #region Accessor Functions
         public void StartTurn(Action onComplete)
@@ -153,7 +158,7 @@ namespace Salem.Players
         {
         // Simple targeting logic (can be expanded later)
         List<Player> potentialTargets = GameManager.Instance.GetActivePlayers();
-        return potentialTargets[Random.Range(0, potentialTargets.Count)];
+        return potentialTargets[rng.NextInt(0, potentialTargets.Count)];
         }
         */
         #endregion

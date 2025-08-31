@@ -28,6 +28,7 @@ using Salem.Players;
 using Salem.Deck;
 using Salem.Cards;
 using Salem.GameFlow;
+using Salem.Data;
 
 namespace Salem.Gameplay.Setup
 {
@@ -40,12 +41,15 @@ namespace Salem.Gameplay.Setup
         private float witchRatio = 1f / 3f;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
+        private IRng rng;
         #endregion
 
         #region Standard Functions
         void Awake()
         {
             DeckManager = GameObject.FindAnyObjectByType<DeckManager>();
+
+            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
         }
         #endregion
 
@@ -122,7 +126,7 @@ namespace Salem.Gameplay.Setup
         {
             for (int i = 0; i < deck.Count; i++)
             {
-                int randomIndex = Random.Range(i, deck.Count);
+                int randomIndex = rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
             
