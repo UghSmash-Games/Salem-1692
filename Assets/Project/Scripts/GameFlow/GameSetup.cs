@@ -110,6 +110,11 @@ namespace Salem.Gameplay.Setup
         {
             foreach (var player in players)
             {
+                if (player.HandManager == null)
+                {
+                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
+                    continue;
+                }
                 DeckManager.DrawMultipleCards(player.HandManager, count);
             }
         }

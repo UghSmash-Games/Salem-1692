@@ -31,11 +31,13 @@ namespace Salem.Players
         #region Vars
         [SerializeField] private float aiThinkDelay = 1.5f;
         private IRng rng;
+        private Player player;
         #endregion
 
         void Awake()
         {
             rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
+            player = GetComponent<Player>();
         }
 
         #region Accessor Functions
@@ -101,6 +103,7 @@ namespace Salem.Players
         #region Helper Functions
         private IEnumerator ExecuteAITurn(Action onComplete)
         {
+            if (player.IsHuman) yield break; // safety
             //Sort Delay before Acting
             yield return new WaitForSeconds(aiThinkDelay);
             Debug.Log($"[AI] {PlayerNameText} is taking action...");
@@ -121,6 +124,12 @@ namespace Salem.Players
         private void DrawCards()
         {
             // Logic for drawing cards
+        }
+
+        void OnEnable()
+        {
+            // Disable itself if this player is human
+            if (player != null && player.IsHuman) enabled = false;
         }
 
         private void PlayCards()

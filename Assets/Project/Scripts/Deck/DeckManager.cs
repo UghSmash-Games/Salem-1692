@@ -33,9 +33,14 @@ namespace Salem.Deck
         #endregion
 
         #region Standard Functions
+        private void OnValidate()
+        {
+            if (Deck != null) Deck.RemoveAll(c => c == null);
+        }
         void Awake()
         {
             rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
+            if (Deck != null) Deck.RemoveAll(c => c == null);
         }
         private void Start()
         {
@@ -46,12 +51,41 @@ namespace Salem.Deck
         #region Accessor Functions
         public void DrawCard(HandManager handManager)
         {
+            if (handManager == null)
+            {
+                Debug.LogError("[DeckManager] DrawCard: HandManager is NULL (did the Player object have a HandManager component on the same GameObject?).");
+                return;
+            }
+
+            if (Deck == null)
+            {
+                Debug.LogError("[DeckManager] DrawCard: Deck list is NULL.");
+                return;
+            }
+
+            while (Deck.Count > 0 && Deck[0] == null)
+            {
+                Debug.LogWarning("[DeckManager] Null card found in Deck. Removing it.");
+                Deck.RemoveAt(0);
+            }
+
             if (Deck.Count == 0)
             {
                 ReshuffleDiscardPile();
+                // after reshuffle, try once more to skip any nulls
+                while (Deck.Count > 0 && Deck[0] == null)
+                {
+                    Debug.LogWarning("[DeckManager] Null card found in Deck after reshuffle. Removing it.");
+                    Deck.RemoveAt(0);
+                }
+                if (Deck.Count == 0)
+                {
+                    Debug.LogError("[DeckManager] No cards available to draw.");
+                    return;
+                }
             }
 
-            Card drawnCard = Deck[0];
+            var drawnCard = Deck[0];
             Deck.RemoveAt(0);
             handManager.AddCard(drawnCard);
 

@@ -20,7 +20,17 @@ public class DebugManager : MonoBehaviour
         if (Input.GetKeyDown(GameTurnManager.debugTurnAdvanceKey))
         {
             Debug.Log("Debug Key Pressed (N). Ending Turn.");
-            GameTurnManager.SkipTurnDebug();
+            if (GameTurnManager.Instance.CurrentPlayer.IsHuman)
+            {
+                // Option A: treat N as 'End Turn' for human, not AI autoplay
+                GameTurnManager.Instance.OnHumanActionResolved();
+                GameTurnManager.Instance.EndTurn();
+            }
+            else
+            {
+                // Option B: advance AI turn normally for bots
+                GameTurnManager.Instance.EndTurn();
+            }
         }
 
         if (Input.GetKeyDown(GamePhaseManager.DebugAdvancePhaseKey))

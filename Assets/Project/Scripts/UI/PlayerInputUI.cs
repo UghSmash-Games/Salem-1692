@@ -24,7 +24,8 @@ namespace Salem.UI
         private void SpawnCardUI(Card card)
         {
             var obj = Instantiate(cardUIPrefab, handPanel);
-            obj.GetComponent<GameCardUI>().SetCard(card);
+            var cardUI = obj.GetComponent<GameCardUI>();
+            cardUI.SetCard(card, /* faceUp: */ true);   // local player sees their own cards
 
             var relay = obj.GetComponent<CardSelectionRelay>();
             relay.Init(card);

@@ -34,13 +34,17 @@ namespace Salem.Players
     public class Player : MonoBehaviour, IPlayerController
     {
         #region Vars
+        [Header("Control")]
+        [SerializeField] private bool isHuman = true;     // set TRUE for you, FALSE for bots
+        //[SerializeField] private bool isLocalPlayer = true; // single-device PoC: TRUE for you; FALSE for AI
+
+        public bool IsHuman => isHuman;
+        public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
         public String PlayerNameText;
-        public HandManager HandManager;
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
-        public bool IsLocalPlayer = false;
         public bool IsWitch { get; private set; }  // Now determined dynamically
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         //Added by Alex Craig-Hastings
@@ -60,12 +64,17 @@ namespace Salem.Players
         public byte townHallAbilityCharges { get; private set; }
         // Black Cat holder flag (keep separate from StatusCards to avoid Scapegoat moving it)
         public bool IsBlackCatHolder { get; private set; }
+        [SerializeField] private HandManager handManager;
+        public HandManager HandManager => handManager ??= GetComponent<HandManager>();
         #endregion
 
         #region Standard Functions
+        private void OnValidate()
+        {
+            if (handManager == null) handManager = GetComponent<HandManager>();
+        }
         void Awake()
         {
-            HandManager = GetComponent<HandManager>();
             if (HandManager == null)
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");

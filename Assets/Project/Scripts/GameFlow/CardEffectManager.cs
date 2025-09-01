@@ -98,6 +98,8 @@ namespace Salem.GameFlow
                 string message = FormatCardLogMessage(card, target);
                 // Raise event for CardLogManager to listen to
                 OnCardPlayed?.Invoke(message);
+                if(CurrentPlayer.IsHuman)
+                    GameTurnManager.Instance.OnHumanActionResolved();
                 GameTurnManager.Instance.EndTurn();
         }
 

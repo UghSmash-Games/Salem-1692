@@ -22,6 +22,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Salem.Data;
 using Salem.Players;
+using TMPro;
 
 namespace Salem.UI
 {
@@ -31,46 +32,100 @@ namespace Salem.UI
         [SerializeField] private GameObject buttonPrefab;
         [SerializeField] private Button confirmButton;
 
+        private readonly List<Button> spawned = new();
         private Player source;
         private Player primary;
         private Player secondary;
-        private bool pickTwo;
+        private bool requireTwo;
         private Action<Player, Player> onDone;
+        private bool isOpen;
 
         public void Open(Player sourcePlayer, bool twoTargets, Action<Player, Player> done)
         {
+            isOpen = true;
             gameObject.SetActive(true);
+
             source = sourcePlayer;
-            pickTwo = twoTargets;
+            requireTwo = twoTargets;
             onDone = done;
-            primary = null; secondary = null;
-            RebuildList(exclude: new HashSet<Player>{ source });
-            confirmButton.onClick.RemoveAllListeners();
-            confirmButton.onClick.AddListener(Confirm);
-            confirmButton.interactable = false;
+            primary = null;
+            secondary = null;
+
+            BuildList(new HashSet<Player> { source });
+
+            if (!confirmButton)
+            {
+                Debug.LogError("[TargetPickerUI] ConfirmButton is not assigned.");
+            }
+            else
+            {
+                confirmButton.onClick.RemoveAllListeners();
+                confirmButton.onClick.AddListener(Confirm);
+                confirmButton.interactable = false;
+            }
         }
 
-        private void RebuildList(HashSet<Player> exclude)
+        private void BuildList(HashSet<Player> exclude)
         {
-            foreach (Transform c in listParent) Destroy(c.gameObject);
+            // remove listeners then destroy old rows
+            foreach (var b in spawned)
+                if (b) b.onClick.RemoveAllListeners();
+            spawned.Clear();
+
+            foreach (Transform c in listParent)
+                Destroy(c.gameObject);
+
             var candidates = PlayerService.GetAlivePlayers().Where(p => !exclude.Contains(p)).ToList();
             foreach (var p in candidates)
             {
-                var b = Instantiate(buttonPrefab, listParent).GetComponent<Button>();
-                b.GetComponentInChildren<TMPro.TMP_Text>().text = p.PlayerNameText;
-                b.onClick.AddListener(() =>
-                {
-                    if (primary == null) { primary = p; }
-                    else if (pickTwo && secondary == null && p != primary) { secondary = p; }
-                    confirmButton.interactable = (primary != null && (!pickTwo || secondary != null));
-                });
+                var go = Instantiate(buttonPrefab, listParent);
+                var b = go.GetComponent<Button>();
+                spawned.Add(b);
+
+                var label = b.GetComponentInChildren<TMP_Text>();
+                if (label) label.text = p.PlayerNameText;
+
+                b.onClick.AddListener(() => OnPick(p));
             }
+        }
+
+        private void OnPick(Player p)
+        {
+            if (!isOpen) return;
+
+            if (primary == null)
+            {
+                primary = p;
+                if (requireTwo)
+                    BuildList(new HashSet<Player> { source, primary }); // second pick
+            }
+            else if (requireTwo && secondary == null && p != primary)
+            {
+                secondary = p;
+            }
+
+            if (confirmButton) // guard destroyed refs
+                confirmButton.interactable = (primary != null && (!requireTwo || secondary != null));
         }
 
         private void Confirm()
         {
+            if (!isOpen) return;
+            isOpen = false;
+
             onDone?.Invoke(primary, secondary);
+            Cleanup();
             gameObject.SetActive(false);
+        }
+
+        private void OnDisable() => Cleanup();
+
+        private void Cleanup()
+        {
+            foreach (var b in spawned)
+                if (b) b.onClick.RemoveAllListeners();
+            spawned.Clear();
+            primary = secondary = null;
         }
     }
 }

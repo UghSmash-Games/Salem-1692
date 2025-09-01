@@ -25,6 +25,7 @@ using Salem.Managers.GameState;
 using Salem.Players;
 using Salem.UI;
 using Salem.Data;
+using System.Collections;
 namespace Salem.GameFlow
 {
     public class GameTurnManager : MonoBehaviour
@@ -33,7 +34,7 @@ namespace Salem.GameFlow
         public static int CurrentPlayerIndex{ get; private set; }
         public static GameTurnManager Instance;
         [SerializeField] private float turnDuration = 30f;
-
+        public Player CurrentPlayer => currentPlayer;
         public GamePhase CurrentPhase;
         public UnityEvent OnTurnStart;
         public UnityEvent OnPhaseTransition;
@@ -44,6 +45,7 @@ namespace Salem.GameFlow
         private float turnTimer;
         private bool isTurnActive = false;
         private Player currentPlayer;
+        private bool waitingForHuman;
         #endregion
 
         private void Awake()
@@ -100,12 +102,37 @@ namespace Salem.GameFlow
             isTurnActive = true;
 
             //Add In Later For Advance UI
-            UIManager.SetPlayerTurnActive();
+            RunTurn(currentPlayer);
+        }
+        
+        private IEnumerator RunTurn(Player current)
+        {
+            UIManager.SetPlayerTurnActive(); // your existing UI cue
 
-            if (currentPlayer is AIPlayer ai)
+            if (current.IsHuman && current.IsLocalPlayer)
             {
-                ai.StartTurn(() => EndTurn());
+                waitingForHuman = true;
+                // Enable local input – e.g., show hand interactivity
+                //PlayerInputUI.EnableInputFor(current);
+
+                // Wait until a card is played or End Turn is pressed
+                yield return new WaitUntil(() => waitingForHuman == false);
             }
+            else
+            {
+                // AI path
+                if (current.TryGetComponent<AIPlayer>(out var ai))
+                    ai.StartTurn(() => EndTurn());
+                else
+                    yield return null; // fallback
+            }
+
+            // advance to next player (your existing logic)
+        }
+
+        public void OnHumanActionResolved()
+        {
+            waitingForHuman = false;
         }
 
         public void EndTurn()
@@ -113,7 +140,7 @@ namespace Salem.GameFlow
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0)
                 return;
-            
+
             isTurnActive = false;
 
             Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
@@ -150,12 +177,6 @@ namespace Salem.GameFlow
             UIManager.SetPlayerTurnActive();
         }
 
-        public void SkipTurnDebug()
-        {
-            if (!isTurnActive) return;
-            EndTurn();
-        }
-
         public void AdvancePhase()
         {
             switch (CurrentPhase)
@@ -171,7 +192,7 @@ namespace Salem.GameFlow
 
                 case GamePhase.Night:
                     HandleNightPhase();
-                    CurrentPhase = GamePhase.Dawn;
+                    CurrentPhase = GamePhase.Day;
                     break;
             }
         }
