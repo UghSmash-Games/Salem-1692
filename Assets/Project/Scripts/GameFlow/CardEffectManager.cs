@@ -33,11 +33,18 @@ namespace Salem.GameFlow
         public static event Action<string> OnCardPlayed;
         [SerializeField] private TargetPickerUI TargetPicker;
         [SerializeField] private TryalPickerUI TryalPicker;
+        [SerializeField] private GameManager GameManager;
 
         private Player CurrentPlayer;
-        private IRng rng;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
+        private delegate void CardOp(Player src, Player primary, Player secondary, IRng rng, ActionCardSO card);
+        private Dictionary<ActionOp, CardOp> _ops;
 
-
+        void OnValidate()
+        {
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+        }
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -48,7 +55,25 @@ namespace Salem.GameFlow
 
             Instance = this;
 
-            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
+            if (!GameManager) Debug.LogError("[CardEffectManager] Missing GameManager reference for RNG.");
+
+            _ops = new()
+                {
+                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(s.PlayerNameText=="Cotton Mather" ? 1 : 3) },
+                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7) },
+                    { ActionOp.Alibi,      (s,_,_,_,_) => s.ApplyAlibi(3) },
+                    { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
+                    { ActionOp.Arson,      (s,t,_,_,_) => { if (t.PlayerNameText!="Sarah Good") t.ClearHand(); } },
+                    { ActionOp.Robbery,    (s,t,u,_,_) => t.TransferEntireHandTo(u) },
+                    { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
+                    { ActionOp.Curse,      (s,t,_,_,c) => t.AddStatusCardAndRecompute(c) },
+                    { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
+                    { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
+                    { ActionOp.Matchmaker, (s,t,_,_,c) => { s.PlayStatusCardOnTarget(c, t); Player.TryFormMatchmakerLink(); } },
+                    { ActionOp.Conspiracy, (s,_,_,rng,_) => ExecuteConspiracy(rng) },
+                    { ActionOp.BlackCat,   (s,_,_,_,_) => Debug.LogWarning("[Black Cat] Assigned at Dawn, not played.") },
+                };
         }
 
         #region Helper Functions
@@ -94,73 +119,20 @@ namespace Salem.GameFlow
             if (card.Type == Card.CardColor.Green || card.Type == Card.CardColor.Red)
                 CurrentPlayer.HandManager.RemoveCard(card);
 
-                //Prepare message
-                string message = FormatCardLogMessage(card, target);
-                // Raise event for CardLogManager to listen to
-                OnCardPlayed?.Invoke(message);
-                if(CurrentPlayer.IsHuman)
-                    GameTurnManager.Instance.OnHumanActionResolved();
-                GameTurnManager.Instance.EndTurn();
+            // Raise event for CardLogManager to listen to
+            OnCardPlayed?.Invoke(CardLogFormatter.Format(CurrentPlayer, card, target));
+            if(CurrentPlayer.IsHuman)
+                GameTurnManager.Instance.OnHumanActionResolved();
+            GameTurnManager.Instance.EndTurn();
         }
 
         private void ExecuteActionOp(ActionCardSO action, Player target)
         {           
-            switch (action.Op)
-            {
-                case ActionOp.Accusation:
-                    target?.ApplyAccusation(1);
-                    break;
-                case ActionOp.Evidence:
-                    target?.ApplyAccusation(CurrentPlayer.PlayerNameText == "Cotton Mather" ? 1 : 3);
-                    break;
-                case ActionOp.Witness:
-                    target?.ApplyAccusation(7);
-                    break;
-                case ActionOp.Alibi:
-                    CurrentPlayer.ApplyAlibi(3);
-                    break;
-                case ActionOp.Stocks:
-                    target?.ApplyStocks(1);
-                    break;
-                case ActionOp.Arson:
-                    if (target == null) { Debug.LogWarning("[Arson] Target required."); break; }
-                    if (target.PlayerNameText == "Sarah Good") { Debug.Log("[Arson] Sarah Good is immune."); break; }
-                    target.ClearHand();
-                    break;
-                case ActionOp.Robbery:
-                    // target = victim (not self), action.target = recipient (not self, not victim)
-                    var recipient = action.target;
-                    target.TransferEntireHandTo(recipient);
-                    break;
-                case ActionOp.Scapegoat:
-                    // target = status donor, action.target = receiver
-                    target.TransferAllStatusesTo(action.target);
-                    break;
-                case ActionOp.Curse:
-                    if (target == null) { Debug.LogWarning("[Curse] Target required."); break; }
-                    target.AddStatusCardAndRecompute(action);
-                    break;
-                case ActionOp.Asylum:
-                    CurrentPlayer.PlayStatusCardOnTarget(action, target);
-                    break;
-                case ActionOp.Piety:
-                    CurrentPlayer.PlayStatusCardOnTarget(action, target);
-                    break;
-                case ActionOp.Matchmaker:
-                    CurrentPlayer.PlayStatusCardOnTarget(action, target);
-                    Player.TryFormMatchmakerLink(); // links two different holders
-                    break;
-                case ActionOp.BlackCat:
-                    // not played from hand; ignore here
-                    Debug.LogWarning("[Black Cat] Not a playable action; it is assigned at Dawn by witches’ vote.");
-                    break;
-                case ActionOp.Conspiracy:
-                    ExecuteConspiracy(rng);
-                    break;
-                default:
-                    Debug.LogWarning($"[Effect] Unhandled op {action.Op}");
-                    break;
-            }
+            var secondary = action.RequiresSecondTarget ? action.target : null;
+            if (_ops.TryGetValue(action.Op, out var op))
+                op(CurrentPlayer, target, secondary, Rng, action);
+            else
+                Debug.LogWarning($"[Effect] Unhandled op {action.Op}");
         }
 
         private void ExecuteConspiracy(IRng rng)
@@ -249,25 +221,6 @@ namespace Salem.GameFlow
             {
                 CurrentPlayer = players[GameTurnManager.CurrentPlayerIndex];
             }
-        }
-
-
-        private string FormatCardLogMessage(Card card, Player target)
-        {
-            // Supports dynamic substitution if used
-            string sourceName = CurrentPlayer.PlayerNameText;
-            string targetName = target?.PlayerNameText ?? "no target";
-
-
-            if (string.IsNullOrEmpty(card.LogMessage))
-                return $"{sourceName} played {card.name} on {targetName}";
-
-
-            // Optional: Replace placeholders in the log message
-            return card.LogMessage
-                .Replace("{source}", sourceName)
-                .Replace("{card}", card.Name)
-                .Replace("{target}", targetName);
         }
         #endregion
     }

@@ -23,27 +23,66 @@ using Salem.Cards;
 using System.Collections;
 using System;
 using Salem.Data;
+using System.Linq;
 
 namespace Salem.Players
 {
+    [RequireComponent(typeof(Player))]
     public class AIPlayer : Player
     {
         #region Vars
         [SerializeField] private float aiThinkDelay = 1.5f;
-        private IRng rng;
-        private Player player;
+        [SerializeField] private Player player;
+        [SerializeField] private GameManager GameManager;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
 
+        void OnValidate()
+        {
+            if (!player) player = GetComponent<Player>();
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+        }
         void Awake()
         {
-            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
-            player = GetComponent<Player>();
+            if (!GameManager) Debug.LogError("[AI Player] Missing GameManager reference for RNG.");
         }
 
         #region Accessor Functions
-        public void StartTurn(Action onComplete)
+        public IEnumerator TakeTurnOnce()
         {
-            StartCoroutine(ExecuteAITurn(onComplete));
+            //Debug.Log("Starting AI Turn Logic");
+            if (player.IsHuman) yield break;
+
+            yield return new WaitForSeconds(aiThinkDelay);
+
+            var hand = player.HandManager.GetCards();
+            if (hand == null || hand.Count == 0)
+            {
+                // Nothing to play -> end turn
+                GameTurnManager.Instance.EndTurn();
+                yield break;
+            }
+
+            // Pick a playable ACTION card deterministically
+            var actions = hand.OfType<ActionCardSO>().ToList();
+            if (actions.Count == 0)
+            {
+                GameTurnManager.Instance.EndTurn();
+                yield break;
+            }
+
+            var card = actions[Rng.NextInt(0, actions.Count)];
+
+
+            // naive: pick first playable card and a legal target
+            if (card == null)
+            {
+                GameTurnManager.Instance.EndTurn();
+                yield break;
+            }
+
+            PerformTurnAction(card);
         }
 
         public override void ApplyCardEffect(Card card)
@@ -63,10 +102,11 @@ namespace Salem.Players
             return HandManager.Hand[0];
         }
 
-        public override void PerformTurnAction(Card selectedCard)
+        public override void PerformTurnAction(ActionCardSO selectedCard)
         {
             if (selectedCard == null)
             {
+                Debug.Log("No Selected Card");
                 return;
             }
 
@@ -76,18 +116,28 @@ namespace Salem.Players
                 return;
             }
 
-            Player target = null;
+            Player primary = null;
+            Player secondary = null;
             if (selectedCard.RequiresTarget)
             {
-                target = AITargetingHelper.SelectRandomTarget(this);
-                if (target == null)
+                primary = AITargetingHelper.SelectRandomTarget(this);
+                if (primary == null)
                 {
                     Debug.LogWarning("[AI] No valid target found.");
                     return;
                 }
             }
-
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+            if (selectedCard.RequiresSecondTarget)
+            {
+                secondary = AITargetingHelper.SelectRandomTarget(this);
+                if (secondary == null || secondary == primary)
+                {
+                    Debug.LogWarning("[AI] No valid target found.");
+                    return;
+                }
+            }
+            Debug.Log("Playing Card");
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
             HandManager.RemoveCard(selectedCard);
         }
 
@@ -101,26 +151,7 @@ namespace Salem.Players
         #endregion
 
         #region Helper Functions
-        private IEnumerator ExecuteAITurn(Action onComplete)
-        {
-            if (player.IsHuman) yield break; // safety
-            //Sort Delay before Acting
-            yield return new WaitForSeconds(aiThinkDelay);
-            Debug.Log($"[AI] {PlayerNameText} is taking action...");
 
-            Card chosenCard = SelectCard();
-
-            // Example stub: play first card in hand if exists
-            if (chosenCard != null)
-            {
-                PerformTurnAction(chosenCard);
-            }
-
-            // Optional delay after action
-            yield return new WaitForSeconds(1f);
-
-            onComplete?.Invoke();
-        }
         private void DrawCards()
         {
             // Logic for drawing cards
@@ -131,46 +162,6 @@ namespace Salem.Players
             // Disable itself if this player is human
             if (player != null && player.IsHuman) enabled = false;
         }
-
-        private void PlayCards()
-        {
-            /*
-            foreach (Card i in Hand)
-            {
-                    if (IsValidPlay(card))
-                {
-                    //target = ChooseTarget(); // Basic target selection
-                    PlayCard(card, target);
-                    break; // Play one card per turn in this example
-                }
-                //GameTurnManager.Instance.EndTurn();
-            }
-            */
-        }
-
-        /*
-        private void PlayCard(Card card, Player target)
-        {
-            Debug.Log("Function Not Implemented");
-            throw new System.NotImplementedException();
-        }
-
-        private bool IsValidPlay(Card card)
-        {
-            // Define simple rules for valid card plays
-            return card.Type != "Black"; // Example: Skip black cards for now
-        }
-        */
-        
-        /*
-        private Player ChooseTarget()
-        {
-        // Simple targeting logic (can be expanded later)
-        List<Player> potentialTargets = GameManager.Instance.GetActivePlayers();
-        return potentialTargets[rng.NextInt(0, potentialTargets.Count)];
-        }
-        */
         #endregion
-
     }
 }

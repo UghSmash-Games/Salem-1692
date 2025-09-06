@@ -25,30 +25,32 @@ namespace Salem.GameFlow
 {
     public static class NightResolver
     {
-        public static void Resolve(IRng rng)
+        public static void Resolve(IRng rng, bool witchesCanTargetWitches = false)
         {
-            var alive = PlayerService.GetAlivePlayers();
+            var alive   = PlayerService.GetAlivePlayers();
             var witches = alive.Where(p => p.IsWitch && !p.IsEliminated).ToList();
-
             if (witches.Count == 0) return;
 
-            // Collect votes (AI placeholder: random eligible target)
+            // Eligible = alive, not eliminated, not protected by Asylum
             var eligible = alive.Where(p => !p.IsEliminated && !p.hasAsylum).ToList();
+
+            // (Optional) If witches cannot target witches, filter them out here:
+            if (!witchesCanTargetWitches)
+                eligible = eligible.Where(p => !p.IsWitch).ToList();
+
             if (eligible.Count == 0) return;
 
-            var tally = new Dictionary<Player,int>();
-            foreach (var p in eligible) tally[p] = 0;
-
+            // Tally random votes (deterministic via IRng)
+            var tally = eligible.ToDictionary(p => p, _ => 0);
             foreach (var w in witches)
             {
-                // You can bias against other witches here if your rules require
                 var t = eligible[rng.NextInt(0, eligible.Count)];
                 tally[t]++;
             }
 
-            // Winner; deterministic tie break
+            // Winner with deterministic tie-break
             int best = tally.Values.Max();
-            var top = tally.Where(kv => kv.Value == best).Select(kv => kv.Key).ToList();
+            var top  = tally.Where(kv => kv.Value == best).Select(kv => kv.Key).ToList();
             var victim = top[rng.NextInt(0, top.Count)];
 
             // Eliminate victim (reveal remaining Tryals)

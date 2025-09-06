@@ -46,7 +46,6 @@ namespace Salem.GameFlow
 
         private GameSetup GameSetup;
         private GameTurnManager GameTurnManager;
-        private IRng rng;
         #endregion
 
         #region Standard Functions
@@ -55,7 +54,6 @@ namespace Salem.GameFlow
             GameSetup = GetComponent<GameSetup>();
             GameTurnManager = GetComponent<GameTurnManager>();
             OnPhaseChange += HandlePhaseChange;
-            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
         }
 
         void Start()
@@ -133,7 +131,7 @@ namespace Salem.GameFlow
 
         public void StartNightPhase()
         {
-            NightResolver.Resolve(rng);
+            NightResolver.Resolve(GameManager.Instance.Rng /*, witchesCanTargetWitches:false */);
             GameManager.Instance.CheckEndgameConditions();
         }
 

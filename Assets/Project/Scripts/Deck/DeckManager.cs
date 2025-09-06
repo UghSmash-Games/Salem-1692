@@ -20,27 +20,31 @@ using UnityEngine;
 using Salem.Cards;
 using Salem.Managers.Hands;
 using Salem.Data;
+using Salem.GameFlow;
 
 namespace Salem.Deck
 {
     public class DeckManager : MonoBehaviour
     {
         #region Vars
+        [SerializeField] private GameManager GameManager;
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<Card> Deck = new List<Card>();
         private List<Card> DiscardPile = new List<Card>();
-        private IRng rng;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
 
         #region Standard Functions
         private void OnValidate()
         {
             if (Deck != null) Deck.RemoveAll(c => c == null);
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
         }
         void Awake()
         {
-            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
             if (Deck != null) Deck.RemoveAll(c => c == null);
+            if (!GameManager) Debug.LogError("[Deck Manager] Missing GameManager reference for RNG.");
         }
         private void Start()
         {
@@ -116,7 +120,7 @@ namespace Salem.Deck
             for (int i = 0; i < Deck.Count; i++)
             {
                 Card temp = Deck[i];
-                int randomIndex = rng.NextInt(0, Deck.Count);
+                int randomIndex = Rng.NextInt(0, Deck.Count);
                 Deck[i] = Deck[randomIndex];
                 Deck[randomIndex] = temp;
             }

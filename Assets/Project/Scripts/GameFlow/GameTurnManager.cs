@@ -33,21 +33,25 @@ namespace Salem.GameFlow
         #region Vars
         public static int CurrentPlayerIndex{ get; private set; }
         public static GameTurnManager Instance;
+        [SerializeField] private GameManager GameManager;
+        [SerializeField] private UIManager UIManager;
         [SerializeField] private float turnDuration = 30f;
         public Player CurrentPlayer => currentPlayer;
-        public GamePhase CurrentPhase;
         public UnityEvent OnTurnStart;
         public UnityEvent OnPhaseTransition;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
 
-        private GameManager GameManager;
-        private UIManager UIManager;
         private float turnTimer;
         private bool isTurnActive = false;
         private Player currentPlayer;
         private bool waitingForHuman;
         #endregion
 
+        private void OnValidate()
+        {
+            if (!UIManager) UIManager = FindFirstObjectByType<UIManager>();
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+        }
         private void Awake()
         {
             if (Instance == null)
@@ -59,10 +63,6 @@ namespace Salem.GameFlow
                 Destroy(gameObject);
                 return;
             }
-
-            GameManager = FindFirstObjectByType<GameManager>();
-            UIManager = FindFirstObjectByType<UIManager>();
-
         }
 
         private void Update()
@@ -86,13 +86,11 @@ namespace Salem.GameFlow
         public void StartTurn(int playerIndex)
         {
             var players = PlayerService.GetAlivePlayers();
-            if (players.Count == 0)
-                return;
+            if (players.Count == 0) return;
             
             turnTimer = turnDuration;
 
-            if (playerIndex >= players.Count)
-                playerIndex = 0;
+            if (playerIndex >= players.Count) playerIndex = 0;
             
             CurrentPlayerIndex = playerIndex;
 
@@ -102,7 +100,7 @@ namespace Salem.GameFlow
             isTurnActive = true;
 
             //Add In Later For Advance UI
-            RunTurn(currentPlayer);
+            StartCoroutine(RunTurn(currentPlayer));
         }
         
         private IEnumerator RunTurn(Player current)
@@ -117,14 +115,16 @@ namespace Salem.GameFlow
 
                 // Wait until a card is played or End Turn is pressed
                 yield return new WaitUntil(() => waitingForHuman == false);
+                yield break;
             }
             else
             {
                 // AI path
                 if (current.TryGetComponent<AIPlayer>(out var ai))
-                    ai.StartTurn(() => EndTurn());
-                else
-                    yield return null; // fallback
+                {
+                    yield return StartCoroutine(ai.TakeTurnOnce());
+                }
+                else GameTurnManager.Instance.EndTurn();
             }
 
             // advance to next player (your existing logic)
@@ -137,16 +137,13 @@ namespace Salem.GameFlow
 
         public void EndTurn()
         {
-            var players = PlayerService.GetAlivePlayers();
-            if (players.Count == 0)
-                return;
-
+            if (!isTurnActive) return;
             isTurnActive = false;
 
-            Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0) return;
 
-            //Add In later for Advance UI
-            //Players[currentPlayerIndex].EndTurnEffects();
+            Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
 
             int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
 
@@ -175,49 +172,6 @@ namespace Salem.GameFlow
             }
 
             UIManager.SetPlayerTurnActive();
-        }
-
-        public void AdvancePhase()
-        {
-            switch (CurrentPhase)
-            {
-                case GamePhase.Dawn:
-                    HandleDawnPhase();
-                    CurrentPhase = GamePhase.Day;
-                    break;
-
-                case GamePhase.Day:
-                    CurrentPhase = GamePhase.Night;
-                    break;
-
-                case GamePhase.Night:
-                    HandleNightPhase();
-                    CurrentPhase = GamePhase.Day;
-                    break;
-            }
-        }
-        #endregion
-
-        #region Helper Functions
-        private void HandleNightPhase()
-        {
-            throw new NotImplementedException();
-        }
-
-        private void HandleDawnPhase()
-        {
-            throw new NotImplementedException();
-        }
-
-
-        private void NotifyTurnStart()
-        {
-            OnTurnStart?.Invoke();
-        }
-
-        private void NotifyPhaseTransition()
-        {
-            OnPhaseTransition?.Invoke();
         }
         #endregion
     }

@@ -31,6 +31,6 @@ namespace Salem.Players
         /// Execute the action for the selected card.
         /// </summary>
         /// <param name="selectedCard">Card chosen by SelectCard.</param>
-        void PerformTurnAction(Card selectedCard);
+        void PerformTurnAction(ActionCardSO selectedCard);
     }
 }

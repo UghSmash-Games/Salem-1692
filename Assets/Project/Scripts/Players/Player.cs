@@ -31,6 +31,7 @@ using UnityEngine;
 
 namespace Salem.Players
 {
+    [RequireComponent(typeof(HandManager))]
     public class Player : MonoBehaviour, IPlayerController
     {
         #region Vars
@@ -79,7 +80,7 @@ namespace Salem.Players
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
             }
-            
+
             //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
             if (PlayerNameText == "George Burroughs")
             {
@@ -102,7 +103,7 @@ namespace Salem.Players
             // A player is a Witch if they have at least one Witch TryalCard
             //FIX - this function will need to be called again when tryal cards get moved around, but even if the witch card gets removed from their hand, they stay a witch
             //put the check in first so witches cant be undone
-            if(!IsWitch)
+            if (!IsWitch)
             {
                 IsWitch = TryalCards.Any(card => card.TryalCardType == TryalCardType.Witch);
             }
@@ -167,7 +168,7 @@ namespace Salem.Players
 
         public void shiftBaseAccusations(bool shiftUp)
         {
-            if(shiftUp) { baseAccusationLimit++; } // if Thomas Danforth dies.... I think their ability ends, so use this on everyone to bring them back to normal
+            if (shiftUp) { baseAccusationLimit++; } // if Thomas Danforth dies.... I think their ability ends, so use this on everyone to bring them back to normal
             else { baseAccusationLimit--; } //use in the case of Thomas Danforth, his ability will drop everyones limit by 1
         }
         #endregion
@@ -183,7 +184,7 @@ namespace Salem.Players
             return null;
         }
 
-        public virtual void PerformTurnAction(Card selectedCard)
+        public virtual void PerformTurnAction(ActionCardSO selectedCard)
         {
             if (selectedCard == null)
             {
@@ -196,8 +197,9 @@ namespace Salem.Players
                 return;
             }
 
-            Player target = selectedCard.RequiresTarget ? selectedCard.target : null;
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+            Player primary = selectedCard.RequiresTarget ? selectedCard.target : null;
+            Player secondary = selectedCard.RequiresSecondTarget ? selectedCard.target : null;
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
             HandManager?.RemoveCard(selectedCard);
         }
         #endregion
@@ -341,7 +343,7 @@ namespace Salem.Players
             // Reset to base; then re-apply statuses each time
             currentAccusationLimit = baseAccusationLimit;
 
-            
+
             hasAsylum = StatusCards.Any(c => c.Name == "Asylum"); // protected at Night
 
             bool hasPiety = StatusCards.Any(c => c.Name == "Piety"); // doubles limit
@@ -393,7 +395,7 @@ namespace Salem.Players
 
         //Black Cat
         public void AssignBlackCat() => IsBlackCatHolder = true;
-        public void ClearBlackCat()  => IsBlackCatHolder = false;
+        public void ClearBlackCat() => IsBlackCatHolder = false;
 
         //For Conspiracy
         public int? GetRandomUnrevealedTryalIndex(Salem.Data.IRng rng)
@@ -426,7 +428,7 @@ namespace Salem.Players
             OnTryalCardsChanged?.Invoke();
         }
 
-       // Eliminate immediately (reveal all remaining Tryals safely)
+        // Eliminate immediately (reveal all remaining Tryals safely)
         public void EliminateNow()
         {
             if (IsEliminated) return;

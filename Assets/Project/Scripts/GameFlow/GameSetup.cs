@@ -35,21 +35,28 @@ namespace Salem.Gameplay.Setup
     public class GameSetup : MonoBehaviour
     {
         #region Vars
+        [SerializeField] private GameManager GameManager;
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
         [SerializeField, Range(0f, 1f), Tooltip("Proportion of players assigned the Witch role")]
         private float witchRatio = 1f / 3f;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
-        private IRng rng;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
 
         #region Standard Functions
+        void OnValidate()
+        {
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+        }
+
         void Awake()
         {
             DeckManager = GameObject.FindAnyObjectByType<DeckManager>();
+            if (!GameManager) Debug.LogError("[CardEffectManager] Missing GameManager reference for RNG.");
 
-            rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
         }
         #endregion
 
@@ -131,7 +138,7 @@ namespace Salem.Gameplay.Setup
         {
             for (int i = 0; i < deck.Count; i++)
             {
-                int randomIndex = rng.NextInt(i, deck.Count);
+                int randomIndex = Rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
             

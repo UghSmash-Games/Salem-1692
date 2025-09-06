@@ -45,9 +45,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2cccc1b83944fe6438ee6601e0be457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  PlayerName: AI Opponent 1
+  isHuman: 0
+  IsLocalPlayer: 0
+  PlayerNameText: 
   TryalCards: []
-  HandManager: {fileID: 0}
+  MatchedPlayer: {fileID: 0}
+  handManager: {fileID: 114096446988200638}
+  aiThinkDelay: 1.5
 --- !u!114 &114096446988200638
 MonoBehaviour:
   m_ObjectHideFlags: 0

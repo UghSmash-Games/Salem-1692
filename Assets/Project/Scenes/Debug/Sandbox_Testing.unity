@@ -242,6 +242,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7157a387441b2ba47957668978f777f1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &841667134 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8941241539781366286, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+  m_PrefabInstance: {fileID: 8753046375948025155}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4848732481f21c4387ed677bf49d7f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &1046357719 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8113552295490818942, guid: 54b84a6d7cbf7db458ba87ea0e3dcfcb, type: 3}
@@ -447,6 +458,17 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!114 &1267484793 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8386369302416158620, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+  m_PrefabInstance: {fileID: 8753046375948025155}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30cbe9d8bb9c4dd4886517fc9d67c190, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!224 &1557537041 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2883950166160848084, guid: 54b84a6d7cbf7db458ba87ea0e3dcfcb, type: 3}
@@ -4590,12 +4612,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2cccc1b83944fe6438ee6601e0be457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isHuman: 0
+  IsLocalPlayer: 0
   PlayerNameText: AI Player 3
   TryalCards: []
-  IsLocalPlayer: 0
   MatchedPlayer: {fileID: 0}
   handManager: {fileID: 2045448825}
   aiThinkDelay: 1.5
+  player: {fileID: 2045448826}
+  GameManager: {fileID: 841667134}
 --- !u!4 &2045448827
 Transform:
   m_ObjectHideFlags: 0
@@ -4654,12 +4679,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2cccc1b83944fe6438ee6601e0be457d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isHuman: 0
+  IsLocalPlayer: 0
   PlayerNameText: AI Player 2
   TryalCards: []
-  IsLocalPlayer: 0
   MatchedPlayer: {fileID: 0}
   handManager: {fileID: 2072694992}
   aiThinkDelay: 1.5
+  player: {fileID: 2072694993}
+  GameManager: {fileID: 841667134}
 --- !u!4 &2072694994
 Transform:
   m_ObjectHideFlags: 0
@@ -4807,6 +4835,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 5887807496239553753, guid: 1247709bf852d6841b8e559deeabf9cc, type: 3}
+      propertyPath: isHuman
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5887807496239553753, guid: 1247709bf852d6841b8e559deeabf9cc, type: 3}
       propertyPath: PlayerName
       value: 
@@ -5038,6 +5070,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1915170812}
     - target: {fileID: 8467606764727035811, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: GameManager
+      value: 
+      objectReference: {fileID: 841667134}
+    - target: {fileID: 8467606764727035811, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: TryalPicker
       value: 
       objectReference: {fileID: 2785213513978825089}
@@ -5045,6 +5081,14 @@ PrefabInstance:
       propertyPath: TargetPicker
       value: 
       objectReference: {fileID: 1228308293121832816}
+    - target: {fileID: 8941241539781366286, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: UIManager
+      value: 
+      objectReference: {fileID: 1267484793}
+    - target: {fileID: 8941241539781366286, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: useFixedSeed
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

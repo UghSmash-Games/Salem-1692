@@ -31,23 +31,31 @@ using Salem.Data;
 
 namespace Salem.GameFlow
 {
+    [DefaultExecutionOrder(-100)] // ensure this Awake Runs before other managers
     public class GameManager : MonoBehaviour
     {
         #region Vars
-        //[SerializeField] private PlayerHandUI PlayerHandUI;
+        [Header("RNG")]
+        [SerializeField] private bool useFixedSeed = false;
+        [SerializeField] private ulong fixedSeed = 123456789UL;
+        public IRng Rng { get; private set; }
+        public ulong Seed{ get; private set; }
         [SerializeField] private EndGameUI EndGameUI;
 
         //Tracks GameManager
         public static GameManager Instance { get; private set; }
+        [SerializeField] private UIManager UIManager;
 
-        private UIManager UIManager;
         private bool isGameActive;
         #endregion
 
         #region Standard Functions
+        private void OnValidate()
+        {
+            if (!UIManager) UIManager = FindFirstObjectByType<UIManager>();
+        }
         void Awake()
         {
-            UIManager = GameObject.FindAnyObjectByType<UIManager>();
             HandleInstance();
             PopulatePlayers();
             isGameActive = true;
@@ -95,21 +103,25 @@ namespace Salem.GameFlow
             EndGameUI.OnRestart += RestartGame;
             EndGameUI.OnQuit += QuitGame;
         }
+
+        public void InitRng(ulong? seed = null)
+        {
+            Seed = seed ?? (useFixedSeed ? fixedSeed : (ulong)System.DateTime.UtcNow.Ticks);
+            Rng  = new XorShiftRng(Seed);
+            Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
+        }
+
+        // Optional for replays/debug:
+        public void Reseed(ulong newSeed) => InitRng(newSeed);
         #endregion
-    
+
         #region Helper Functions
         //Ensures only 1 GameManager
         private void HandleInstance()
         {
-            if (Instance == null)
-            {
-                Instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            InitRng(); // set Rng + Seed
         }
 
         //Finds ALL Players and stores them in an accessible list
@@ -135,6 +147,8 @@ namespace Salem.GameFlow
             }
         }
 
+
+
         private void RestartGame()
         {
             Debug.Log("Restarting Game...");
@@ -145,11 +159,11 @@ namespace Salem.GameFlow
 
         private void QuitGame()
         {
-        Debug.Log("Quitting Game...");
-        EndGameUI.OnRestart -= RestartGame;
-        EndGameUI.OnQuit -= QuitGame;
-        Application.Quit();
+            Debug.Log("Quitting Game...");
+            EndGameUI.OnRestart -= RestartGame;
+            EndGameUI.OnQuit -= QuitGame;
+            Application.Quit();
         }
-    #endregion
+        #endregion
     }
 }
