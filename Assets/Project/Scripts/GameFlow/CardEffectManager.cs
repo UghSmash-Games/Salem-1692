@@ -60,7 +60,7 @@ namespace Salem.GameFlow
             _ops = new()
                 {
                     { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(s.PlayerNameText=="Cotton Mather" ? 1 : 3) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.PlayerNameText=="Cotton Mather" ? 1 : 3) },
                     { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7) },
                     { ActionOp.Alibi,      (s,_,_,_,_) => s.ApplyAlibi(3) },
                     { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
@@ -127,7 +127,8 @@ namespace Salem.GameFlow
         }
 
         private void ExecuteActionOp(ActionCardSO action, Player target)
-        {           
+        {          
+            Debug.Log(action.Op.ToString() );
             var secondary = action.RequiresSecondTarget ? action.target : null;
             if (_ops.TryGetValue(action.Op, out var op))
                 op(CurrentPlayer, target, secondary, Rng, action);

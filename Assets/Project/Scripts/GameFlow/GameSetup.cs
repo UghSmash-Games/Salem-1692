@@ -108,7 +108,8 @@ namespace Salem.Gameplay.Setup
                 player.TryalCards = DrawTryalCards(5, TryalDeck);
                 player.InvokeOnTryalCardsChanged();
                 player.DetermineRole();
-                
+                //give each player a reference to the RNG to be able to randomly decide tryal card
+                player.setRng(GameManager.Rng);
             }
         }
 

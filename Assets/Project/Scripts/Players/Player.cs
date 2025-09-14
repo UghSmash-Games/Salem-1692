@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Salem.Cards;
+using Salem.Data;
 using Salem.GameFlow;
 using Salem.Managers.GameState;
 using Salem.Managers.Hands;
@@ -39,6 +40,8 @@ namespace Salem.Players
         [SerializeField] private bool isHuman = true;     // set TRUE for you, FALSE for bots
         //[SerializeField] private bool isLocalPlayer = true; // single-device PoC: TRUE for you; FALSE for AI
 
+        //needed RNG, but figured giving access to full manager was a bad idea
+        public IRng Rng { get; private set; }
         public bool IsHuman => isHuman;
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
@@ -50,7 +53,7 @@ namespace Salem.Players
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
-        public byte baseAccusationLimit { get; private set; } = 7;
+        public byte baseAccusationLimit { get; private set; } = 4;
         //the amount of accusation cards needed to reveal a tryal currently. This is affected by cards like piety, and default back to the base version when those effects end
         public byte currentAccusationLimit { get; private set; }
         //the current amount of accusations against the player, once this goes over the currentAccusationLimit, a tryal card is revealed and it gets reset to 0
@@ -98,8 +101,17 @@ namespace Salem.Players
         #endregion
 
         #region Accessor Functions
+        public void setRng(IRng rng)
+        {
+            if(rng != null)
+            {
+                Rng = rng;
+            }
+        }
+
         public void DetermineRole()
         {
+            RecomputeStatusFromStatusCards();
             // A player is a Witch if they have at least one Witch TryalCard
             //FIX - this function will need to be called again when tryal cards get moved around, but even if the witch card gets removed from their hand, they stay a witch
             //put the check in first so witches cant be undone
@@ -111,6 +123,7 @@ namespace Salem.Players
 
         public void RevealTryalCard(int index)
         {
+            Debug.Log("REVEAL");
             if (index < 0 || index >= TryalCards.Count) return;
 
             TryalCard card = TryalCards[index];
@@ -118,6 +131,10 @@ namespace Salem.Players
             {
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
+                if (card.TryalCardType == TryalCardType.Witch)
+                {
+                    EliminateNow();
+                }
             }
             //arent we going to need a check if they try to reveal an already revealed card?
             CheckElimination();
@@ -283,7 +300,10 @@ namespace Salem.Players
         // Accusations & turn effects
         public void ApplyAccusation(int amount)
         {
+            Debug.Log("Acc limit:"+currentAccusationLimit);
+            Debug.Log("Before Acc:"+currentAccusationCount);
             currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount + amount);
+            Debug.Log("After Acc:" + currentAccusationCount);
             CheckAccusations(); // you already have this
         }
         public void ApplyAlibi(int reduceBy) => currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
@@ -461,6 +481,12 @@ namespace Salem.Players
         {
             if (currentAccusationCount >= currentAccusationLimit)
             {
+                //setting it as random first to get the main systems hooked together and working
+                int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
+                if (tryalToReveal.HasValue)
+                {
+                    RevealTryalCard(tryalToReveal.Value);
+                }
                 //reveal tryal
                 currentAccusationCount = 0;
             }
