@@ -53,7 +53,7 @@ namespace Salem.Players
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
-        public byte baseAccusationLimit { get; private set; } = 4;
+        public byte baseAccusationLimit { get; private set; } = 7;
         //the amount of accusation cards needed to reveal a tryal currently. This is affected by cards like piety, and default back to the base version when those effects end
         public byte currentAccusationLimit { get; private set; }
         //the current amount of accusations against the player, once this goes over the currentAccusationLimit, a tryal card is revealed and it gets reset to 0
