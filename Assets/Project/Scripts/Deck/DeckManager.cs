@@ -30,6 +30,8 @@ namespace Salem.Deck
         [SerializeField] private GameManager GameManager;
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<Card> Deck = new List<Card>();
+        [Tooltip("Populate with cards in Inspector")]
+        [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
         private List<Card> DiscardPile = new List<Card>();
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing

@@ -5025,6 +5025,74 @@ PrefabInstance:
       propertyPath: m_Name
       value: Managers
       objectReference: {fileID: 0}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: GameManager
+      value: 
+      objectReference: {fileID: 841667134}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: TownhallDeck.Array.size
+      value: 15
+      objectReference: {fileID: 0}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[0]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 9da8047d22712b846ac53c15de24b596, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[1]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 6da8d5498e7e5944baa530f9bbe87ea2, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[2]'
+      value: 
+      objectReference: {fileID: 11400000, guid: f3caad35c54392149bad08e2cc7a4646, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[3]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 6d37343c412757b45acbbc6f72a948bb, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[4]'
+      value: 
+      objectReference: {fileID: 11400000, guid: bd635c90b63be1d46895f3b8d58e29f2, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[5]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 115b8c479ee44374da9325460b6f65b0, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[6]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 07b0acaa342939b4095a8d5b01be536f, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[7]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 40ea15e46582e7144b702c379a028f30, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[8]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 34137e956fc72c44b8cdabbad32197b0, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[9]'
+      value: 
+      objectReference: {fileID: 11400000, guid: fa2bf46b99e89384e91f4a85daacd912, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[10]'
+      value: 
+      objectReference: {fileID: 11400000, guid: c3d3240496488ee4ab6452a6d2e74a94, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[11]'
+      value: 
+      objectReference: {fileID: 11400000, guid: c87cb0d2abde68b48b764de9555c3830, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[12]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 8c5cee8f41c401b4e882d5634e606fe9, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[13]'
+      value: 
+      objectReference: {fileID: 11400000, guid: b80aa014e08378f4f9f2f4318d968c43, type: 2}
+    - target: {fileID: 6869514877064710515, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'TownhallDeck.Array.data[14]'
+      value: 
+      objectReference: {fileID: 11400000, guid: 473f2d05cfff48f49bdfa423885cd8b6, type: 2}
     - target: {fileID: 8386369302416158620, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: localPlayerInputUI
       value: 
