@@ -31,7 +31,7 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<Card> Deck = new List<Card>();
         [Tooltip("Populate with cards in Inspector")]
-        [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
+        [SerializeField] private List<Card> TownhallDeck = new List<Card>();
         private List<Card> DiscardPile = new List<Card>();
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
@@ -52,6 +52,7 @@ namespace Salem.Deck
         {
             InitializeDeck();
         }
+
         #endregion
 
         #region Accessor Functions
@@ -117,6 +118,7 @@ namespace Salem.Deck
             throw new System.NotImplementedException();
         }
 
+        //making this work first.... could easily combine into 1 function to shuffle any deck handed to it, but worried if it will need to be called somewhere that doesn't have access to the deck itself
         private void ShuffleDeck()
         {
             for (int i = 0; i < Deck.Count; i++)
@@ -125,6 +127,17 @@ namespace Salem.Deck
                 int randomIndex = Rng.NextInt(0, Deck.Count);
                 Deck[i] = Deck[randomIndex];
                 Deck[randomIndex] = temp;
+            }
+        }
+
+        private void ShuffleTownhallDeck()
+        {
+            for (int i = 0; i < TownhallDeck.Count; i++)
+            {
+                Card temp = TownhallDeck[i];
+                int randomIndex = Rng.NextInt(0, TownhallDeck.Count);
+                TownhallDeck[i] = TownhallDeck[randomIndex];
+                TownhallDeck[randomIndex] = temp;
             }
         }
 
@@ -138,6 +151,7 @@ namespace Salem.Deck
         private void InitializeDeck()
         {
             ShuffleDeck();
+            ShuffleTownhallDeck();
         }
         #endregion
     }

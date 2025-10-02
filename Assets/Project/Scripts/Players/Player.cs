@@ -47,6 +47,7 @@ namespace Salem.Players
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
         public String PlayerNameText;
+        public TownHallCard townhallCard { get; private set; }
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public bool IsWitch { get; private set; }  // Now determined dynamically
@@ -107,6 +108,13 @@ namespace Salem.Players
             {
                 Rng = rng;
             }
+        }
+
+        public void setTownhall(TownHallCard card)
+        {
+            if(card == null) { return; }
+            townhallCard = card;
+            //set art?
         }
 
         public void DetermineRole()

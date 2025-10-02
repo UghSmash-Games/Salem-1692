@@ -127,6 +127,12 @@ namespace Salem.Gameplay.Setup
             }
         }
 
+        //Give the players their townhall Card
+        private void SetupTownhallCard()
+        {
+
+        }
+
         //Have players draw their Tryal Cards
         private List<TryalCard> DrawTryalCards(int count, List<TryalCard> deck)
         {
