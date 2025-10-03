@@ -21,14 +21,14 @@
 *    • Ensure null safety on DeckManager reference in Awake.
 *    • Make Witch ratio configurable through game settings.
 */
+using Salem.Cards;
+using Salem.Data;
+using Salem.Deck;
+using Salem.GameFlow;
+using Salem.Players;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using Salem.Players;
-using Salem.Deck;
-using Salem.Cards;
-using Salem.GameFlow;
-using Salem.Data;
 
 namespace Salem.Gameplay.Setup
 {
@@ -66,6 +66,7 @@ namespace Salem.Gameplay.Setup
         {
             SetupTryalCards(players);
             SetupInitalHand(players, count);
+            SetupTownhallCard(players);
         }
         #endregion
 
@@ -128,9 +129,18 @@ namespace Salem.Gameplay.Setup
         }
 
         //Give the players their townhall Card
-        private void SetupTownhallCard()
+        private void SetupTownhallCard(IReadOnlyList<Player> players)
         {
-
+            foreach (var player in players)
+            {
+                if (player.HandManager == null)
+                {
+                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
+                    continue;
+                }
+                //draw and set card
+                DeckManager.drawTownhallCard(player);
+            }
         }
 
         //Have players draw their Tryal Cards

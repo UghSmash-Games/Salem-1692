@@ -31,7 +31,7 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<Card> Deck = new List<Card>();
         [Tooltip("Populate with cards in Inspector")]
-        [SerializeField] private List<Card> TownhallDeck = new List<Card>();
+        [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
         private List<Card> DiscardPile = new List<Card>();
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
@@ -134,11 +134,29 @@ namespace Salem.Deck
         {
             for (int i = 0; i < TownhallDeck.Count; i++)
             {
-                Card temp = TownhallDeck[i];
+                TownHallCard temp = TownhallDeck[i];
                 int randomIndex = Rng.NextInt(0, TownhallDeck.Count);
                 TownhallDeck[i] = TownhallDeck[randomIndex];
                 TownhallDeck[randomIndex] = temp;
             }
+        }
+
+        public void drawTownhallCard(Salem.Players.Player player)
+        {
+            if (TownhallDeck == null)
+            {
+                Debug.LogError("[DeckManager] DrawCard: TownhallDeck list is NULL.");
+                return;
+            }
+            if (player == null)
+            {
+                Debug.LogError("[DeckManager] DrawCard: Player is NULL.");
+                return;
+            }
+
+            var drawnCard = TownhallDeck[0];
+            TownhallDeck.RemoveAt(0);
+            player.setTownhall(drawnCard);
         }
 
         private void ReshuffleDiscardPile()
