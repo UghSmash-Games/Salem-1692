@@ -25,8 +25,22 @@ namespace Salem.GameFlow
 {
     public static class NightResolver
     {
-        public static void Resolve(IRng rng, bool witchesCanTargetWitches = false)
+       public class NightPlan
         {
+            public Player ConstableTarget { get; set; }
+            public Dictionary<Player, Player> WitchVotes { get; } = new();
+
+            public void SetWitchVote(Player witch, Player target)
+            {
+                if (witch == null || target == null) return;
+                WitchVotes[witch] = target;
+            }
+        }
+
+        public static void Resolve(IRng rng, NightPlan plan = null, bool witchesCanTargetWitches = false)
+        {
+            plan ??= new NightPlan();
+
             var alive   = PlayerService.GetAlivePlayers();
             var witches = alive.Where(p => p.IsWitch && !p.IsEliminated).ToList();
             if (witches.Count == 0) return;
@@ -40,18 +54,31 @@ namespace Salem.GameFlow
 
             if (eligible.Count == 0) return;
 
-            // Tally random votes (deterministic via IRng)
+            // Tally votes (manual overrides where provided; otherwise deterministic RNG)
             var tally = eligible.ToDictionary(p => p, _ => 0);
             foreach (var w in witches)
             {
-                var t = eligible[rng.NextInt(0, eligible.Count)];
-                tally[t]++;
+                Player target = null;
+
+                if (plan.WitchVotes.TryGetValue(w, out var planned) && planned != null && eligible.Contains(planned))
+                    target = planned;
+
+                if (target == null)
+                    target = eligible[RNGService.Rng.NextInt(0, eligible.Count)];
+
+                tally[target]++;
             }
 
             // Winner with deterministic tie-break
             int best = tally.Values.Max();
             var top  = tally.Where(kv => kv.Value == best).Select(kv => kv.Key).ToList();
             var victim = top[rng.NextInt(0, top.Count)];
+
+            if (plan.ConstableTarget != null && victim == plan.ConstableTarget)
+            {
+                Debug.Log($"[NightResolver] Constable protected {victim.PlayerNameText}. No elimination tonight.");
+                return;
+            }
 
             // Eliminate victim (reveal remaining Tryals)
             victim.EliminateNow();

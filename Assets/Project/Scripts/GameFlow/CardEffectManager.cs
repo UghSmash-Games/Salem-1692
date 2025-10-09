@@ -90,7 +90,7 @@ namespace Salem.GameFlow
             if (card.Name == "Night")
             {
                 Debug.Log($"[Effect] Night card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
-                GamePhaseManager?.HandleNightCardDrawn(drawer, card);
+                GamePhaseManager?.HandleNightCardDrawn();
                 return true;
             }
 
@@ -140,9 +140,8 @@ namespace Salem.GameFlow
 
             // Raise event for CardLogManager to listen to
             OnCardPlayed?.Invoke(CardLogFormatter.Format(CurrentPlayer, card, target));
-            if(CurrentPlayer.IsHuman)
-                GameTurnManager.Instance.OnHumanActionResolved();
-            GameTurnManager.Instance.EndTurn();
+            
+            GameTurnManager.Instance.NotifyCardPlayed(CurrentPlayer);
         }
 
         private void ExecuteActionOp(ActionCardSO action, Player target)

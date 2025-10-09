@@ -18,14 +18,16 @@
 *           This Script will work in conjunction with the GamePhaseManager
 */
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Events;
+using Salem.Data;
+using Salem.Deck;
 using Salem.Managers.GameState;
 using Salem.Players;
 using Salem.UI;
-using Salem.Data;
-using System.Collections;
+using UnityEngine;
+using UnityEngine.Events;
+
 namespace Salem.GameFlow
 {
     public class GameTurnManager : MonoBehaviour
@@ -41,16 +43,29 @@ namespace Salem.GameFlow
         public UnityEvent OnPhaseTransition;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
 
+        public event System.Action<Player> TurnStarted;
+        public event System.Action<Player> TurnEnded;
+
         private float turnTimer;
         private bool isTurnActive = false;
         private Player currentPlayer;
         private bool waitingForHuman;
+        private DeckManager deckManager;
+
+        private enum TurnActionChoice
+        {
+            None,
+            DrawTwoCards,
+            PlayCards
+        }
+        private TurnActionChoice currentTurnAction = TurnActionChoice.None;
         #endregion
 
         private void OnValidate()
         {
             if (!UIManager) UIManager = FindFirstObjectByType<UIManager>();
             if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+            if (!deckManager) deckManager = FindFirstObjectByType<DeckManager>();
         }
         private void Awake()
         {
@@ -63,6 +78,8 @@ namespace Salem.GameFlow
                 Destroy(gameObject);
                 return;
             }
+
+            if (!deckManager) deckManager = FindFirstObjectByType<DeckManager>();
         }
 
         private void Update()
@@ -98,11 +115,144 @@ namespace Salem.GameFlow
             Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
             isTurnActive = true;
+            waitingForHuman = false;
+            currentTurnAction = TurnActionChoice.None;
+            TurnStarted?.Invoke(currentPlayer);
+            OnTurnStart?.Invoke();
 
             //Add In Later For Advance UI
             StartCoroutine(RunTurn(currentPlayer));
         }
-        
+
+        public void OnPlayerEliminated(Player eliminatedPlayer)
+        {
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0)
+            {
+                CurrentPlayerIndex = 0;
+                currentPlayer = null;
+                return;
+            }
+
+            int newIndex = players.IndexOf(currentPlayer);
+            if (newIndex == -1)
+            {
+                CurrentPlayerIndex %= players.Count;
+                currentPlayer = players[CurrentPlayerIndex];
+            }
+            else
+            {
+                CurrentPlayerIndex = newIndex;
+            }
+
+            UIManager.SetPlayerTurnActive();
+        }
+
+        public bool TryBeginPlayPhase(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+            {
+                Debug.LogWarning("[TurnManager] Attempted to play cards when it is not this player's turn.");
+                return false;
+            }
+
+            if (currentTurnAction == TurnActionChoice.DrawTwoCards)
+            {
+                Debug.LogWarning("[TurnManager] Cannot play cards after choosing to draw this turn.");
+                return false;
+            }
+
+            if (currentTurnAction == TurnActionChoice.None)
+            {
+                currentTurnAction = TurnActionChoice.PlayCards;
+            }
+
+            return true;
+        }
+
+        public bool TryDrawTwoCards(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+            {
+                Debug.LogWarning("[TurnManager] Attempted to draw outside of the current player's turn.");
+                return false;
+            }
+
+            if (currentTurnAction != TurnActionChoice.None)
+            {
+                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot draw cards now.");
+                return false;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager)
+            {
+                return false;
+            }
+
+            deckManager.DrawMultipleCards(requestingPlayer.HandManager, 2);
+            currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+            if (requestingPlayer.IsHuman)
+            {
+                waitingForHuman = false;
+            }
+
+            EndTurn();
+            return true;
+        }
+
+        public void NotifyCardPlayed(Player actingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(actingPlayer))
+            {
+                return;
+            }
+
+            if (currentTurnAction == TurnActionChoice.None)
+            {
+                currentTurnAction = TurnActionChoice.PlayCards;
+            }
+
+            if (!actingPlayer.IsHuman)
+            {
+                EndTurn();
+            }
+        }
+
+        public void RequestEndTurn(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+            {
+                return;
+            }
+
+            if (requestingPlayer.IsHuman)
+            {
+                waitingForHuman = false;
+            }
+
+            EndTurn();
+        }
+
+        public void EndTurn()
+        {
+            if (!isTurnActive) return;
+            isTurnActive = false;
+
+            TurnEnded?.Invoke(currentPlayer);
+
+            var players = PlayerService.GetAlivePlayers();
+            if (players.Count == 0) return;
+
+            Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
+
+            int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
+
+            StartTurn(nextIndex); // Move to the next player's turn
+        }
+        #endregion
+
         private IEnumerator RunTurn(Player current)
         {
             UIManager.SetPlayerTurnActive(); // your existing UI cue
@@ -130,49 +280,23 @@ namespace Salem.GameFlow
             // advance to next player (your existing logic)
         }
 
-        public void OnHumanActionResolved()
+        private bool IsCurrentPlayersTurn(Player player)
         {
-            waitingForHuman = false;
+            return isTurnActive && player != null && player == currentPlayer;
         }
 
-        public void EndTurn()
+        private void EnsureDeckManager()
         {
-            if (!isTurnActive) return;
-            isTurnActive = false;
-
-            var players = PlayerService.GetAlivePlayers();
-            if (players.Count == 0) return;
-
-            Debug.Log($"Ending turn for {currentPlayer.PlayerNameText}");
-
-            int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
-
-            StartTurn(nextIndex); // Move to the next player's turn
+            if (!deckManager)
+            {
+                deckManager = FindFirstObjectByType<DeckManager>();
+                if (!deckManager)
+                {
+                    Debug.LogError("[TurnManager] DeckManager reference missing; cannot resolve draw actions.");
+                }
+            }
         }
 
-        public void OnPlayerEliminated(Player eliminatedPlayer)
-        {
-            var players = PlayerService.GetAlivePlayers();
-            if (players.Count == 0)
-            {
-                CurrentPlayerIndex = 0;
-                currentPlayer = null;
-                return;
-            }
-
-            int newIndex = players.IndexOf(currentPlayer);
-            if (newIndex == -1)
-            {
-                CurrentPlayerIndex %= players.Count;
-                currentPlayer = players[CurrentPlayerIndex];
-            }
-            else
-            {
-                CurrentPlayerIndex = newIndex;
-            }
-
-            UIManager.SetPlayerTurnActive();
-        }
-        #endregion
+        
     }
 }

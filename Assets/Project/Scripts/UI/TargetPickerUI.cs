@@ -31,6 +31,7 @@ namespace Salem.UI
         [SerializeField] private Transform listParent;
         [SerializeField] private GameObject buttonPrefab;
         [SerializeField] private Button confirmButton;
+        [SerializeField] private TMP_Text promptLabel;
 
         private readonly List<Button> spawned = new();
         private Player source;
@@ -39,8 +40,23 @@ namespace Salem.UI
         private bool requireTwo;
         private Action<Player, Player> onDone;
         private bool isOpen;
+        private List<Player> candidateOverride;
+        private bool useOverride;
+        private bool allowSourceSelection;
+        private string defaultPrompt;
 
-        public void Open(Player sourcePlayer, bool twoTargets, Action<Player, Player> done)
+        private void Awake()
+        {
+            if (promptLabel)
+            {
+                defaultPrompt = promptLabel.text;
+            }
+        }
+
+        public void Open(Player sourcePlayer, bool twoTargets, Action<Player, Player> done,
+                         IEnumerable<Player> candidateOverride = null,
+                         bool allowSelfSelection = false,
+                         string promptOverride = null)
         {
             isOpen = true;
             gameObject.SetActive(true);
@@ -50,9 +66,24 @@ namespace Salem.UI
             onDone = done;
             primary = null;
             secondary = null;
+            allowSourceSelection = allowSelfSelection;
 
-            BuildList(new HashSet<Player> { source });
+            candidateOverride = candidateOverride?.Where(p => p != null && !p.IsEliminated)
+                                                   .Distinct()
+                                                   .ToList();
+            this.candidateOverride = candidateOverride != null && candidateOverride.Any()
+                ? new List<Player>(candidateOverride)
+                : null;
+            useOverride = this.candidateOverride != null;
 
+            if (promptLabel)
+            {
+                promptLabel.text = string.IsNullOrEmpty(promptOverride) ? defaultPrompt : promptOverride;
+            }
+
+            BuildList(allowSourceSelection ? new HashSet<Player>()
+                                           : new HashSet<Player> { source });
+            
             if (!confirmButton)
             {
                 Debug.LogError("[TargetPickerUI] ConfirmButton is not assigned.");
@@ -75,7 +106,9 @@ namespace Salem.UI
             foreach (Transform c in listParent)
                 Destroy(c.gameObject);
 
-            var candidates = PlayerService.GetAlivePlayers().Where(p => !exclude.Contains(p)).ToList();
+            var candidates = useOverride
+                ? candidateOverride.Where(p => !exclude.Contains(p)).ToList()
+                : PlayerService.GetAlivePlayers().Where(p => !exclude.Contains(p)).ToList();
             foreach (var p in candidates)
             {
                 var go = Instantiate(buttonPrefab, listParent);
@@ -126,6 +159,11 @@ namespace Salem.UI
                 if (b) b.onClick.RemoveAllListeners();
             spawned.Clear();
             primary = secondary = null;
+            candidateOverride = null;
+            useOverride = false;
+            allowSourceSelection = false;
+            if (promptLabel)
+                promptLabel.text = defaultPrompt;
         }
     }
 }

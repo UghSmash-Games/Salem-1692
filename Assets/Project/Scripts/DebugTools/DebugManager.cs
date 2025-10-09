@@ -23,8 +23,7 @@ public class DebugManager : MonoBehaviour
             if (GameTurnManager.Instance.CurrentPlayer.IsHuman)
             {
                 // Option A: treat N as 'End Turn' for human, not AI autoplay
-                GameTurnManager.Instance.OnHumanActionResolved();
-                GameTurnManager.Instance.EndTurn();
+                GameTurnManager.Instance.RequestEndTurn(GameTurnManager.Instance.CurrentPlayer);
             }
             else
             {

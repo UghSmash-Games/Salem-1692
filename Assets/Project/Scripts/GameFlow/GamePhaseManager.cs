@@ -15,12 +15,14 @@
  * FIXME: [Known bugs or issues]
 */
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
 using Salem.Gameplay.Setup;
 using Salem.Players;
+using Salem.UI;
 using UnityEngine;
 
 namespace Salem.GameFlow
@@ -40,6 +42,12 @@ namespace Salem.GameFlow
         #region Vars
         [SerializeField] private float PhaseChangeDelay = 0.5f;
         [SerializeField] private DeckManager DeckManager;
+        [SerializeField] private TargetPickerUI nightTargetPicker;
+        [SerializeField] private float aiDecisionDelay = 0.25f;
+        [SerializeField] private bool witchesCanTargetWitches = false;
+        [SerializeField] private bool constableCanSelfProtect = false;
+        [SerializeField] private string constablePrompt = "Choose a player to protect";
+        [SerializeField] private string witchPrompt = "Choose a player to eliminate";
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
@@ -48,7 +56,7 @@ namespace Salem.GameFlow
 
         private GameSetup GameSetup;
         private GameTurnManager GameTurnManager;
-        private bool isResolvingNight;
+        private Coroutine activeNightSequence;
         #endregion
 
         #region Standard Functions
@@ -100,7 +108,7 @@ namespace Salem.GameFlow
 
             */
             //Transition to Day phase
-            StartCoroutine(ChangePhase(GamePhase.Day,PhaseChangeDelay));
+            StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
         }
 
         public void StartDayPhase()
@@ -142,19 +150,21 @@ namespace Salem.GameFlow
             */
         }
 
-        public void HandleNightCardDrawn(Player drawer, Card nightCard)
+        public void HandleNightCardDrawn()
         {
-            if (isResolvingNight)
+            if (!BeginNightSequence())
             {
-                return;
+                ResolveNightImmediately();
             }
-
-            StartCoroutine(ResolveNightFromCard(drawer, nightCard));
         }
 
-        public void StartNightPhase(Player nightDrawer = null, Card nightCard = null)
+        public void StartNightPhase()
         {
-            ResolveNightSequence(nightDrawer, nightCard);
+            if (!BeginNightSequence())
+            {
+                // If we could not queue the sequence (e.g., manager disabled), fall back to immediate resolve.
+                ResolveNightImmediately();
+            }
         }
 
         public void StartEndGamePhase()
@@ -192,8 +202,8 @@ namespace Salem.GameFlow
                     break;
             }
         }
-        
-        
+
+
         #endregion
 
         #region Helper Fucntions
@@ -212,90 +222,161 @@ namespace Salem.GameFlow
             // Transition to Dawn phase
             StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
         }
-        
 
-        private IEnumerator ResolveNightFromCard(Player drawer, Card nightCard)
+        private bool BeginNightSequence()
         {
-            isResolvingNight = true;
-            GameTurnManager?.OnPhaseTransition?.Invoke();
+            if (!isActiveAndEnabled)
+            {
+                Debug.LogWarning("[GamePhaseManager] Night sequence requested while manager disabled.");
+                return false;
+            }
 
-            yield return StartCoroutine(ChangePhase(GamePhase.Night, PhaseChangeDelay));
+            if (activeNightSequence != null)
+            {
+                Debug.LogWarning("[GamePhaseManager] Night sequence already running. Ignoring duplicate request.");
+                return true; // already in progress – treat as handled
+            }
 
-            StartNightPhase(drawer, nightCard);
-
-            yield return StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
-
-            isResolvingNight = false;
+            activeNightSequence = StartCoroutine(NightSequenceRoutine());
+            return true;
         }
 
-        private void ResolveNightSequence(Player drawer, Card nightCard)
+        private void ResolveNightImmediately()
         {
-            var gameManager = GameManager.Instance;
-            var rng = gameManager != null ? gameManager.Rng : new XorShiftRng(1UL);
-
-            var alive = PlayerService.GetAlivePlayers();
-            var witches = alive.Where(p => p.IsWitch && !p.IsEliminated).ToList();
-            if (witches.Count == 0)
+            var rng = GameManager.Instance?.Rng;
+            if (rng == null)
             {
-                Debug.Log("[Night] No witches remain. Night passes quietly.");
-                DeckManager?.ReshuffleAndPlaceNightCard(nightCard);
+                Debug.LogWarning("[GamePhaseManager] Unable to resolve night immediately: missing RNG instance.");
                 return;
             }
 
-            var eligible = alive.Where(p => !p.IsEliminated && !p.hasAsylum).ToList();
-            if (eligible.Count == 0)
+            NightResolver.Resolve(rng, null, witchesCanTargetWitches);
+            GameManager.Instance.CheckEndgameConditions();
+        }
+
+        private IEnumerator NightSequenceRoutine()
+        {
+            yield return ChangePhase(GamePhase.Night, PhaseChangeDelay);
+            yield return NightPhaseRoutine();
+
+            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
+            yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
+
+            activeNightSequence = null;
+        }
+
+        private IEnumerator NightPhaseRoutine()
+        {
+            var rng = GameManager.Instance?.Rng;
+            if (rng == null)
             {
-                Debug.Log("[Night] No eligible targets. Night ends without incident.");
-                DeckManager?.ReshuffleAndPlaceNightCard(nightCard);
-                return;
+                Debug.LogWarning("[GamePhaseManager] Night phase invoked without a valid RNG instance.");
+                yield break;
             }
 
-            var tally = eligible.ToDictionary(p => p, _ => 0);
-            foreach (var witch in witches)
+            var plan = new NightResolver.NightPlan();
+            var alivePlayers = PlayerService.GetAlivePlayers();
+            var localPlayer = PlayerService.GetLocalPlayer();
+
+            yield return ExecuteConstableChoice(alivePlayers, localPlayer, plan, rng);
+            yield return ExecuteLocalWitchChoice(alivePlayers, localPlayer, plan, rng);
+
+            NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
+            GameManager.Instance.CheckEndgameConditions();
+        }
+
+        private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
+        {
+            var constable = alivePlayers.FirstOrDefault(p => p.TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable));
+            if (constable == null)
+                yield break;
+
+            var candidates = alivePlayers
+                .Where(p => constableCanSelfProtect || p != constable)
+                .ToList();
+
+            if (candidates.Count == 0)
+                yield break;
+
+            if (constable == localPlayer && constable.IsHuman && nightTargetPicker != null)
             {
-                var choice = eligible[RNGService.Rng.NextInt(0, eligible.Count)];
-                tally[choice]++;
-            }
-
-            int best = tally.Values.Max();
-            var topChoices = tally.Where(kv => kv.Value == best).Select(kv => kv.Key).ToList();
-            var victim = topChoices[RNGService.Rng.NextInt(0, topChoices.Count)];
-
-            Debug.Log($"[Night] Witches targeted {victim.PlayerNameText}.");
-
-            var constable = alive.FirstOrDefault(p => p.IsConstable && !p.IsEliminated);
-            Player protectedPlayer = null;
-            if (constable != null)
-            {
-                var protectable = alive.Where(p => p != constable && !p.IsEliminated).ToList();
-                if (protectable.Count > 0)
+                bool done = false;
+                Player chosen = null;
+                var picker = nightTargetPicker;
+                picker.Open(constable, false, (primary, _) =>
                 {
-                    protectedPlayer = protectable[RNGService.Rng.NextInt(0, protectable.Count)];
-                    Debug.Log($"[Night] {constable.PlayerNameText} protected {protectedPlayer.PlayerNameText}.");
+                    chosen = primary;
+                    done = true;
+                }, candidates, constableCanSelfProtect, constablePrompt);
+
+                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
+
+                if (done && chosen != null)
+                {
+                    plan.ConstableTarget = chosen;
+                }
+                else if (candidates.Count > 0)
+                {
+                    Debug.LogWarning("[GamePhaseManager] Constable selection cancelled; defaulting to random.");
+                    plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
                 }
             }
-
-            bool confessed = victim.TryConfessToSurvive();
-            if (confessed)
+            else
             {
-                Debug.Log($"[Night] {victim.PlayerNameText} confessed and revealed a Tryal card to avoid elimination.");
-            }
+                if (constable == localPlayer && nightTargetPicker == null)
+                    Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; constable protection defaulting to random.");
 
-            bool savedByConstable = protectedPlayer != null && victim == protectedPlayer;
-            if (savedByConstable)
+                yield return new WaitForSeconds(aiDecisionDelay);
+                plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
+            }
+        }
+
+        private IEnumerator ExecuteLocalWitchChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
+        {
+            if (localPlayer == null || !localPlayer.IsWitch || localPlayer.IsEliminated)
+                yield break;
+
+            var eligible = alivePlayers
+                .Where(p => !p.hasAsylum)
+                .ToList();
+
+            if (!witchesCanTargetWitches)
+                eligible = eligible.Where(p => !p.IsWitch).ToList();
+
+            eligible = eligible.Distinct().ToList();
+
+            if (eligible.Count == 0)
+                yield break;
+
+            if (nightTargetPicker != null)
             {
-                Debug.Log($"[Night] {victim.PlayerNameText} was saved by the Constable.");
-            }
+                bool done = false;
+                Player voteTarget = null;
+                var picker = nightTargetPicker;
+                picker.Open(localPlayer, false, (primary, _) =>
+                {
+                    voteTarget = primary;
+                    done = true;
+                }, eligible, false, witchPrompt);
 
-            if (!savedByConstable && !confessed)
+                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
+
+                if (done && voteTarget != null)
+                {
+                    plan.SetWitchVote(localPlayer, voteTarget);
+                }
+                else if (eligible.Count > 0)
+                {
+                    Debug.LogWarning("[GamePhaseManager] Witch vote selection cancelled; defaulting to random.");
+                    plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
+                }
+            }
+            else
             {
-                Debug.Log($"[Night] {victim.PlayerNameText} was eliminated by the witches.");
-                victim.EliminateNow();
+                Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; witch vote defaulting to random.");
+                yield return new WaitForSeconds(aiDecisionDelay);
+                plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
             }
-
-            gameManager?.CheckEndgameConditions();
-
-            DeckManager?.ReshuffleAndPlaceNightCard(nightCard);
         }
         #endregion
     }
