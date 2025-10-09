@@ -155,7 +155,7 @@ namespace Salem.Gameplay.Setup
         {
             for (int i = 0; i < deck.Count; i++)
             {
-                int randomIndex = Rng.NextInt(i, deck.Count);
+                int randomIndex = RNGService.Rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
             

@@ -34,6 +34,7 @@ namespace Salem.GameFlow
         [SerializeField] private TargetPickerUI TargetPicker;
         [SerializeField] private TryalPickerUI TryalPicker;
         [SerializeField] private GameManager GameManager;
+        [SerializeField] private GamePhaseManager GamePhaseManager;
 
         private Player CurrentPlayer;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -44,6 +45,7 @@ namespace Salem.GameFlow
         void OnValidate()
         {
             if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+            if (!GamePhaseManager) GamePhaseManager = FindFirstObjectByType<GamePhaseManager>();
         }
         private void Awake()
         {
@@ -56,6 +58,7 @@ namespace Salem.GameFlow
             Instance = this;
 
             if (!GameManager) Debug.LogError("[CardEffectManager] Missing GameManager reference for RNG.");
+            if (!GamePhaseManager) Debug.LogError("[CardEffectManager] Missing GamePhaseManager reference.");
 
             _ops = new()
                 {
@@ -77,6 +80,22 @@ namespace Salem.GameFlow
         }
 
         #region Helper Functions
+        public bool HandleCardDrawn(Player drawer, Card card)
+        {
+            if (card == null)
+            {
+                return false;
+            }
+
+            if (card.Name == "Night")
+            {
+                Debug.Log($"[Effect] Night card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
+                GamePhaseManager?.HandleNightCardDrawn(drawer, card);
+                return true;
+            }
+
+            return false;
+        }
         public void ExecuteCardEffect(Card card, Player target)
         {
             UpdateCurrentPlayer();

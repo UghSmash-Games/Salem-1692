@@ -32,7 +32,7 @@ namespace Salem.Deck
         [SerializeField] private List<Card> Deck = new List<Card>();
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
-        private List<Card> DiscardPile = new List<Card>();
+        private readonly List<Card> DiscardPile = new List<Card>();
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
@@ -94,6 +94,20 @@ namespace Salem.Deck
 
             var drawnCard = Deck[0];
             Deck.RemoveAt(0);
+
+            // Give the CardEffectManager a chance to handle immediate effects (Black Cards)
+            var owningPlayer = handManager.GetComponent<Salem.Players.Player>();
+            bool handled = false;
+            if (CardEffectManager.Instance != null)
+            {
+                handled = CardEffectManager.Instance.HandleCardDrawn(owningPlayer, drawnCard);
+            }
+
+            if (handled)
+            {
+                return;
+            }
+
             handManager.AddCard(drawnCard);
 
             if (drawnCard.Type == Card.CardColor.Black)
@@ -108,6 +122,37 @@ namespace Salem.Deck
             {
                 DrawCard(handManager);
             }
+        }
+
+        public void AddToDiscardPile(Card card)
+        {
+            if (card == null)
+            {
+                Debug.LogWarning("[DeckManager] Tried to discard a null card.");
+                return;
+            }
+
+            DiscardPile.Add(card);
+        }
+        
+        public void ReshuffleAndPlaceNightCard(Card nightCard)
+        {
+            if (nightCard == null)
+            {
+                return;
+            }
+
+            ShuffleDeck();
+
+            if (Deck.Count == 0)
+            {
+                Deck.Add(nightCard);
+                return;
+            }
+
+            int lowerHalfStart = Mathf.Clamp(Deck.Count / 2, 0, Deck.Count);
+            int insertIndex = RNGService.Rng.NextInt(lowerHalfStart, Deck.Count + 1);
+            Deck.Insert(insertIndex, nightCard);
         }
         #endregion
 
@@ -124,7 +169,7 @@ namespace Salem.Deck
             for (int i = 0; i < Deck.Count; i++)
             {
                 Card temp = Deck[i];
-                int randomIndex = Rng.NextInt(0, Deck.Count);
+                int randomIndex = RNGService.Rng.NextInt(0, Deck.Count);
                 Deck[i] = Deck[randomIndex];
                 Deck[randomIndex] = temp;
             }

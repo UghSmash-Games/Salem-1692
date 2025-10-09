@@ -51,6 +51,7 @@ namespace Salem.Players
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public bool IsWitch { get; private set; }  // Now determined dynamically
+        public bool IsConstable => TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable);
         public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
@@ -456,6 +457,33 @@ namespace Salem.Players
             OnTryalCardsChanged?.Invoke();
         }
 
+        public bool TryRevealTryalOfType(TryalCardType type)
+        {
+            int index = TryalCards.FindIndex(tc => tc.TryalCardType == type && !tc.IsRevealed);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            RevealTryalCard(index);
+            return true;
+        }
+
+        public bool TryConfessToSurvive()
+        {
+            if (TryRevealTryalOfType(TryalCardType.NotAWitch))
+            {
+                return true;
+            }
+
+            if (TryRevealTryalOfType(TryalCardType.Constable))
+            {
+                return true;
+            }
+
+            return false;
+        }
+        
         // Eliminate immediately (reveal all remaining Tryals safely)
         public void EliminateNow()
         {

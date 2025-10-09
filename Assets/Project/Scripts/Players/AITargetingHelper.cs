@@ -20,7 +20,7 @@ namespace Salem.Players
             }
 
             // Randomly pick one
-            return validTargets[UnityEngine.Random.Range(0, validTargets.Count)];
+            return validTargets[RNGService.Rng.NextInt(0, validTargets.Count)];
         }
 
         public static Player SelectSmartAccusationCountTarget(Player self)

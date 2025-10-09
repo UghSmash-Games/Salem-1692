@@ -33,8 +33,27 @@ namespace Salem.Managers.Hands
     {
         public event Action OnHandChanged;
         #region Vars
+        [SerializeField] private DeckManager deckManager;
         public List<Card> Hand = new List<Card>();
+        #endregion
 
+        #region Standard Functions
+        private void OnValidate()
+        {
+            if (!deckManager) deckManager = FindFirstObjectByType<DeckManager>();
+        }
+
+        private void Awake()
+        {
+            if (!deckManager)
+            {
+                deckManager = FindFirstObjectByType<DeckManager>();
+                if (!deckManager)
+                {
+                    Debug.LogWarning("[HandManager] DeckManager reference is missing; discards will be lost.");
+                }
+            }
+        }
         #endregion
 
         #region Accessor Functions
@@ -42,13 +61,6 @@ namespace Salem.Managers.Hands
         {
             return new List<Card>(Hand);
         }
-        /*
-        public void PlayCard(Card card, Player target)
-        {
-            Hand.Remove(card);
-            target.ApplyCardEffect(card);
-        }
-        */
 
         public void AddCard(Card card)
         {
@@ -58,7 +70,11 @@ namespace Salem.Managers.Hands
 
         public void RemoveCard(Card card)
         {
-            if (Hand.Remove(card)) { OnHandChanged?.Invoke(); }
+            if (Hand.Remove(card))
+            {
+                deckManager?.AddToDiscardPile(card);
+                OnHandChanged?.Invoke();
+            }
         }
 
         public void ClearHand()

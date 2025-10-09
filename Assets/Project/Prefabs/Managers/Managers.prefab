@@ -337,6 +337,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4987831934337757016, guid: 397843f728c94994c8eee582848fd69a, type: 3}
   m_PrefabInstance: {fileID: 1100571606704433345}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6869514877064710515 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5770078048544858546, guid: 397843f728c94994c8eee582848fd69a, type: 3}
+  m_PrefabInstance: {fileID: 1100571606704433345}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dec418a325f21fa499aa8cb7d871272e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &1863589858568860800
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -485,6 +496,10 @@ PrefabInstance:
       propertyPath: AI_PlayerStatusUIPanels.Array.size
       value: 11
       objectReference: {fileID: 0}
+    - target: {fileID: 888482270252131910, guid: a9ec180086cc2f04ab4f672b7e455774, type: 3}
+      propertyPath: DeckManager
+      value: 
+      objectReference: {fileID: 6869514877064710515}
     - target: {fileID: 6515433016833422667, guid: a9ec180086cc2f04ab4f672b7e455774, type: 3}
       propertyPath: m_LocalPosition.x
       value: -688.97076
