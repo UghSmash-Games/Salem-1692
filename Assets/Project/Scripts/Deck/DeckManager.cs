@@ -14,6 +14,7 @@
 * TODO: [Planned improvements]
 * FIXME: Rework Draw Cards to work through HandManager and Not Player
 */
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -56,7 +57,7 @@ namespace Salem.Deck
         #endregion
 
         #region Accessor Functions
-        public void DrawCard(HandManager handManager)
+        public void DrawCard(HandManager handManager, Predicate<Card> rejectPredicate = null)
         {
             if (handManager == null)
             {
@@ -70,30 +71,57 @@ namespace Salem.Deck
                 return;
             }
 
-            while (Deck.Count > 0 && Deck[0] == null)
-            {
-                Debug.LogWarning("[DeckManager] Null card found in Deck. Removing it.");
-                Deck.RemoveAt(0);
-            }
+            Card drawnCard = null;
+            int inspectedCards = 0;
+            int deckSnapshotCount = Deck.Count;
 
-            if (Deck.Count == 0)
+            while (drawnCard == null)
             {
-                ReshuffleDiscardPile();
-                // after reshuffle, try once more to skip any nulls
                 while (Deck.Count > 0 && Deck[0] == null)
                 {
-                    Debug.LogWarning("[DeckManager] Null card found in Deck after reshuffle. Removing it.");
+                    Debug.LogWarning("[DeckManager] Null card found in Deck. Removing it.");
                     Deck.RemoveAt(0);
                 }
+
                 if (Deck.Count == 0)
                 {
-                    Debug.LogError("[DeckManager] No cards available to draw.");
-                    return;
-                }
-            }
+                    ReshuffleDiscardPile();
+                    while (Deck.Count > 0 && Deck[0] == null)
+                    {
+                        Debug.LogWarning("[DeckManager] Null card found in Deck after reshuffle. Removing it.");
+                        Deck.RemoveAt(0);
+                    }
 
-            var drawnCard = Deck[0];
-            Deck.RemoveAt(0);
+                    if (Deck.Count == 0)
+                    {
+                        Debug.LogError("[DeckManager] No cards available to draw.");
+                        return;
+                    }
+
+                    deckSnapshotCount = Deck.Count;
+                    inspectedCards = 0;
+                }
+
+                var candidate = Deck[0];
+                Deck.RemoveAt(0);
+
+                if (rejectPredicate != null && rejectPredicate(candidate))
+                {
+                    Deck.Add(candidate);
+                    inspectedCards++;
+
+                    if (inspectedCards >= deckSnapshotCount)
+                    {
+                        Debug.LogWarning("[DeckManager] All remaining cards rejected by predicate; dealing restricted card anyway.");
+                        Deck.RemoveAt(Deck.Count - 1);
+                        drawnCard = candidate;
+                    }
+
+                    continue;
+                }
+
+                drawnCard = candidate;
+            }
 
             // Give the CardEffectManager a chance to handle immediate effects (Black Cards)
             var owningPlayer = handManager.GetComponent<Salem.Players.Player>();
@@ -108,19 +136,28 @@ namespace Salem.Deck
                 return;
             }
 
-            handManager.AddCard(drawnCard);
-
-            if (drawnCard.Type == Card.CardColor.Black)
+            if (drawnCard != null && drawnCard.Name == "Black Cat")
             {
-                ResolveBlackCardEffect(drawnCard);
+                if (owningPlayer != null)
+                {
+                    owningPlayer.AssignBlackCat(drawnCard);
+                }
+                else
+                {
+                    Debug.LogWarning("[DeckManager] Drew Black Cat but could not determine owning player. Sending to discard.");
+                    AddToDiscardPile(drawnCard);
+                }
+                return;
             }
+
+            handManager.AddCard(drawnCard);
         }
 
-        public void DrawMultipleCards(HandManager handManager, int count)
+        public void DrawMultipleCards(HandManager handManager, int count, Predicate<Card> rejectPredicate = null)
         {
             for (int i = 0; i < count; i++)
             {
-                DrawCard(handManager);
+                DrawCard(handManager, rejectPredicate);
             }
         }
 
@@ -133,6 +170,24 @@ namespace Salem.Deck
             }
 
             DiscardPile.Add(card);
+        }
+
+        public Card ExtractCardFromDeck(string cardName)
+        {
+            if (Deck == null || Deck.Count == 0)
+            {
+                return null;
+            }
+
+            int index = Deck.FindIndex(c => c != null && c.Name == cardName);
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var card = Deck[index];
+            Deck.RemoveAt(index);
+            return card;
         }
         
         public void ReshuffleAndPlaceNightCard(Card nightCard)
@@ -157,12 +212,6 @@ namespace Salem.Deck
         #endregion
 
         #region Helper Functions
-        private void ResolveBlackCardEffect(Card card)
-        {
-            Debug.Log("Function Not Implemented");
-            throw new System.NotImplementedException();
-        }
-
         //making this work first.... could easily combine into 1 function to shuffle any deck handed to it, but worried if it will need to be called somewhere that doesn't have access to the deck itself
         private void ShuffleDeck()
         {

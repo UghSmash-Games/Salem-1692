@@ -15,14 +15,15 @@
 * FIXME: [Known bugs or issues]
 */
 
-using UnityEngine;
-using Salem.Players;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Salem.Cards;
 using Salem.Data;
-using System;
-using System.Linq;
-using System.Collections.Generic;
+using Salem.Deck;
+using Salem.Players;
 using Salem.UI;
+using UnityEngine;
 
 
 namespace Salem.GameFlow
@@ -35,6 +36,7 @@ namespace Salem.GameFlow
         [SerializeField] private TryalPickerUI TryalPicker;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private GamePhaseManager GamePhaseManager;
+        [SerializeField] private DeckManager DeckManager;
 
         private Player CurrentPlayer;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -46,6 +48,7 @@ namespace Salem.GameFlow
         {
             if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
             if (!GamePhaseManager) GamePhaseManager = FindFirstObjectByType<GamePhaseManager>();
+            if (!DeckManager) DeckManager = FindFirstObjectByType<DeckManager>();
         }
         private void Awake()
         {
@@ -59,6 +62,7 @@ namespace Salem.GameFlow
 
             if (!GameManager) Debug.LogError("[CardEffectManager] Missing GameManager reference for RNG.");
             if (!GamePhaseManager) Debug.LogError("[CardEffectManager] Missing GamePhaseManager reference.");
+            if (!DeckManager) Debug.LogError("[CardEffectManager] Missing DeckManager reference.");
 
             _ops = new()
                 {
@@ -70,7 +74,16 @@ namespace Salem.GameFlow
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (t.PlayerNameText!="Sarah Good") t.ClearHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => t.TransferEntireHandTo(u) },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
-                    { ActionOp.Curse,      (s,t,_,_,c) => t.AddStatusCardAndRecompute(c) },
+                    { ActionOp.Curse,      (s,t,_,_,c) =>
+                        {
+                            var removed = t.RemoveBlackCat(false);
+                            if (removed != null)
+                            {
+                                DeckManager?.AddToDiscardPile(removed);
+                            }
+                            t.AddStatusCardAndRecompute(c);
+                        }
+                    },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Matchmaker, (s,t,_,_,c) => { s.PlayStatusCardOnTarget(c, t); Player.TryFormMatchmakerLink(); } },
@@ -91,6 +104,20 @@ namespace Salem.GameFlow
             {
                 Debug.Log($"[Effect] Night card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
                 GamePhaseManager?.HandleNightCardDrawn();
+                return true;
+            }
+
+            if (card.Name == "Black Cat")
+            {
+                if (drawer != null)
+                {
+                    drawer.AssignBlackCat(card);
+                }
+                else
+                {
+                    Debug.LogWarning("[Effect] Black Cat drawn but no player was provided. Card will be discarded.");
+                    DeckManager?.AddToDiscardPile(card);
+                }
                 return true;
             }
 

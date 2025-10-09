@@ -38,7 +38,7 @@ namespace Salem.Players
         #region Vars
         [Header("Control")]
         [SerializeField] private bool isHuman = true;     // set TRUE for you, FALSE for bots
-        //[SerializeField] private bool isLocalPlayer = true; // single-device PoC: TRUE for you; FALSE for AI
+        [SerializeField] private HandManager handManager;
 
         //needed RNG, but figured giving access to full manager was a bad idea
         public IRng Rng { get; private set; }
@@ -70,8 +70,9 @@ namespace Salem.Players
         public byte townHallAbilityCharges { get; private set; }
         // Black Cat holder flag (keep separate from StatusCards to avoid Scapegoat moving it)
         public bool IsBlackCatHolder { get; private set; }
-        [SerializeField] private HandManager handManager;
         public HandManager HandManager => handManager ??= GetComponent<HandManager>();
+
+        private Card blackCatCard;
         #endregion
 
         #region Standard Functions
@@ -353,11 +354,26 @@ namespace Salem.Players
         }
         public void TransferAllStatusesTo(Player recipient)
         {
-            if (StatusCards.Count == 0) return;
-            foreach (var s in StatusCards.ToList()) recipient.AddStatusCard(s);
-            ClearStatusCards();
+            if (recipient == null)
+            {
+                return;
+            }
+
+            Card transferredBlackCat = RemoveBlackCat(false);
+
+            if (StatusCards.Count > 0)
+            {
+                foreach (var s in StatusCards.ToList()) recipient.AddStatusCard(s);
+                ClearStatusCards();
+            }
+
             RecomputeStatusFromStatusCards();
             recipient.RecomputeStatusFromStatusCards();
+
+            if (transferredBlackCat != null)
+            {
+                recipient.AssignBlackCat(transferredBlackCat);
+            }
         }
         public void RemoveStatusByNameAndRecompute(string name)
         {
@@ -423,8 +439,52 @@ namespace Salem.Players
         }
 
         //Black Cat
-        public void AssignBlackCat() => IsBlackCatHolder = true;
-        public void ClearBlackCat() => IsBlackCatHolder = false;
+        public void AssignBlackCat(Card card)
+        {
+            if (card == null)
+            {
+                Debug.LogWarning("[Player] Attempted to assign a null Black Cat card.");
+                return;
+            }
+
+            if (!StatusCards.Contains(card))
+            {
+                AddStatusCard(card);
+            }
+
+            blackCatCard = card;
+            IsBlackCatHolder = true;
+            RecomputeStatusFromStatusCards();
+        }
+
+        public Card RemoveBlackCat(bool recompute = true)
+        {
+            if (!IsBlackCatHolder)
+            {
+                return null;
+            }
+
+            var card = blackCatCard;
+            if (card != null)
+            {
+                RemoveStatusCard(card);
+            }
+
+            blackCatCard = null;
+            IsBlackCatHolder = false;
+
+            if (recompute)
+            {
+                RecomputeStatusFromStatusCards();
+            }
+
+            return card;
+        }
+
+        public void ClearBlackCat()
+        {
+            RemoveBlackCat();
+        }
 
         //For Conspiracy
         public int? GetRandomUnrevealedTryalIndex(Salem.Data.IRng rng)
