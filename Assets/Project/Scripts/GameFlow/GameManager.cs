@@ -47,6 +47,7 @@ namespace Salem.GameFlow
         [SerializeField] private UIManager UIManager;
 
         private bool isGameActive;
+        private bool endGameHandlersRegistered;
         #endregion
 
         #region Standard Functions
@@ -78,30 +79,51 @@ namespace Salem.GameFlow
         #region Accessor Functions
         public void CheckEndgameConditions()
         {
-            int activeVillagers = PlayerService.GetAliveVillagers().Count;
-            int activeWitches = PlayerService.GetAliveWitches().Count;
-
-            if (activeWitches == 0)
+            if (!isGameActive)
             {
-                EndGame("Villagers Win!");
+                return;
             }
-            else if (activeVillagers == 0 || activeWitches >= activeVillagers)
+
+            var aliveVillagers = PlayerService.GetAliveVillagers();
+            var aliveWitches = PlayerService.GetAliveWitches();
+
+            if (aliveWitches.Count == 0)
             {
-                EndGame("Witches Win!");
+                EndGame(FormatVictoryMessage("Villagers", aliveVillagers));
+            }
+            else if (aliveVillagers.Count == 0 || aliveWitches.Count >= aliveVillagers.Count)
+            {
+                EndGame(FormatVictoryMessage("Witches", aliveWitches));
             }
         }
 
         public void EndGame(string result)
         {
+            if (!isGameActive)
+            {
+                return;
+            }
+
             Debug.Log(result);
             isGameActive = false;
 
             // Display the endgame UI
-            EndGameUI.Show(result);
+            if (EndGameUI != null)
+            {
+                EndGameUI.Show(result);
+            }
+            else
+            {
+                Debug.LogWarning("[GameManager] EndGameUI reference missing. Unable to display endgame screen.");
+            }
 
             // Provide options to restart or quit
-            EndGameUI.OnRestart += RestartGame;
-            EndGameUI.OnQuit += QuitGame;
+            if (!endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart += RestartGame;
+                EndGameUI.OnQuit += QuitGame;
+                endGameHandlersRegistered = true;
+            }
         }
 
         public void InitRng(ulong? seed = null)
@@ -152,17 +174,36 @@ namespace Salem.GameFlow
         private void RestartGame()
         {
             Debug.Log("Restarting Game...");
-            EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
-            EndGameUI.OnQuit -= QuitGame;
+            if (endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
+                EndGameUI.OnQuit -= QuitGame;
+                endGameHandlersRegistered = false;
+            }
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
         }
 
         private void QuitGame()
         {
             Debug.Log("Quitting Game...");
-            EndGameUI.OnRestart -= RestartGame;
-            EndGameUI.OnQuit -= QuitGame;
+            if (endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart -= RestartGame;
+                EndGameUI.OnQuit -= QuitGame;
+                endGameHandlersRegistered = false;
+            }
             Application.Quit();
+        }
+
+        private static string FormatVictoryMessage(string faction, IReadOnlyCollection<Player> winners)
+        {
+            if (winners == null || winners.Count == 0)
+            {
+                return $"{faction} Win!";
+            }
+
+            string survivorList = string.Join(", ", winners.Select(p => p.PlayerNameText));
+            return $"{faction} Win!\nSurvivors: {survivorList}";
         }
         #endregion
     }
