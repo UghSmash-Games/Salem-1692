@@ -5273,11 +5273,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isHuman: 0
+  handManager: {fileID: 2045448825}
   IsLocalPlayer: 0
   PlayerNameText: AI Player 3
   TryalCards: []
   MatchedPlayer: {fileID: 0}
-  handManager: {fileID: 2045448825}
   aiThinkDelay: 1.5
   player: {fileID: 2045448826}
   GameManager: {fileID: 841667134}
@@ -5342,11 +5342,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isHuman: 0
+  handManager: {fileID: 2072694992}
   IsLocalPlayer: 0
   PlayerNameText: AI Player 2
   TryalCards: []
   MatchedPlayer: {fileID: 0}
-  handManager: {fileID: 2072694992}
   aiThinkDelay: 1.5
   player: {fileID: 2072694993}
   GameManager: {fileID: 841667134}
