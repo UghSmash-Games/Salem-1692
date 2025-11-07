@@ -81,7 +81,8 @@ namespace Salem.GameFlow
             }
 
             // Eliminate victim (reveal remaining Tryals)
-            victim.EliminateNow();
+            //victim.EliminateNow();
+            PlayerService.Eliminate(victim, EliminationCause.NightKill);
         }
     }
 }

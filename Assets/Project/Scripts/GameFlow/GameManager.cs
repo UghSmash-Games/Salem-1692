@@ -40,14 +40,21 @@ namespace Salem.GameFlow
         [SerializeField] private ulong fixedSeed = 123456789UL;
         public IRng Rng { get; private set; }
         public ulong Seed{ get; private set; }
-        [SerializeField] private EndGameUI EndGameUI;
+        //[SerializeField] private EndGameUI EndGameUI;
 
         //Tracks GameManager
         public static GameManager Instance { get; private set; }
         [SerializeField] private UIManager UIManager;
 
+        public event Action<EndGameResult> OnGameEnded;
+
+        //for central control of input/time when game ends
+        [SerializeField] private bool pauseOnGameEnd = true;
+
+
         private bool isGameActive;
         private bool endGameHandlersRegistered;
+        private bool gameAlreadyEnded = false;
         #endregion
 
         #region Standard Functions
@@ -77,7 +84,30 @@ namespace Salem.GameFlow
         #endregion
 
         #region Accessor Functions
-        public void CheckEndgameConditions()
+        public void EvaluateEndGame()
+        {
+            var alive = PlayerService.GetAlivePlayers();
+            if (alive == null || alive.Count == 0) return;
+
+            int witches = alive.Count(p => p.IsWitch && !p.IsEliminated);
+            int nonWitches = alive.Count - witches;
+
+            // villagers win if all witches dead
+            if (witches == 0)
+            {
+                var winners = alive.Where(p => !p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Villagers, winners, "All witches eliminated"));
+                return;
+            }
+
+            if (witches >= nonWitches)
+            {
+                var winners = alive.Where(p => p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Witches, winners, "Witches reached parity"));
+                return;
+            }
+        }
+        /*public void CheckEndgameConditions()
         {
             if (!isGameActive)
             {
@@ -95,9 +125,14 @@ namespace Salem.GameFlow
             {
                 EndGame(FormatVictoryMessage("Witches", aliveWitches));
             }
-        }
+        }*/
 
-        public void EndGame(string result)
+        // Call EvaluateEndGame() at key points:
+        public void OnDayLynchResolved() => EvaluateEndGame();
+        public void OnNightResolved() => EvaluateEndGame();
+        public void OnPlayerLeftGame() => EvaluateEndGame();
+
+        /*public void EndGame(string result)
         {
             if (!isGameActive)
             {
@@ -124,7 +159,7 @@ namespace Salem.GameFlow
                 EndGameUI.OnQuit += QuitGame;
                 endGameHandlersRegistered = true;
             }
-        }
+        }*/
 
         public void InitRng(ulong? seed = null)
         {
@@ -169,9 +204,7 @@ namespace Salem.GameFlow
             }
         }
 
-
-
-        private void RestartGame()
+        /*private void RestartGame()
         {
             Debug.Log("Restarting Game...");
             if (endGameHandlersRegistered)
@@ -204,6 +237,27 @@ namespace Salem.GameFlow
 
             string survivorList = string.Join(", ", winners.Select(p => p.PlayerNameText));
             return $"{faction} Win!\nSurvivors: {survivorList}";
+        }*/
+
+        private void RaiseGameEnded(EndGameResult result)
+        {
+            if (gameAlreadyEnded) return;
+            gameAlreadyEnded = true;
+            if (pauseOnGameEnd) Time.timeScale = 0f;
+            OnGameEnded?.Invoke(result);
+        }
+
+        private void OnEnable()
+        {
+            PlayerService.OnPlayerEliminated += HandlePlayerEliminated;
+        }
+        private void OnDisable()
+        {
+            PlayerService.OnPlayerEliminated -= HandlePlayerEliminated;
+        }
+        private void HandlePlayerEliminated(Player p, EliminationCause cause)
+        {
+            EvaluateEndGame();
         }
         #endregion
     }

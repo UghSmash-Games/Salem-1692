@@ -131,7 +131,7 @@ namespace Salem.GameFlow
             {
                 CurrentPlayerIndex = 0;
                 currentPlayer = null;
-                GameManager?.CheckEndgameConditions();
+                GameManager?.EvaluateEndGame();
                 return;
             }
 
@@ -147,7 +147,7 @@ namespace Salem.GameFlow
             }
 
             UIManager.SetPlayerTurnActive();
-            GameManager?.CheckEndgameConditions();
+            GameManager?.EvaluateEndGame();
         }
 
         public bool TryBeginPlayPhase(Player requestingPlayer)

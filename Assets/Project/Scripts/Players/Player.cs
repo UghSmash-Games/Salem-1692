@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Unity.VisualStudio.Editor;
 using Salem.Cards;
 using Salem.Data;
 using Salem.GameFlow;
@@ -46,13 +47,15 @@ namespace Salem.Players
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
+        
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
+        public Sprite townHallCardIcon { get; private set; }
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public bool IsWitch { get; private set; }  // Now determined dynamically
         public bool IsConstable => TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable);
-        public bool IsEliminated => TryalCards.TrueForAll(card => card.IsRevealed);
+        public bool IsEliminated;
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
         public byte baseAccusationLimit { get; private set; } = 7;
@@ -141,12 +144,13 @@ namespace Salem.Players
             {
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
-                if (card.TryalCardType == TryalCardType.Witch)
+                /*if (card.TryalCardType == TryalCardType.Witch)
                 {
                     EliminateNow();
-                }
+                }*/
+                TrialService.OnTrialCardRevealed(this, card);
             }
-            //arent we going to need a check if they try to reveal an already revealed card?
+            //TODO:arent we going to need a check if they try to reveal an already revealed card?
             CheckElimination();
         }
 
@@ -550,6 +554,8 @@ namespace Salem.Players
             if (IsEliminated) return;
             for (int i = 0; i < TryalCards.Count; i++)
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
+            
+            GameManager.Instance.OnDayLynchResolved();
         }
         // After any reveal, if eliminated → cascade to Matchmaker partner (only if both statuses exist)
         private void CheckElimination()
@@ -570,6 +576,7 @@ namespace Salem.Players
                     partner.ClearMatch();
                     partner.EliminateNow();
                 }
+                GameManager.Instance.OnDayLynchResolved();
             }
         }
 

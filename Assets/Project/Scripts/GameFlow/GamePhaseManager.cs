@@ -251,7 +251,7 @@ namespace Salem.GameFlow
             }
 
             NightResolver.Resolve(rng, null, witchesCanTargetWitches);
-            GameManager.Instance.CheckEndgameConditions();
+            GameManager.Instance.EvaluateEndGame();
         }
 
         private IEnumerator NightSequenceRoutine()
@@ -282,7 +282,7 @@ namespace Salem.GameFlow
             yield return ExecuteLocalWitchChoice(alivePlayers, localPlayer, plan, rng);
 
             NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
-            GameManager.Instance.CheckEndgameConditions();
+            GameManager.Instance.EvaluateEndGame();
         }
 
         private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)

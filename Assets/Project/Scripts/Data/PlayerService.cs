@@ -1,5 +1,5 @@
 /*
-* AUTHOR:
+* AUTHOR: Ron Bresett
 * REFERENCES:
 * NOTES:
 * TODO: [Planned improvements]
@@ -9,13 +9,28 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Salem.Players;
+using Salem.GameFlow;
+using System;
 
 namespace Salem.Data
 {
+    public enum EliminationCause
+    {
+        NightKill,
+        Lynch,
+        WitchTrialRevealed,
+        AllTrialsRevealed,
+        CardEffect,
+        Disconnect,
+        Other
+    }
+    
     public static class PlayerService
     {
         private static readonly List<Player> allPlayers = new();
         public static IReadOnlyList<Player> All => allPlayers;
+
+        public static event Action<Player, EliminationCause> OnPlayerEliminated;
 
         public static void Register(Player player)
         {
@@ -60,6 +75,19 @@ namespace Salem.Data
         public static List<Player> GetAliveVillagers()
         {
             return allPlayers.FindAll(p => !p.IsWitch && !p.IsEliminated);
+        }
+
+        public static void Eliminate(Player player, EliminationCause cause)
+        {
+            if (player == null || player.IsEliminated) return;
+
+            player.IsEliminated = true;
+
+            OnPlayerEliminated?.Invoke(player, cause);
+
+            // Trigger endgame evaluation in one place if you like,
+            // or have GameManager subscribe to OnPlayerEliminated.
+            GameManager.Instance?.EvaluateEndGame();
         }
     }
 }
