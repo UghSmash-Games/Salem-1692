@@ -95,22 +95,6 @@ namespace Salem.GameFlow
             Debug.Log($"Game Phase Changed to: {newPhase}");
         }
 
-        public void StartDawnPhase()
-        {
-            /*
-            // Reveal Witches to each other
-            List<Player> witches = players.Where(p => p.HasRole(TryalCardType.Witch)).ToList();
-            witches.ForEach(w => w.RevealWitchGroup(witches));
-
-            // Assign the Black Cat
-            Player blackCatHolder = witches[RNGService.Rng.NextInt(0, witches.Count)];
-            blackCatHolder.AssignBlackCat();
-
-            */
-            //Transition to Day phase
-            StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
-        }
-
         public void StartDayPhase()
         {
             /*
@@ -209,9 +193,15 @@ namespace Salem.GameFlow
         #region Helper Fucntions
         private void HandlePhaseChange(GamePhase newPhase)
         {
-            if (newPhase == GamePhase.Setup)
+            switch (newPhase)
             {
-                StartSetupPhase();
+                case GamePhase.Setup:
+                    StartSetupPhase();
+                    break;
+
+                case GamePhase.Dawn:
+                    StartDawnPhase();
+                    break;
             }
         }
 
@@ -221,6 +211,33 @@ namespace Salem.GameFlow
             GameTurnManager.Initialize();
             // Transition to Dawn phase
             StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
+        }
+
+        private void StartDawnPhase()
+        {
+            //TODO: Reveal Witches to each other
+            //TODO: Allow Witches to Assign the Black Cat Card
+            /*
+            // Reveal Witches to each other
+            List<Player> witches = players.Where(p => p.HasRole(TryalCardType.Witch)).ToList();
+            witches.ForEach(w => w.RevealWitchGroup(witches));
+
+            // Assign the Black Cat
+            Player blackCatHolder = witches[RNGService.Rng.NextInt(0, witches.Count)];
+            blackCatHolder.AssignBlackCat();
+
+            */
+            //Transition to Day phase
+            StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
+        }
+
+        private IEnumerator EnterNight()
+        {
+            // pause turns: GameTurnManager already stops on phase change
+            NightResolver.Resolve(GameManager.Instance.Rng);
+            // (Optional: Constable protect hook here)
+            yield return null;
+            ChangePhase(GamePhase.Day, PhaseChangeDelay); // turn manager will restart on this
         }
 
         private bool BeginNightSequence()

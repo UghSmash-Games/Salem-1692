@@ -123,8 +123,16 @@ namespace Salem.GameFlow
 
             return false;
         }
+        
         public void ExecuteCardEffect(Card card, Player target)
         {
+            var phaseMgr = FindFirstObjectByType<GamePhaseManager>();
+            if (phaseMgr != null && phaseMgr.CurrentPhase != GamePhase.Day)
+            {
+                Debug.LogWarning($"[Effect] Ignored {card.Name}: not in Day phase.");
+                return;
+            }
+
             UpdateCurrentPlayer();
             Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
 

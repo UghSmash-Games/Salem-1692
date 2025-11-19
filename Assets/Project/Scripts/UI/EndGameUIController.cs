@@ -109,14 +109,14 @@ namespace Salem.UI
             // e.g., a small TMP_Text for "All witches eliminated" etc.
         }
 
-        private void BackToMainMenu()
+        public void BackToMainMenu()
         {
             // Unpause
             Time.timeScale = 1f;
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         }
 
-        private void QuitGame()
+        public void QuitGame()
         {
             // Unpause not needed, but harmless
             Time.timeScale = 1f;

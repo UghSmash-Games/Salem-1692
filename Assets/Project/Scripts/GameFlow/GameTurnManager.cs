@@ -33,24 +33,24 @@ namespace Salem.GameFlow
     public class GameTurnManager : MonoBehaviour
     {
         #region Vars
-        public static int CurrentPlayerIndex{ get; private set; }
+        public static int CurrentPlayerIndex { get; private set; }
         public static GameTurnManager Instance;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private UIManager UIManager;
         [SerializeField] private float turnDuration = 30f;
         public Player CurrentPlayer => currentPlayer;
+        public KeyCode debugTurnAdvanceKey = KeyCode.N;
         public UnityEvent OnTurnStart;
         public UnityEvent OnPhaseTransition;
-        public KeyCode debugTurnAdvanceKey = KeyCode.N;
-
         public event System.Action<Player> TurnStarted;
         public event System.Action<Player> TurnEnded;
 
+        private DeckManager deckManager;
+        private Player currentPlayer;
         private float turnTimer;
         private bool isTurnActive = false;
-        private Player currentPlayer;
         private bool waitingForHuman;
-        private DeckManager deckManager;
+        private bool turnsStarted;
 
         private enum TurnActionChoice
         {
@@ -97,18 +97,18 @@ namespace Salem.GameFlow
         #region Accessor Functions
         public void Initialize()
         {
-            //Debug.Log("Initializing GameTurnManager.");
-            StartTurn(0);
+            var phase = FindFirstObjectByType<GamePhaseManager>();
+            if (phase != null) phase.OnPhaseChange += HandlePhaseChanged;
         }
         public void StartTurn(int playerIndex)
         {
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0) return;
-            
+
             turnTimer = turnDuration;
 
             if (playerIndex >= players.Count) playerIndex = 0;
-            
+
             CurrentPlayerIndex = playerIndex;
 
             currentPlayer = players[CurrentPlayerIndex];
@@ -120,7 +120,6 @@ namespace Salem.GameFlow
             TurnStarted?.Invoke(currentPlayer);
             OnTurnStart?.Invoke();
 
-            //Add In Later For Advance UI
             StartCoroutine(RunTurn(currentPlayer));
         }
 
@@ -299,6 +298,28 @@ namespace Salem.GameFlow
             }
         }
 
-        
+        private void HandlePhaseChanged(GamePhase phase)
+        {
+            if (phase == GamePhase.Day)
+            {
+                if (!turnsStarted)
+                {
+                    turnsStarted = true;
+                    StartTurn(0); // first ever turn, AFTER Setup+Dawn finished
+                }
+                else
+                {
+                    // resuming Day after Night – do not auto-advance here.
+                    // If you pause turns on Night, the current player/next index is already set.
+                    if (!isTurnActive) StartTurn(CurrentPlayerIndex % PlayerService.GetAlivePlayers().Count);
+                }
+            }
+            else
+            {
+                // Not Day → pause/stop the turn loop
+                isTurnActive = false;
+                StopAllCoroutines();
+            }
+        }
     }
 }
