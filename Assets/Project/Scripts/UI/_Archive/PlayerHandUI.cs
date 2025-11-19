@@ -53,7 +53,7 @@ namespace Salem.UI
             {
                 GameObject cardGO = Instantiate(cardUIPrefab, handPanel);
                 GameCardUI cardUI = cardGO.GetComponent<GameCardUI>();
-                cardUI.SetCard(card);
+                cardUI.SetCard(card, true);
                 cardUIElements.Add(cardUI);
             }
         }

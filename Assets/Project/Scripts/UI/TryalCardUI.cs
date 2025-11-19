@@ -14,11 +14,10 @@
 
 * FIXME: [Known bugs or issues]
 */
+using Salem.Cards;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using Salem.Cards;
-using Salem.Players;
 
 namespace Salem.UI
 {
@@ -34,14 +33,28 @@ namespace Salem.UI
         #region Accessor Functions
         public void AssignCard(TryalCard card)
         {
+            if (assignedCard != null)
+            {
+                assignedCard.OnRevealed -= UpdateTryalCardVisual;
+            }
             assignedCard = card;
+            assignedCard.OnRevealed += UpdateTryalCardVisual;
+
             UpdateTryalCardVisual(assignedCard);
+        }
+        
+        private void OnDestroy()
+        {
+            if (assignedCard != null)
+            {
+                assignedCard.OnRevealed -= UpdateTryalCardVisual;
+            }
         }
 
         public void UpdateTryalCardVisual(TryalCard card)
         {
             if (card.IsRevealed)
-            { 
+            {
                 CardImage.sprite = card.RevealedCardImage;
             }
             else

@@ -54,10 +54,12 @@ namespace Salem.UI
             {
                 statusUI.UpdateStatusCards(player.StatusCards);
             };
+            player.OnTryalCardsChanged += statusUI.UpdateTryalCards;
             statusUI.Initialize(player);
 
             // Optional: initialize immediately
             statusUI.UpdateStatusCards(player.StatusCards);
+            statusUI.UpdateTryalCards();
 
             playerToStatusUI[player] = statusUI;
             SetPlayerName(player, statusUI);
@@ -82,7 +84,14 @@ namespace Salem.UI
                 ui.SetTurnActive(false);
             }
 
-            var currentPlayer = PlayerService.All[GameTurnManager.CurrentPlayerIndex];
+            var players = PlayerService.GetAlivePlayers();
+            if (GameTurnManager.CurrentPlayerIndex >= players.Count)
+            {
+                Debug.LogWarning("UIManager: CurrentPlayerIndex out of range.");
+                return;
+            }
+
+            var currentPlayer = players[GameTurnManager.CurrentPlayerIndex];
 
             if (playerToStatusUI.TryGetValue(currentPlayer, out var statusUI))
             {

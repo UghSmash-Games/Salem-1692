@@ -15,112 +15,178 @@
 
 * FIXME: [Known bugs or issues]
 */
+using System;
+using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
+using System.Linq;
+using Salem.Cards;
+using Salem.Data;
+using Salem.Deck;
 using Salem.GameFlow;
 using Salem.Managers.Hands;
-using Salem.Cards;
-using System.Collections;
-using System;
+using UnityEngine;
 
 namespace Salem.Players
 {
+    [RequireComponent(typeof(Player))]
     public class AIPlayer : Player
     {
         #region Vars
         [SerializeField] private float aiThinkDelay = 1.5f;
-        private Player target;
+        [SerializeField] private Player player;
+        [SerializeField] private GameManager GameManager;
+        [SerializeField] private DeckManager deckManager;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
 
-        #region Accessor Functions
-        public void StartTurn(Action onComplete)
+        void OnValidate()
         {
-            StartCoroutine(ExecuteAITurn(onComplete));
+            if (!player) player = GetComponent<Player>();
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+            if (!deckManager) deckManager = FindFirstObjectByType<DeckManager>();
         }
+        void Awake()
+        {
+            if (!GameManager) Debug.LogError("[AI Player] Missing GameManager reference for RNG.");
+            if (!deckManager) deckManager = FindFirstObjectByType<DeckManager>();
+        }
+
+        #region Accessor Functions
+        public IEnumerator TakeTurnOnce()
+        {
+            //Debug.Log("Starting AI Turn Logic");
+            if (player.IsHuman) yield break;
+
+            /* Possible remove with new AutoPlay Test Code RJB 11/18/25
+            yield return new WaitForSeconds(aiThinkDelay);
+
+            var hand = player.HandManager.GetCards();
+            if (hand == null || hand.Count == 0)
+            {
+                // Nothing to play -> Draw Cards
+                if (!GameTurnManager.Instance.TryDrawTwoCards(player))
+                {
+                    DrawTwoCards();
+                    GameTurnManager.Instance.RequestEndTurn(player);
+                }
+            }
+
+            // Pick a playable ACTION card deterministically
+            var actions = hand.OfType<ActionCardSO>().ToList();
+            if (!GameTurnManager.Instance.TryDrawTwoCards(player))
+                {
+                    DrawTwoCards();
+                    GameTurnManager.Instance.RequestEndTurn(player);
+                }
+
+            var card = actions[RNGService.Rng.NextInt(0, actions.Count)];
+
+
+            // naive: pick first playable card and a legal target
+            if (card == null)
+            {
+                if (!GameTurnManager.Instance.TryDrawTwoCards(player))
+                {
+                    DrawTwoCards();
+                    GameTurnManager.Instance.RequestEndTurn(player);
+                }
+                yield break;
+            }
+
+            if (!GameTurnManager.Instance.TryBeginPlayPhase(player))
+            {
+                GameTurnManager.Instance.RequestEndTurn(player);
+            }
+
+            PerformTurnAction(card);
+            */
+
+            yield return AITurnSequencer.ExecuteTurn(player, deckManager, aiThinkDelay, false);
+        }
+
         public override void ApplyCardEffect(Card card)
         {
             // Use generic version or expand later with smarter AI logic
             base.ApplyCardEffect(card);
         }
-        public void TakeTurn()
+
+        public override Card SelectCard()
         {
-            // Placeholder for AI behavior
-            DrawCards();
-            //need to develop choosing card from hand and selecting target
-            //PlayCards();
+            if (HandManager == null || HandManager.Hand.Count == 0)
+            {
+                Debug.LogWarning("[AI] No cards to select.");
+                return null;
+            }
+
+            return HandManager.Hand[0];
+        }
+
+        public override void PerformTurnAction(ActionCardSO selectedCard)
+        {
+            if (selectedCard == null)
+            {
+                Debug.Log("No Selected Card");
+                return;
+            }
+
+            if (CardEffectManager.Instance == null)
+            {
+                Debug.LogError("CardEffectManager.Instance is null!");
+                return;
+            }
+
+            Player primary = null;
+            Player secondary = null;
+            if (selectedCard.RequiresTarget)
+            {
+                primary = AITargetingHelper.SelectRandomTarget(this);
+                if (primary == null)
+                {
+                    Debug.LogWarning("[AI] No valid target found.");
+                    return;
+                }
+            }
+            if (selectedCard.RequiresSecondTarget)
+            {
+                secondary = AITargetingHelper.SelectRandomTarget(this);
+                if (secondary == null || secondary == primary)
+                {
+                    Debug.LogWarning("[AI] No valid target found.");
+                    return;
+                }
+            }
+            Debug.Log("Playing Card");
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
+            HandManager.RemoveCard(selectedCard);
         }
         #endregion
 
         #region Helper Functions
-        private IEnumerator ExecuteAITurn(Action onComplete)
+        /* Possible remove with new AutoPlay Test Code RJB 11/18/25
+        private void DrawTwoCards()
         {
-            //Sort Delay before Acting
-            yield return new WaitForSeconds(aiThinkDelay);
-            //TODO: Add Real Decision Logic HERE
-            Debug.Log($"[AI] {PlayerNameText} is taking action...");
-
-            // Example stub: play first card in hand if exists
-            if (HandManager.Hand.Count > 0)
+            if (deckManager == null)
             {
-                Card chosenCard = HandManager.Hand[0];
-                Debug.Log($"[AI] Playing card: {chosenCard.Name}");
-
-                //Build out ApplyCardEffect logic later
-                ApplyCardEffect(chosenCard);
-
-                // Remove the card from hand
-                HandManager.RemoveCard(chosenCard);
+                Debug.LogError("[AI] DeckManager reference missing; cannot draw.");
+                return;
             }
 
-            // Optional delay after action
-            yield return new WaitForSeconds(1f);
-
-            onComplete?.Invoke();
-        }
-        private void DrawCards()
-        {
-            // Logic for drawing cards
-        }
-
-        private void PlayCards()
-        {
-            /*
-            foreach (Card i in Hand)
+            if (player == null || player.HandManager == null)
             {
-                    if (IsValidPlay(card))
-                {
-                    //target = ChooseTarget(); // Basic target selection
-                    PlayCard(card, target);
-                    break; // Play one card per turn in this example
-                }
-                //GameTurnManager.Instance.EndTurn();
+                Debug.LogError("[AI] Player or HandManager missing; cannot draw.");
+                return;
             }
-            */
-        }
 
-        /*
-        private void PlayCard(Card card, Player target)
-        {
-            Debug.Log("Function Not Implemented");
-            throw new System.NotImplementedException();
-        }
-
-        private bool IsValidPlay(Card card)
-        {
-            // Define simple rules for valid card plays
-            return card.Type != "Black"; // Example: Skip black cards for now
+            deckManager.DrawMultipleCards(player.HandManager, 2);
         }
         */
-        
-        /*
-        private Player ChooseTarget()
+
+        void OnEnable()
         {
-        // Simple targeting logic (can be expanded later)
-        List<Player> potentialTargets = GameManager.Instance.GetActivePlayers();
-        return potentialTargets[Random.Range(0, potentialTargets.Count)];
+            // Disable itself if this player is human
+            if (player != null && player.IsHuman) enabled = false;
         }
-        */
         #endregion
-
     }
 }

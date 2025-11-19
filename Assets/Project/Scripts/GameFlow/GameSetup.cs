@@ -21,28 +21,47 @@
 *    • Ensure null safety on DeckManager reference in Awake.
 *    • Make Witch ratio configurable through game settings.
 */
+using Salem.Cards;
+using Salem.Data;
+using Salem.Deck;
+using Salem.GameFlow;
+using Salem.Players;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using Salem.Players;
-using Salem.Deck;
-using Salem.Cards;
 
 namespace Salem.Gameplay.Setup
 {
     public class GameSetup : MonoBehaviour
     {
         #region Vars
+        [SerializeField] private GameManager GameManager;
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
+        [SerializeField, Range(0f, 1f), Tooltip("Proportion of players assigned the Witch role")]
+        private float witchRatio = 1f / 3f;
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
+        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
+        private static readonly HashSet<string> InitialHandRestrictedCards = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "Night",
+            "Conspiracy"
+        };
         #endregion
 
         #region Standard Functions
+        void OnValidate()
+        {
+            if (!GameManager) GameManager = FindFirstObjectByType<GameManager>();
+        }
+
         void Awake()
         {
-            DeckManager = GetComponent<DeckManager>();
+            DeckManager = GameObject.FindAnyObjectByType<DeckManager>();
+            if (!GameManager) Debug.LogError("[CardEffectManager] Missing GameManager reference for RNG.");
+
         }
         #endregion
 
@@ -51,14 +70,16 @@ namespace Salem.Gameplay.Setup
         public void SetupNewGame(IReadOnlyList<Player> players, int count)
         {
             SetupTryalCards(players);
+            AssignBlackCatAtStart(players);
             SetupInitalHand(players, count);
+            SetupTownhallCard(players);
         }
         #endregion
 
         #region Helper Functions
         private void SetupTryalCards(IReadOnlyList<Player> players)
         {
-            int numberOfWitches = players.Count / 3; 
+            int numberOfWitches = Mathf.Max(1, Mathf.RoundToInt(players.Count * witchRatio));
             //Debug.Log($"There are {numberOfWitches} Witches.");
 
             int numberOfTryalCardsNeeded = players.Count * 5;
@@ -69,7 +90,7 @@ namespace Salem.Gameplay.Setup
             TryalDeck.Add(constableCard);
 
             //Create our Witch Cards
-            for (int i = 0; i < numberOfWitches; i++) 
+            for (int i = 0; i < numberOfWitches; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[1]);
                 card.TryalCardType = TryalCardType.Witch;
@@ -77,12 +98,12 @@ namespace Salem.Gameplay.Setup
             }
 
             //Finish the deck with NotAWitch Cards
-            for (int i = TryalDeck.Count; i < numberOfTryalCardsNeeded; i++) 
+            for (int i = TryalDeck.Count; i < numberOfTryalCardsNeeded; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[2]);
                 card.TryalCardType = TryalCardType.NotAWitch;
                 TryalDeck.Add(card);
-            } 
+            }
 
             //Debug.Log($"There are {TryalDeck.Count} total Tryal Cards.");
 
@@ -92,8 +113,38 @@ namespace Salem.Gameplay.Setup
             foreach (var player in players)
             {
                 player.TryalCards = DrawTryalCards(5, TryalDeck);
+                player.InvokeOnTryalCardsChanged();
                 player.DetermineRole();
+                //give each player a reference to the RNG to be able to randomly decide tryal card. This will likely be replaced later, but I want to just get the systems connected for now
+                player.setRng(GameManager.Rng);
             }
+        }
+        
+        private void AssignBlackCatAtStart(IReadOnlyList<Player> players)
+        {
+            if (DeckManager == null)
+            {
+                Debug.LogWarning("[GameSetup] Cannot assign Black Cat without a DeckManager reference.");
+                return;
+            }
+
+            var card = DeckManager.ExtractCardFromDeck("Black Cat");
+            if (card == null)
+            {
+                Debug.LogWarning("[GameSetup] No Black Cat card found in the deck during setup.");
+                return;
+            }
+
+            if (players == null || players.Count == 0)
+            {
+                Debug.LogWarning("[GameSetup] No players available to receive the Black Cat. Sending card to discard.");
+                DeckManager.AddToDiscardPile(card);
+                return;
+            }
+
+            int index = Rng.NextInt(0, players.Count);
+            var chosenPlayer = players[index];
+            chosenPlayer.AssignBlackCat(card);
         }
 
         //Give the players their starting hand
@@ -101,7 +152,32 @@ namespace Salem.Gameplay.Setup
         {
             foreach (var player in players)
             {
-                DeckManager.DrawMultipleCards(player.HandManager, count);
+                if (player.HandManager == null)
+                {
+                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
+                    continue;
+                }
+                DeckManager.DrawMultipleCards(player.HandManager, count, ShouldRejectInitialHandCard);
+            }
+        }
+
+         private bool ShouldRejectInitialHandCard(Card card)
+        {
+            return card != null && InitialHandRestrictedCards.Contains(card.Name);
+        }
+
+        //Give the players their townhall Card
+        private void SetupTownhallCard(IReadOnlyList<Player> players)
+        {
+            foreach (var player in players)
+            {
+                if (player.HandManager == null)
+                {
+                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
+                    continue;
+                }
+                //draw and set card
+                DeckManager.drawTownhallCard(player);
             }
         }
 
@@ -117,7 +193,7 @@ namespace Salem.Gameplay.Setup
         {
             for (int i = 0; i < deck.Count; i++)
             {
-                int randomIndex = Random.Range(i, deck.Count);
+                int randomIndex = RNGService.Rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
             

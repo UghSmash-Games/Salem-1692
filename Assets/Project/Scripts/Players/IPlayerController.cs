@@ -15,11 +15,22 @@
 */
 using UnityEngine;
 using Salem.GameFlow;
+using Salem.Cards;
 
 namespace Salem.Players
 {
     public interface IPlayerController
     {
-        
+        /// <summary>
+        /// Choose a card from the player's hand to play.
+        /// </summary>
+        /// <returns>The selected card or null if none available.</returns>
+        Card SelectCard();
+
+        /// <summary>
+        /// Execute the action for the selected card.
+        /// </summary>
+        /// <param name="selectedCard">Card chosen by SelectCard.</param>
+        void PerformTurnAction(ActionCardSO selectedCard);
     }
 }
