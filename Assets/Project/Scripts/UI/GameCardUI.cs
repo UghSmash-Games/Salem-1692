@@ -26,30 +26,38 @@ namespace Salem.UI
     {
         #region Vars
         [SerializeField] private Image CardImage;
-        private Image revealedCardImage;
-        //public TextMeshPro cardNameText;
+        public Card Card => card;
         
         private Card card;
+        private bool faceUp;
         #endregion
 
         #region Accessor Functions
-        public void SetCard(Card newCard)
+        public void SetCard(Card c, bool isFaceUp)
         {
-            card = newCard;
-            UpdatePlayingCardVisual(card); 
+            card = c;
+            faceUp = isFaceUp;
+            Refresh();
         }
 
-        public void UpdatePlayingCardVisual(Card card)
+        public void SetFaceUp(bool isFaceUp)
         {
-            if (card.IsPlayed)
-            { 
-                CardImage.sprite = card.RevealedCardImage;
-            }
-            else
-            {
-                CardImage.sprite = card.HiddenCardImage;
-            }
+            faceUp = isFaceUp;
+            Refresh();
         }
         #endregion
+
+        private void Refresh()
+        {
+            if (card == null || CardImage == null) return;
+
+            // Front for face-up, back for face-down
+            var sprite = faceUp ? card.RevealedCardImage : card.HiddenCardImage;
+            CardImage.sprite = sprite;
+
+            // Optional: fallback if a sprite is missing
+            if (CardImage.sprite == null)
+                Debug.LogWarning($"[GameCardUI] {card?.Name} missing {(faceUp ? "Revealed" : "Hidden")} sprite.");
+        }
     }
 }

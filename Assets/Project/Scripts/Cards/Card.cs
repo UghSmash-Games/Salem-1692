@@ -14,21 +14,31 @@
 *    • Add CardID and CanPlay method
 * FIXME: [Known bugs or issues]
 */
-using Microsoft.Unity.VisualStudio.Editor;
+using Salem.Players;
 using UnityEngine;
-using Salem.Deck;
-using Salem.Managers.Hands;
 
 namespace Salem.Cards
 {
     [CreateAssetMenu(fileName = "NewCard", menuName = "Card Game/Card")]
     public class Card : ScriptableObject
     {
+        public enum CardColor
+    {
+        Green,
+        Blue,
+        Red,
+        Black,
+        White,
+        Tryal
+    }
         public string Name;
-        public string Type;
+        public CardColor Type;
+        public bool RequiresTarget;
         public string Effect;
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;
         public bool IsPlayed;
+        public Player target;
+        public string LogMessage = "{source} played {card} on {target}."; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
     }
 }

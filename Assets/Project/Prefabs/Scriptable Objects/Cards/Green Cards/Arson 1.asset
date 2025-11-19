@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41d6e0217fd2a104fb4e789c1dea13e1, type: 3}
+  m_Name: Arson 1
+  m_EditorClassIdentifier: 
+  Name: Arson
+  Type: 0
+  RequiresTarget: 1
+  Effect: Target player must discard their entire hand.
+  HiddenCardImage: {fileID: 6155972301573739850, guid: 51064e9348a75d8429406f860f1909e8, type: 3}
+  RevealedCardImage: {fileID: 6656842718856498535, guid: c972f4a6861487a49b93a8152a444c40, type: 3}
+  IsPlayed: 0
+  target: {fileID: 0}
+  LogMessage: '{source} played {card} on {target}.'
+  Op: 7
+  NeedsTarget: 1
+  RulesText: Target player must discard their entire hand.

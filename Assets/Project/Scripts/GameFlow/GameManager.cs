@@ -31,24 +31,37 @@ using Salem.Data;
 
 namespace Salem.GameFlow
 {
+    [DefaultExecutionOrder(-100)] // ensure this Awake Runs before other managers
     public class GameManager : MonoBehaviour
     {
         #region Vars
-        //[SerializeField] private PlayerHandUI PlayerHandUI;
-        [SerializeField] private EndGameUI EndGameUI;
-        [SerializeField] private PlayerStatusUI PlayerStatusUI;
-        [SerializeField] private List<PlayerStatusUI> AI_PlayerStatusUIPanels;
-        [SerializeField] private PlayerInputUI PlayerInputUI;
-
+        [Header("RNG")]
+        [SerializeField] private bool useFixedSeed = false;
+        [SerializeField] private ulong fixedSeed = 123456789UL;
+        public IRng Rng { get; private set; }
+        public ulong Seed{ get; private set; }
+        //[SerializeField] private EndGameUI EndGameUI;
 
         //Tracks GameManager
-        public static object Instance { get; internal set; }
-        public List<Player> players;
-    
+        public static GameManager Instance { get; private set; }
+        [SerializeField] private UIManager UIManager;
+
+        public event Action<EndGameResult> OnGameEnded;
+
+        //for central control of input/time when game ends
+        [SerializeField] private bool pauseOnGameEnd = true;
+
+
         private bool isGameActive;
+        private bool endGameHandlersRegistered;
+        private bool gameAlreadyEnded = false;
         #endregion
 
         #region Standard Functions
+        private void OnValidate()
+        {
+            if (!UIManager) UIManager = FindFirstObjectByType<UIManager>();
+        }
         void Awake()
         {
             HandleInstance();
@@ -58,89 +71,121 @@ namespace Salem.GameFlow
 
         void Start()
         {
-            LinkPlayersToUIPanels(players);
+            //Debug.Log($"[GameManager] Total players registered: {PlayerService.All.Count}");
+            /*foreach (var p in PlayerService.All)
+            {
+                Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
+            }
+            */
+
+            UIManager.BindAllPlayerStatusUI();
+            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
         }
         #endregion
 
         #region Accessor Functions
-        public void LinkPlayersToUIPanels(List<Player> players)
+        public void EvaluateEndGame()
         {
-            for (int i = 0; i < AI_PlayerStatusUIPanels.Count; i++)
-            {
-                if (i < players.Count-1)
-                {
-                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(true);
-                    AI_PlayerStatusUIPanels[i].Initialize(players[i]);
-                    players[i].StatusUI = AI_PlayerStatusUIPanels[i];
-                    print("Assigned AI UI Pannel for player count " + i);
-                }
-                else
-                {
-                    AI_PlayerStatusUIPanels[i].gameObject.SetActive(false);
-                }
-            }
-        }
-        //Updates CardsUI
-        public void UpdateLocalPlayerUI()
-        {
-            //Update local player's hand
-            var localPlayer = players[0];
-            var data = new PlayerHandData(localPlayer.HandManager.GetCards(), localPlayer.TryalCards);
-            //PlayerHandUI.UpdateFromData(data);
-            //PlayerInputUI.UpdateHand();
-            PlayerStatusUI.Initialize(localPlayer);
-            localPlayer.StatusUI = PlayerStatusUI;
-        }
-        
-        public void CheckEndgameConditions()
-        {
-            int activeVillagers = players.Count(p => !p.IsWitch && !p.IsEliminated);
-            int activeWitches = players.Count(p => p.IsWitch && !p.IsEliminated);
+            var alive = PlayerService.GetAlivePlayers();
+            if (alive == null || alive.Count == 0) return;
 
-            if (activeWitches == 0)
+            int witches = alive.Count(p => p.IsWitch && !p.IsEliminated);
+            int nonWitches = alive.Count - witches;
+
+            // villagers win if all witches dead
+            if (witches == 0)
             {
-                EndGame("Villagers Win!");
+                var winners = alive.Where(p => !p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Villagers, winners, "All witches eliminated"));
+                return;
             }
-            else if (activeVillagers == 0 || activeWitches >= activeVillagers)
+
+            if (witches >= nonWitches)
             {
-                EndGame("Witches Win!");
+                var winners = alive.Where(p => p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Witches, winners, "Witches reached parity"));
+                return;
             }
         }
-
-        public void EndGame(string result)
+        /*public void CheckEndgameConditions()
         {
+            if (!isGameActive)
+            {
+                return;
+            }
+
+            var aliveVillagers = PlayerService.GetAliveVillagers();
+            var aliveWitches = PlayerService.GetAliveWitches();
+
+            if (aliveWitches.Count == 0)
+            {
+                EndGame(FormatVictoryMessage("Villagers", aliveVillagers));
+            }
+            else if (aliveVillagers.Count == 0 || aliveWitches.Count >= aliveVillagers.Count)
+            {
+                EndGame(FormatVictoryMessage("Witches", aliveWitches));
+            }
+        }*/
+
+        // Call EvaluateEndGame() at key points:
+        public void OnDayLynchResolved() => EvaluateEndGame();
+        public void OnNightResolved() => EvaluateEndGame();
+        public void OnPlayerLeftGame() => EvaluateEndGame();
+
+        /*public void EndGame(string result)
+        {
+            if (!isGameActive)
+            {
+                return;
+            }
+
             Debug.Log(result);
             isGameActive = false;
 
             // Display the endgame UI
-            EndGameUI.Show(result);
+            if (EndGameUI != null)
+            {
+                EndGameUI.Show(result);
+            }
+            else
+            {
+                Debug.LogWarning("[GameManager] EndGameUI reference missing. Unable to display endgame screen.");
+            }
 
             // Provide options to restart or quit
-            EndGameUI.OnRestart += RestartGame;
-            EndGameUI.OnQuit += QuitGame;
+            if (!endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart += RestartGame;
+                EndGameUI.OnQuit += QuitGame;
+                endGameHandlersRegistered = true;
+            }
+        }*/
+
+        public void InitRng(ulong? seed = null)
+        {
+            Seed = seed ?? (useFixedSeed ? fixedSeed : (ulong)System.DateTime.UtcNow.Ticks);
+            Rng  = new XorShiftRng(Seed);
+            Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
         }
+
+        // Optional for replays/debug:
+        public void Reseed(ulong newSeed) => InitRng(newSeed);
         #endregion
-    
+
         #region Helper Functions
         //Ensures only 1 GameManager
         private void HandleInstance()
         {
-            if (Instance == null)
-            {
-                Instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            InitRng(); // set Rng + Seed
         }
-  
+
         //Finds ALL Players and stores them in an accessible list
         private void PopulatePlayers()
         {
             // Ensure the list is empty before populating
-            players.Clear(); 
+            PlayerService.Clear();
 
             GameObject[] playerObjects = GameObject.FindGameObjectsWithTag("Player");
             GameObject[] aiObjects = GameObject.FindGameObjectsWithTag("AI");
@@ -150,8 +195,7 @@ namespace Salem.GameFlow
                 Player playerComponent = obj.GetComponent<Player>();
                 if (playerComponent != null)
                 {
-                    players.Add(playerComponent);
-                    Debug.Log($"Added player: {playerComponent.PlayerName}");
+                    PlayerService.Register(playerComponent);
                 }
                 else
                 {
@@ -160,21 +204,61 @@ namespace Salem.GameFlow
             }
         }
 
-        private void RestartGame()
+        /*private void RestartGame()
         {
             Debug.Log("Restarting Game...");
-            EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
-            EndGameUI.OnQuit -= QuitGame;
+            if (endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
+                EndGameUI.OnQuit -= QuitGame;
+                endGameHandlersRegistered = false;
+            }
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
         }
 
         private void QuitGame()
         {
-        Debug.Log("Quitting Game...");
-        EndGameUI.OnRestart -= RestartGame;
-        EndGameUI.OnQuit -= QuitGame;
-        Application.Quit();
+            Debug.Log("Quitting Game...");
+            if (endGameHandlersRegistered)
+            {
+                EndGameUI.OnRestart -= RestartGame;
+                EndGameUI.OnQuit -= QuitGame;
+                endGameHandlersRegistered = false;
+            }
+            Application.Quit();
         }
-    #endregion
+
+        private static string FormatVictoryMessage(string faction, IReadOnlyCollection<Player> winners)
+        {
+            if (winners == null || winners.Count == 0)
+            {
+                return $"{faction} Win!";
+            }
+
+            string survivorList = string.Join(", ", winners.Select(p => p.PlayerNameText));
+            return $"{faction} Win!\nSurvivors: {survivorList}";
+        }*/
+
+        private void RaiseGameEnded(EndGameResult result)
+        {
+            if (gameAlreadyEnded) return;
+            gameAlreadyEnded = true;
+            if (pauseOnGameEnd) Time.timeScale = 0f;
+            OnGameEnded?.Invoke(result);
+        }
+
+        private void OnEnable()
+        {
+            PlayerService.OnPlayerEliminated += HandlePlayerEliminated;
+        }
+        private void OnDisable()
+        {
+            PlayerService.OnPlayerEliminated -= HandlePlayerEliminated;
+        }
+        private void HandlePlayerEliminated(Player p, EliminationCause cause)
+        {
+            EvaluateEndGame();
+        }
+        #endregion
     }
 }
