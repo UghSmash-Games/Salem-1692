@@ -58,6 +58,7 @@ namespace Salem.Players
             //Debug.Log("Starting AI Turn Logic");
             if (player.IsHuman) yield break;
 
+            /* Possible remove with new AutoPlay Test Code RJB 11/18/25
             yield return new WaitForSeconds(aiThinkDelay);
 
             var hand = player.HandManager.GetCards();
@@ -99,6 +100,9 @@ namespace Salem.Players
             }
 
             PerformTurnAction(card);
+            */
+
+            yield return AITurnSequencer.ExecuteTurn(player, deckManager, aiThinkDelay, false);
         }
 
         public override void ApplyCardEffect(Card card)
@@ -159,7 +163,7 @@ namespace Salem.Players
         #endregion
 
         #region Helper Functions
-
+        /* Possible remove with new AutoPlay Test Code RJB 11/18/25
         private void DrawTwoCards()
         {
             if (deckManager == null)
@@ -176,6 +180,7 @@ namespace Salem.Players
 
             deckManager.DrawMultipleCards(player.HandManager, 2);
         }
+        */
 
         void OnEnable()
         {

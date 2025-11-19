@@ -9,7 +9,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Salem.Cards;
+using Salem.Data;
 using Salem.GameFlow;
+using Salem.Players;
 
 
 namespace Salem.UI
@@ -28,24 +31,89 @@ namespace Salem.UI
 
         private Queue<GameObject> logEntries = new();
 
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+        }
 
         private void OnEnable()
         {
             CardEffectManager.OnCardPlayed += HandleCardPlayed;
+            Player.AccusationCountChanged += HandleAccusationChanged;
+            Player.AccusationThresholdReached += HandleAccusationThreshold;
+            Player.TryalCardRevealed += HandleTryalRevealed;
+            PlayerService.OnPlayerEliminated += HandlePlayerEliminated;
         }
 
 
         private void OnDisable()
         {
             CardEffectManager.OnCardPlayed -= HandleCardPlayed;
+            Player.AccusationCountChanged -= HandleAccusationChanged;
+            Player.AccusationThresholdReached -= HandleAccusationThreshold;
+            Player.TryalCardRevealed -= HandleTryalRevealed;
+            PlayerService.OnPlayerEliminated -= HandlePlayerEliminated;
         }
 
+        private void HandleCardPlayed(string message) => AddLogEntry(message);
 
-        private void HandleCardPlayed(string message)
+        private void HandleAccusationChanged(Player player, byte count, byte limit)
         {
-            AddLogEntry(message);
+            if (player == null)
+            {
+                return;
+            }
+
+            AddLogEntry($"{player.PlayerNameText} accusations: {count}/{limit}.");
         }
 
+        private void HandleAccusationThreshold(Player player, byte count, byte limit)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            AddLogEntry($"{player.PlayerNameText} reached their accusation limit ({limit}). Revealing a Tryal card...");
+        }
+
+        private void HandleTryalRevealed(Player player, TryalCard card)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            string result = card != null ? card.TryalCardType.ToString() : "Unknown";
+            AddLogEntry($"{player.PlayerNameText} revealed {result}.");
+        }
+
+        private void HandlePlayerEliminated(Player player, EliminationCause cause)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            AddLogEntry($"{player.PlayerNameText} was eliminated ({cause}).");
+        }
+
+        public static void Log(string message)
+        {
+            if (Instance == null)
+            {
+                Debug.Log($"[CardLog] {message}");
+                return;
+            }
+
+            Instance.AddLogEntry(message);
+        }
 
         private void AddLogEntry(string message)
         {

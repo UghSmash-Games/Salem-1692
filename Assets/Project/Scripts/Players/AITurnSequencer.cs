@@ -1,0 +1,134 @@
+/*
+* AUTHOR: Ron Bresett
+* REFERENCES:
+* NOTES:
+* TODO: [Planned improvements]
+* FIXME: [Known bugs or issues]
+*/
+
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using Salem.Cards;
+using Salem.Data;
+using Salem.Deck;
+using Salem.GameFlow;
+using UnityEngine;
+
+namespace Salem.Players
+{
+    public static class AITurnSequencer
+    {
+        public static IEnumerator ExecuteTurn(Player driver, DeckManager deckManager, float thinkDelay, bool forceEndTurnOnHuman)
+        {
+            if (driver == null)
+            {
+                yield break;
+            }
+
+            var turnManager = GameTurnManager.Instance;
+            if (turnManager == null)
+            {
+                yield break;
+            }
+
+            if (thinkDelay > 0f)
+            {
+                yield return new WaitForSeconds(thinkDelay);
+            }
+
+            var cards = driver.HandManager?.GetCards();
+            if (cards == null || cards.Count == 0)
+            {
+                yield return DrawFallback(driver, deckManager, turnManager);
+                yield break;
+            }
+
+            var actions = cards.OfType<ActionCardSO>().ToList();
+            if (actions.Count == 0)
+            {
+                yield return DrawFallback(driver, deckManager, turnManager);
+                yield break;
+            }
+
+            var chosen = actions[RNGService.Rng.NextInt(0, actions.Count)];
+            if (chosen == null)
+            {
+                turnManager.RequestEndTurn(driver);
+                yield break;
+            }
+
+            if (!turnManager.TryBeginPlayPhase(driver))
+            {
+                turnManager.RequestEndTurn(driver);
+                yield break;
+            }
+
+            Player primary = null;
+            if (chosen.RequiresTarget || (chosen is ActionCardSO actionCard && actionCard.NeedsTarget))
+            {
+                primary = AITargetingHelper.SelectRandomTarget(driver);
+                if (primary == null)
+                {
+                    turnManager.RequestEndTurn(driver);
+                    yield break;
+                }
+            }
+
+            if (chosen is ActionCardSO action && action.RequiresSecondTarget)
+            {
+                var secondary = AITargetingHelper.SelectRandomTarget(driver);
+                int guard = 0;
+                while (secondary == primary && guard++ < 4)
+                {
+                    secondary = AITargetingHelper.SelectRandomTarget(driver);
+                }
+
+                if (secondary == null || secondary == primary)
+                {
+                    turnManager.RequestEndTurn(driver);
+                    yield break;
+                }
+
+                action.target = secondary;
+            }
+
+            if (CardEffectManager.Instance == null)
+            {
+                Debug.LogError("[AITurnSequencer] CardEffectManager missing; cannot execute card.");
+                turnManager.RequestEndTurn(driver);
+                yield break;
+            }
+
+            CardEffectManager.Instance.ExecuteCardEffect(chosen, primary);
+            driver.HandManager?.RemoveCard(chosen);
+
+            if (forceEndTurnOnHuman && driver.IsHuman)
+            {
+                turnManager.RequestEndTurn(driver);
+            }
+        }
+
+        private static IEnumerator DrawFallback(Player driver, DeckManager deckManager, GameTurnManager turnManager)
+        {
+            yield return null;
+
+            if (turnManager != null && turnManager.TryDrawTwoCards(driver))
+            {
+                yield break;
+            }
+
+            if (deckManager == null)
+            {
+                deckManager = Object.FindFirstObjectByType<DeckManager>();
+            }
+
+            if (deckManager != null)
+            {
+                deckManager.DrawMultipleCards(driver.HandManager, 2);
+            }
+
+            turnManager?.RequestEndTurn(driver);
+        }
+    }
+}

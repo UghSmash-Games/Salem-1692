@@ -44,6 +44,11 @@ namespace Salem.Players
         //needed RNG, but figured giving access to full manager was a bad idea
         public IRng Rng { get; private set; }
         public bool IsHuman => isHuman;
+
+        public static event Action<Player, byte, byte> AccusationCountChanged;
+        public static event Action<Player, byte, byte> AccusationThresholdReached;
+        public static event Action<Player, TryalCard> TryalCardRevealed;
+
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
@@ -149,6 +154,7 @@ namespace Salem.Players
                     EliminateNow();
                 }*/
                 TrialService.OnTrialCardRevealed(this, card);
+                TryalCardRevealed?.Invoke(this, card);
             }
             //TODO:arent we going to need a check if they try to reveal an already revealed card?
             CheckElimination();
@@ -258,6 +264,7 @@ namespace Salem.Players
                         case "Alibi":
                             currentAccusationCount -= 3;
                             if (currentAccusationCount < 0) { currentAccusationCount = 0; }
+                            NotifyAccusationChanged();
                             break;
                         case "Stocks":
                             skipTurn = true;
@@ -294,15 +301,18 @@ namespace Salem.Players
                     {
                         case "Accusations":
                             currentAccusationCount++;
+                            NotifyAccusationChanged();
                             CheckAccusations();
                             break;
                         case "Evidence":
                             currentAccusationCount += 3;
                             if (PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
+                            NotifyAccusationChanged();
                             CheckAccusations();
                             break;
                         case "Witness":
                             currentAccusationCount += 7;
+                            NotifyAccusationChanged();
                             CheckAccusations();
                             break;
                     }
@@ -320,7 +330,11 @@ namespace Salem.Players
             Debug.Log("After Acc:" + currentAccusationCount);
             CheckAccusations(); // you already have this
         }
-        public void ApplyAlibi(int reduceBy) => currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
+        public void ApplyAlibi(int reduceBy)
+        {
+            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
+            NotifyAccusationChanged();
+        }        
         public void ApplyStocks(int turns = 1) => skipTurn = true; // extend later if you track duration
 
         // Hand
@@ -584,6 +598,7 @@ namespace Salem.Players
         {
             if (currentAccusationCount >= currentAccusationLimit)
             {
+                AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
                 //setting it as random first to get the main systems hooked together and working
                 int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
                 if (tryalToReveal.HasValue)
@@ -592,7 +607,13 @@ namespace Salem.Players
                 }
                 //reveal tryal
                 currentAccusationCount = 0;
+                NotifyAccusationChanged();
             }
+        }
+
+        private void NotifyAccusationChanged()
+        {
+            AccusationCountChanged?.Invoke(this, currentAccusationCount, currentAccusationLimit);
         }
         #endregion
     }
