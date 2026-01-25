@@ -311,7 +311,7 @@ namespace Salem.GameFlow
                 if (!turnsStarted)
                 {
                     turnsStarted = true;
-                    StartTurn(0); // first ever turn, AFTER Setup+Dawn finished
+                    StartTurn(forcedStartingIndex); // first ever turn, AFTER Setup+Dawn finished
                 }
                 else
                 {
