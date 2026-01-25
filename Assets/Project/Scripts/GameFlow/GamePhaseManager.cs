@@ -214,22 +214,83 @@ namespace Salem.GameFlow
         }
 
         private void StartDawnPhase()
+    {
+        Debug.Log("Dawn Phase Started: Witches must choose the Black Cat holder.");
+
+        // 1. Identify valid players
+        var localPlayer = PlayerService.GetLocalPlayer();
+        var allPlayers = PlayerService.GetAlivePlayers();
+
+        // 2. Determine if we are a Witch
+        // Note: Assuming Player.cs has an 'IsWitch' property or helper. 
+        // If not, use: localPlayer.myTryalHand.Any(c => c.data.cardName.Contains("Witch"))
+        bool amIAWitch = localPlayer != null && localPlayer.IsWitch;
+
+        if (amIAWitch)
         {
-            //TODO: Reveal Witches to each other
-            //TODO: Allow Witches to Assign the Black Cat Card
-            /*
-            // Reveal Witches to each other
-            List<Player> witches = players.Where(p => p.HasRole(TryalCardType.Witch)).ToList();
-            witches.ForEach(w => w.RevealWitchGroup(witches));
-
-            // Assign the Black Cat
-            Player blackCatHolder = witches[RNGService.Rng.NextInt(0, witches.Count)];
-            blackCatHolder.AssignBlackCat();
-
-            */
-            //Transition to Day phase
-            StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
+            // 3. If Witch: Show the Target Picker UI
+            Debug.Log("Local Player is a Witch. Requesting input.");
+            
+            // Reuse the existing Night Target Picker
+            if (nightTargetPicker != null)
+            {
+                nightTargetPicker.gameObject.SetActive(true);
+                nightTargetPicker.Open(
+                    source: localPlayer, 
+                    isAttack: false, 
+                    onConfirm: (target, _) => 
+                    {
+                        ResolveBlackCatAssignment(target);
+                    }, 
+                    validTargets: allPlayers, 
+                    count: 1, 
+                    promptText: "Choose a player to receive the Black Cat (They will start Day 1)."
+                );
+            }
+            else
+            {
+                Debug.LogError("NightTargetPicker is not assigned in GamePhaseManager Inspector!");
+                // Failsafe: Pick Random if UI is broken
+                ResolveBlackCatAssignment(allPlayers[Random.Range(0, allPlayers.Count)]);
+            }
         }
+        else
+        {
+            // 4. If NOT Witch (or AI): Pick Randomly for now
+            // In a full multiplayer game, this would wait for the server/host.
+            Debug.Log("Local Player is NOT a Witch. AI/Random selection.");
+            
+            Player randomTarget = allPlayers[Random.Range(0, allPlayers.Count)];
+            ResolveBlackCatAssignment(randomTarget);
+        }
+    }
+    private void ResolveBlackCatAssignment(Player target)
+    {
+        if (target == null) return;
+
+        Debug.Log($"The Black Cat has visited {target.PlayerNameText}.");
+
+        // 1. Add visual feedback or log entry here
+        // UIManager.Instance.AddLogEntry($"The Black Cat visits {target.PlayerNameText}");
+
+        // 2. Set the Turn Order for the upcoming Day Phase
+        // Note: This requires the Step 3 update to GameTurnManager to work!
+        if (GameTurnManager.Instance != null)
+        {
+            var alivePlayers = PlayerService.GetAlivePlayers();
+            int targetIndex = alivePlayers.IndexOf(target);
+            GameTurnManager.Instance.SetStartingPlayerIndex(targetIndex);
+        }
+
+        // 3. Close UI
+        if (nightTargetPicker != null) 
+        {
+            nightTargetPicker.gameObject.SetActive(false);
+        }
+
+        // 4. Transition to Day after a short delay
+        StartCoroutine(ChangePhase(GamePhase.Day, 2.0f));
+    }
 
         private IEnumerator EnterNight()
         {
