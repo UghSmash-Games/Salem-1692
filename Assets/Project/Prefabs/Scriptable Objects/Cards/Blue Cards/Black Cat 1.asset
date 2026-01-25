@@ -22,7 +22,7 @@ MonoBehaviour:
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
-  Op: 0
+  Op: 5
   NeedsTarget: 1
   RequiresSecondTarget: 0
   RulesText: Owner must reveal a Tryal card every time Conspiracy is drawn (Chosen
