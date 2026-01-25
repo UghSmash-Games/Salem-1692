@@ -45,6 +45,7 @@ namespace Salem.GameFlow
         public event System.Action<Player> TurnStarted;
         public event System.Action<Player> TurnEnded;
 
+        private int forcedStartingIndex = 0;
         private DeckManager deckManager;
         private Player currentPlayer;
         private float turnTimer;
@@ -100,6 +101,11 @@ namespace Salem.GameFlow
             var phase = FindFirstObjectByType<GamePhaseManager>();
             if (phase != null) phase.OnPhaseChange += HandlePhaseChanged;
         }
+        public void SetStartingPlayerIndex(int index)
+{
+    Debug.Log($"Turn Order Override: Day 1 will start with player index {index}");
+    forcedStartingIndex = index;
+}
         public void StartTurn(int playerIndex)
         {
             var players = PlayerService.GetAlivePlayers();
