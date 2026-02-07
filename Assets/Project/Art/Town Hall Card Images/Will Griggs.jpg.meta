@@ -147,7 +147,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Will Griggs_0: 3889235269648740336
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

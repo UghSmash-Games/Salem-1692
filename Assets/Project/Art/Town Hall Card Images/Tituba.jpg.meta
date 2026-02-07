@@ -147,7 +147,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Tituba_0: -3839529658055775178
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

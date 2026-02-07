@@ -6138,8 +6138,20 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: autoStartOnEnable
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: autopilotAllHumans
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: autopilotThinkDelay
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: autopilotLocalPlayer
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3695826593631295867, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: m_LocalPosition.x
