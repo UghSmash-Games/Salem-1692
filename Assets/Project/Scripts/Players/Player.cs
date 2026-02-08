@@ -616,5 +616,50 @@ namespace Salem.Players
             AccusationCountChanged?.Invoke(this, currentAccusationCount, currentAccusationLimit);
         }
         #endregion
+
+        [Header("Status Effects")]
+        [SerializeField] private bool hasBlackCat;
+
+        // Property to check if the player holds the Black Cat
+        public bool HasBlackCat
+        {
+            get => hasBlackCat;
+            private set => hasBlackCat = value;
+        }
+
+        // Property to check if the player is a Witch (checks Tryal cards)
+        public bool IsWitch
+        {
+            get
+            {
+                // Assuming 'myTryalHand' is your list of TryalCards
+                if (myTryalHand == null) return false;
+            
+                foreach (var card in myTryalHand)
+                {
+                    // Adjust "Witch" string to match your exact card name in the scriptable object
+                    if (card.data != null && card.data.cardName.Contains("Witch") && !card.data.cardName.Contains("Not"))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        // Method called by GamePhaseManager to assign the cat
+        public void ReceiveBlackCat()
+        {
+            Debug.Log($"{PlayerNameText} received the Black Cat.");
+            HasBlackCat = true;
+        
+            // TODO: Visual FX (Turn on a Black Cat icon)
+        }
+
+        // Method to remove the cat (if it moves later)
+        public void RemoveBlackCat()
+        {
+            HasBlackCat = false;
+        }
     }
 }
