@@ -31,64 +31,102 @@ namespace Salem.UI
         [SerializeField] private Transform listParent;
         [SerializeField] private GameObject buttonPrefab;
         [SerializeField] private Button confirmButton;
-        [SerializeField] private TMP_Text promptLabel;
+        [Header("UI References")]
+        [SerializeField] private TextMeshProUGUI headerlabel; // Ensure this is linked in Inspector
 
         private readonly List<Button> spawned = new();
         private Player source;
         private Player primary;
         private Player secondary;
+        
+        // Mode Flags
         private bool requireTwo;
-        private Action<Player, Player> onDone;
+        private bool isSingleTargetMode;
+        private bool isAttackMode;
+        
+        // Callbacks
+        private Action<Player, Player> onDone; // Legacy 2-target callback
+        private Action<Player, bool> onSingleTargetConfirm; // New 1-target callback
+
         private bool isOpen;
         private List<Player> candidateOverride;
         private bool useOverride;
-        private bool allowSourceSelection;
-        private string defaultPrompt;
 
-        private void Awake()
+        // -----------------------------------------------------------------------------------
+        // OPEN METHOD (Supports Black Cat & Night Actions)
+        // -----------------------------------------------------------------------------------
+        public void Open(Player source, bool isAttack, Action<Player, bool> onConfirm, List<Player> validTargets, bool isSingleTarget = true, string promptOverride = null)
         {
-            if (promptLabel)
-            {
-                defaultPrompt = promptLabel.text;
-            }
-        }
+            this.source = source;
+            this.isAttackMode = isAttack;
+            this.onSingleTargetConfirm = onConfirm;
+            this.validTargets = validTargets; // Assuming you meant candidateOverride logic here
+            
+            // Map the passed list to the override logic
+            this.candidateOverride = validTargets;
+            this.useOverride = (validTargets != null && validTargets.Count > 0);
 
-        public void Open(Player sourcePlayer, bool twoTargets, Action<Player, Player> done,
-                         IEnumerable<Player> candidateOverride = null,
-                         bool allowSelfSelection = false,
-                         string promptOverride = null)
-        {
+            this.isSingleTargetMode = isSingleTarget;
+            this.requireTwo = !isSingleTarget; 
+
             isOpen = true;
             gameObject.SetActive(true);
 
-            source = sourcePlayer;
-            requireTwo = twoTargets;
-            onDone = done;
+            // Reset Selection
             primary = null;
             secondary = null;
-            allowSourceSelection = allowSelfSelection;
 
-            candidateOverride = candidateOverride?.Where(p => p != null && !p.IsEliminated)
-                                                   .Distinct()
-                                                   .ToList();
-            this.candidateOverride = candidateOverride != null && candidateOverride.Any()
-                ? new List<Player>(candidateOverride)
-                : null;
-            useOverride = this.candidateOverride != null;
-
-            if (promptLabel)
+            // Handle Text
+            if (headerlabel != null)
             {
-                promptLabel.text = string.IsNullOrEmpty(promptOverride) ? defaultPrompt : promptOverride;
+                if (!string.IsNullOrEmpty(promptOverride))
+                {
+                    headerlabel.text = promptOverride;
+                }
+                else
+                {
+                    headerlabel.text = isAttack ? "Choose a Target to Attack" : "Choose a Target to Save";
+                }
             }
 
-            BuildList(allowSourceSelection ? new HashSet<Player>()
-                                           : new HashSet<Player> { source });
+            // Build List (Allow source selection unless specifically excluded in logic)
+            BuildList(new HashSet<Player>());
+
+            // Setup Button
+            if (confirmButton)
+            {
+                confirmButton.onClick.RemoveAllListeners();
+                confirmButton.onClick.AddListener(Confirm);
+                confirmButton.interactable = false;
+            }
+        }
+
+        // -----------------------------------------------------------------------------------
+        // LEGACY OPEN METHOD (Keep if other scripts call this specific signature)
+        // -----------------------------------------------------------------------------------
+        public void OpenLegacy(Player sourcePlayer, bool twoTargets, Action<Player, Player> done, 
+                               IEnumerable<Player> candidateOverride = null, bool allowSelfSelection = false, string promptOverride = null)
+        {
+            this.source = sourcePlayer;
+            this.requireTwo = twoTargets;
+            this.isSingleTargetMode = !twoTargets;
+            this.onDone = done;
             
-            if (!confirmButton)
-            {
-                Debug.LogError("[TargetPickerUI] ConfirmButton is not assigned.");
-            }
-            else
+            // Logic to convert IEnumerable to List
+            this.candidateOverride = candidateOverride?.Where(p => p != null && !p.IsEliminated).Distinct().ToList();
+            this.useOverride = this.candidateOverride != null && this.candidateOverride.Any();
+
+            isOpen = true;
+            gameObject.SetActive(true);
+            
+            primary = null;
+            secondary = null;
+
+            if (headerlabel) headerlabel.text = string.IsNullOrEmpty(promptOverride) ? "Choose Target" : promptOverride;
+
+            BuildList(allowSelfSelection ? new HashSet<Player>() : new HashSet<Player> { source });
+            
+            if (confirmButton)
             {
                 confirmButton.onClick.RemoveAllListeners();
                 confirmButton.onClick.AddListener(Confirm);
@@ -98,17 +136,17 @@ namespace Salem.UI
 
         private void BuildList(HashSet<Player> exclude)
         {
-            // remove listeners then destroy old rows
-            foreach (var b in spawned)
-                if (b) b.onClick.RemoveAllListeners();
+            // Clear old
+            foreach (var b in spawned) if (b) b.onClick.RemoveAllListeners();
             spawned.Clear();
+            foreach (Transform c in listParent) Destroy(c.gameObject);
 
-            foreach (Transform c in listParent)
-                Destroy(c.gameObject);
-
+            // Determine candidates
             var candidates = useOverride
                 ? candidateOverride.Where(p => !exclude.Contains(p)).ToList()
                 : PlayerService.GetAlivePlayers().Where(p => !exclude.Contains(p)).ToList();
+
+            // Spawn
             foreach (var p in candidates)
             {
                 var go = Instantiate(buttonPrefab, listParent);
@@ -126,19 +164,33 @@ namespace Salem.UI
         {
             if (!isOpen) return;
 
-            if (primary == null)
+            if (isSingleTargetMode)
             {
+                // Single Target Logic: Clicking just selects that player
                 primary = p;
-                if (requireTwo)
-                    BuildList(new HashSet<Player> { source, primary }); // second pick
+                secondary = null;
             }
-            else if (requireTwo && secondary == null && p != primary)
+            else
             {
-                secondary = p;
+                // Dual Target Logic
+                if (primary == null)
+                {
+                    primary = p;
+                    // If we need a second target, rebuild list to exclude first pick
+                    if (requireTwo) BuildList(new HashSet<Player> { source, primary });
+                }
+                else if (requireTwo && secondary == null && p != primary)
+                {
+                    secondary = p;
+                }
             }
 
-            if (confirmButton) // guard destroyed refs
-                confirmButton.interactable = (primary != null && (!requireTwo || secondary != null));
+            if (confirmButton)
+            {
+                // Valid if Primary exists. If Dual mode, Secondary must also exist.
+                bool complete = primary != null && (isSingleTargetMode || secondary != null);
+                confirmButton.interactable = complete;
+            }
         }
 
         private void Confirm()
@@ -146,7 +198,15 @@ namespace Salem.UI
             if (!isOpen) return;
             isOpen = false;
 
-            onDone?.Invoke(primary, secondary);
+            if (isSingleTargetMode)
+            {
+                onSingleTargetConfirm?.Invoke(primary, isAttackMode);
+            }
+            else
+            {
+                onDone?.Invoke(primary, secondary);
+            }
+
             Cleanup();
             gameObject.SetActive(false);
         }
@@ -155,15 +215,12 @@ namespace Salem.UI
 
         private void Cleanup()
         {
-            foreach (var b in spawned)
-                if (b) b.onClick.RemoveAllListeners();
+            foreach (var b in spawned) if (b) b.onClick.RemoveAllListeners();
             spawned.Clear();
             primary = secondary = null;
             candidateOverride = null;
             useOverride = false;
-            allowSourceSelection = false;
-            if (promptLabel)
-                promptLabel.text = defaultPrompt;
+            // prompt reset handled in Open
         }
     }
 }
