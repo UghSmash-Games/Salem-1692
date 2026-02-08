@@ -629,23 +629,28 @@ namespace Salem.Players
 
         // Property to check if the player is a Witch (checks Tryal cards)
         public bool IsWitch
+    {
+        get
         {
-            get
+            if (myTryalHand == null || myTryalHand.Count == 0) return false;
+
+            foreach (var card in myTryalHand)
             {
-                // Assuming 'myTryalHand' is your list of TryalCards
-                if (myTryalHand == null) return false;
-            
-                foreach (var card in myTryalHand)
+                // Safety check: Ensure card data exists before reading the name
+                if (card != null && card.data != null)
                 {
-                    // Adjust "Witch" string to match your exact card name in the scriptable object
-                    if (card.data != null && card.data.cardName.Contains("Witch") && !card.data.cardName.Contains("Not"))
+                    string name = card.data.cardName;
+                    
+                    // Logic: Must contain "Witch" but NOT contain "Not" (to exclude "Not a Witch")
+                    if (name.Contains("Witch") && !name.Contains("Not"))
                     {
                         return true;
                     }
                 }
-                return false;
             }
+            return false;
         }
+    }
 
         // Method called by GamePhaseManager to assign the cat
         public void ReceiveBlackCat()
