@@ -632,16 +632,15 @@ namespace Salem.Players
     {
         get
         {
+            // VERIFY: Is 'myTryalHand' the correct list name?
             if (myTryalHand == null || myTryalHand.Count == 0) return false;
 
             foreach (var card in myTryalHand)
             {
-                // Safety check: Ensure card data exists before reading the name
+                // VERIFY: Is '.data' the correct reference to the ScriptableObject?
                 if (card != null && card.data != null)
                 {
-                    string name = card.data.cardName;
-                    
-                    // Logic: Must contain "Witch" but NOT contain "Not" (to exclude "Not a Witch")
+                    string name = card.data.cardName; // VERIFY: Is '.cardName' correct?
                     if (name.Contains("Witch") && !name.Contains("Not"))
                     {
                         return true;
@@ -654,17 +653,15 @@ namespace Salem.Players
 
         // Method called by GamePhaseManager to assign the cat
         public void ReceiveBlackCat()
-        {
-            Debug.Log($"{PlayerNameText} received the Black Cat.");
-            HasBlackCat = true;
-        
-            // TODO: Visual FX (Turn on a Black Cat icon)
-        }
+    {
+        // VERIFY: Ensure 'PlayerNameText' is the correct property for the name
+        Debug.Log($"{PlayerNameText} has received the Black Cat.");
+        HasBlackCat = true;
+    }
 
-        // Method to remove the cat (if it moves later)
-        public void RemoveBlackCat()
-        {
-            HasBlackCat = false;
+    public void RemoveBlackCat()
+    {
+        HasBlackCat = false;
         }
     }
 }
