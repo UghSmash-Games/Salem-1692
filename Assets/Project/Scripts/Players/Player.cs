@@ -627,7 +627,9 @@ namespace Salem.Players
             private set => hasBlackCat = value;
         }
 
+        //Posible delete pending as of 2/13/26
         // Property to check if the player is a Witch (checks Tryal cards)
+        /*
         public bool IsWitch
     {
         get
@@ -649,7 +651,7 @@ namespace Salem.Players
             }
             return false;
         }
-    }
+    }*/
 
         // Method called by GamePhaseManager to assign the cat
         public void ReceiveBlackCat()
