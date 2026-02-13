@@ -21,6 +21,7 @@ using Salem.Players;
 using Salem.GameFlow;
 using Salem.Data;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 namespace Salem.UI
 {
@@ -28,7 +29,50 @@ namespace Salem.UI
     {
         [SerializeField] private List<PlayerStatusUI> statusPanels;
         [SerializeField] private PlayerInputUI localPlayerInputUI;
+
+        [Header("Phase Indicator")]
+        [SerializeField] private Image phaseIconImage;
+        [SerializeField] private Sprite placeholderPhaseSprite;
+        [SerializeField] private Sprite dawnPhaseSprite;
+        [SerializeField] private Sprite dayPhaseSprite;
+        [SerializeField] private Sprite nightPhaseSprite;
+
+        private GamePhaseManager GamePhaseManager;
         private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new();
+
+        private void Awake()
+        {
+            if (phaseIconImage == null)
+            {
+                var indicatorObject = GameObject.Find("Day_NightIndicator");
+                if (indicatorObject != null)
+                {
+                    phaseIconImage = indicatorObject.GetComponent<Image>();
+                }
+            }
+        }
+
+        private void OnEnable()
+        {
+            GamePhaseManager = FindFirstObjectByType<GamePhaseManager>();
+            if (GamePhaseManager != null)
+            {
+                GamePhaseManager.OnPhaseChange += HandlePhaseIconChanged;
+                HandlePhaseIconChanged(GamePhaseManager.CurrentPhase);
+            }
+            else
+            {
+                ApplyPhaseSprite(placeholderPhaseSprite);
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (GamePhaseManager != null)
+            {
+                GamePhaseManager.OnPhaseChange -= HandlePhaseIconChanged;
+            }
+        }
 
         public void BindAllPlayerStatusUI()
         {
@@ -106,6 +150,45 @@ namespace Salem.UI
         private void SetPlayerName(Player player, PlayerStatusUI statusUI)
         {
             statusUI.PlayerName.text = player.PlayerNameText;
+        }
+
+        private void HandlePhaseIconChanged(GamePhase phase)
+        {
+            switch (phase)
+            {
+                case GamePhase.Dawn:
+                    ApplyPhaseSprite(dawnPhaseSprite);
+                    break;
+
+                case GamePhase.Day:
+                    ApplyPhaseSprite(dayPhaseSprite);
+                    break;
+
+                case GamePhase.Night:
+                    ApplyPhaseSprite(nightPhaseSprite);
+                    break;
+
+                default:
+                    ApplyPhaseSprite(placeholderPhaseSprite);
+                    break;
+            }
+        }
+
+        private void ApplyPhaseSprite(Sprite sprite)
+        {
+            if (phaseIconImage == null)
+            {
+                return;
+            }
+
+            var resolvedSprite = sprite != null ? sprite : placeholderPhaseSprite;
+            if (resolvedSprite == null)
+            {
+                return;
+            }
+
+            phaseIconImage.enabled = true;
+            phaseIconImage.sprite = resolvedSprite;
         }
     }
 }

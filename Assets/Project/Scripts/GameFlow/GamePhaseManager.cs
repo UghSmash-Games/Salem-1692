@@ -48,6 +48,7 @@ namespace Salem.GameFlow
         [SerializeField] private bool constableCanSelfProtect = false;
         [SerializeField] private string constablePrompt = "Choose a player to protect";
         [SerializeField] private string witchPrompt = "Choose a player to eliminate";
+        [SerializeField] private string dawnBlackCatPrompt = "Witches choose who receives the Black Cat";
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
@@ -216,19 +217,13 @@ namespace Salem.GameFlow
         private void StartDawnPhase()
         {
             //TODO: Reveal Witches to each other
-            //TODO: Allow Witches to Assign the Black Cat Card
-            /*
-            // Reveal Witches to each other
-            List<Player> witches = players.Where(p => p.HasRole(TryalCardType.Witch)).ToList();
-            witches.ForEach(w => w.RevealWitchGroup(witches));
+            StartCoroutine(DawnPhaseRoutine());
+        }
 
-            // Assign the Black Cat
-            Player blackCatHolder = witches[RNGService.Rng.NextInt(0, witches.Count)];
-            blackCatHolder.AssignBlackCat();
-
-            */
-            //Transition to Day phase
-            StartCoroutine(ChangePhase(GamePhase.Day, PhaseChangeDelay));
+        private IEnumerator DawnPhaseRoutine()
+        {
+            yield return ExecuteDawnBlackCatChoice();
+            yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
         }
 
         private IEnumerator EnterNight()
@@ -276,7 +271,6 @@ namespace Salem.GameFlow
             yield return ChangePhase(GamePhase.Night, PhaseChangeDelay);
             yield return NightPhaseRoutine();
 
-            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
             yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
 
             activeNightSequence = null;
@@ -302,6 +296,80 @@ namespace Salem.GameFlow
             GameManager.Instance.EvaluateEndGame();
         }
 
+        private IEnumerator ExecuteDawnBlackCatChoice()
+        {
+            var rng = GameManager.Instance?.Rng;
+            if (rng == null)
+            {
+                Debug.LogWarning("[GamePhaseManager] Dawn Black Cat assignment skipped: missing RNG instance.");
+                yield break;
+            }
+
+            var alivePlayers = PlayerService.GetAlivePlayers();
+            if (alivePlayers.Count == 0)
+            {
+                yield break;
+            }
+
+            var witches = alivePlayers.Where(p => p.IsWitch).ToList();
+            var currentHolder = PlayerService.All.FirstOrDefault(p => p.IsBlackCatHolder);
+            Card blackCatCard = null;
+
+            if (currentHolder != null)
+            {
+                blackCatCard = currentHolder.RemoveBlackCat(false);
+                currentHolder.RecomputeStatusFromStatusCards();
+            }
+
+            if (blackCatCard == null)
+            {
+                if (DeckManager == null)
+                {
+                    Debug.LogWarning("[GamePhaseManager] Cannot assign Black Cat during Dawn without a DeckManager reference.");
+                    yield break;
+                }
+
+                blackCatCard = DeckManager.ExtractCardFromDeck("Black Cat");
+                if (blackCatCard == null)
+                {
+                    Debug.LogWarning("[GamePhaseManager] No Black Cat card found for Dawn assignment.");
+                    yield break;
+                }
+            }
+
+            Player chosen = null;
+            var localWitch = witches.FirstOrDefault(w => w.IsLocalPlayer && w.IsHuman);
+            if (localWitch != null && nightTargetPicker != null)
+            {
+                bool done = false;
+                var picker = nightTargetPicker;
+                picker.Open(localWitch, false, (primary, _) =>
+                {
+                    chosen = primary;
+                    done = true;
+                }, alivePlayers, true, dawnBlackCatPrompt);
+
+                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
+            }
+
+            if (chosen == null)
+            {
+                if (localWitch != null && nightTargetPicker == null)
+                {
+                    Debug.LogWarning("[GamePhaseManager] Dawn target picker not assigned; Black Cat assignment defaulting to random.");
+                }
+
+                if (witches.Count > 0)
+                {
+                    yield return new WaitForSeconds(aiDecisionDelay);
+                }
+
+                chosen = alivePlayers[rng.NextInt(0, alivePlayers.Count)];
+            }
+
+            chosen.AssignBlackCat(blackCatCard);
+        }
+        
         private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
         {
             var constable = alivePlayers.FirstOrDefault(p => p.TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable));

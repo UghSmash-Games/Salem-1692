@@ -70,7 +70,6 @@ namespace Salem.Gameplay.Setup
         public void SetupNewGame(IReadOnlyList<Player> players, int count)
         {
             SetupTryalCards(players);
-            AssignBlackCatAtStart(players);
             SetupInitalHand(players, count);
             SetupTownhallCard(players);
         }
@@ -118,33 +117,6 @@ namespace Salem.Gameplay.Setup
                 //give each player a reference to the RNG to be able to randomly decide tryal card. This will likely be replaced later, but I want to just get the systems connected for now
                 player.setRng(GameManager.Rng);
             }
-        }
-        
-        private void AssignBlackCatAtStart(IReadOnlyList<Player> players)
-        {
-            if (DeckManager == null)
-            {
-                Debug.LogWarning("[GameSetup] Cannot assign Black Cat without a DeckManager reference.");
-                return;
-            }
-
-            var card = DeckManager.ExtractCardFromDeck("Black Cat");
-            if (card == null)
-            {
-                Debug.LogWarning("[GameSetup] No Black Cat card found in the deck during setup.");
-                return;
-            }
-
-            if (players == null || players.Count == 0)
-            {
-                Debug.LogWarning("[GameSetup] No players available to receive the Black Cat. Sending card to discard.");
-                DeckManager.AddToDiscardPile(card);
-                return;
-            }
-
-            int index = Rng.NextInt(0, players.Count);
-            var chosenPlayer = players[index];
-            chosenPlayer.AssignBlackCat(card);
         }
 
         //Give the players their starting hand
