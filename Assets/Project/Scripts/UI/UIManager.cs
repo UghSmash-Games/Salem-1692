@@ -73,7 +73,7 @@ namespace Salem.UI
                 GamePhaseManager.OnPhaseChange -= HandlePhaseIconChanged;
             }
         }
-
+        /* Temp Disable for Testing purpose of new UI Layout 2/16/26
         public void BindAllPlayerStatusUI()
         {
             var players = PlayerService.All;
@@ -91,6 +91,7 @@ namespace Salem.UI
                 }
             }
         }
+        */
         private void BindStatusUI(Player player, PlayerStatusUI statusUI)
         {
             // Link the UI to this player's updates
@@ -116,8 +117,8 @@ namespace Salem.UI
                 Debug.LogWarning("UIManager: No local player assigned.");
                 return;
             }
-
-            localPlayerInputUI.Initialize(localPlayer);
+            //Temp Disable for Testing purpose of new UI Layout 2/16/26
+            //localPlayerInputUI.Initialize(localPlayer);
 
         }
 

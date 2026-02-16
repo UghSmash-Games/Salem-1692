@@ -73,8 +73,8 @@ namespace Salem.GameFlow
                 Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
             }
             */
-
-            UIManager.BindAllPlayerStatusUI();
+            //Temp Disable for testing new UI Layout controller 2/16/26
+            //UIManager.BindAllPlayerStatusUI();
             UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
         }
         #endregion
