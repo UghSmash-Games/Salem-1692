@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Salem 1692 is a card game built in **Unity 6000.0.37f1** using C#. It implements the Salem witch trial-themed card game with local multiplayer and AI opponents.
+Salem 1692 is a card game built in **Unity 6000.0.37f1** using C#. It implements the Salem witch trial-themed card game with local multiplayer and AI opponents. The game targets **AirConsole** — a platform where players use their smartphones as controllers connected to a shared screen via a WebGL build.
 
 ## Development Setup
 
@@ -12,6 +12,7 @@ Salem 1692 is a card game built in **Unity 6000.0.37f1** using C#. It implements
 - **Render Pipeline**: Universal Render Pipeline (URP)
 - **UI**: Unity UI (uGUI) + TextMesh Pro
 - **Input**: Unity Input System
+- **Platform**: AirConsole (WebGL) — smartphones as controllers, shared screen display
 - **No external build tools** — all building, testing, and running happens through the Unity Editor
 
 ## Running the Project
