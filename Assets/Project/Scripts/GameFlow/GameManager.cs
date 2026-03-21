@@ -79,7 +79,12 @@ namespace Salem.GameFlow
             */
 
             UIManager.BindAllPlayerStatusUI();
-            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+
+            // In AirConsole mode, there is no single local player — input comes from phones
+            if (!PlayerService.IsAirConsoleMode)
+            {
+                UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+            }
         }
         #endregion
 

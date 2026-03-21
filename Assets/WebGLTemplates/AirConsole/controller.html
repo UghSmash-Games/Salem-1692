@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Salem 1692 - Controller</title>
+    <script src="https://www.airconsole.com/api/airconsole-1.9.0.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Georgia', serif;
+            background: #1a0a00;
+            color: #e8d5b0;
+            min-height: 100vh;
+            overflow-y: auto;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #status-bar {
+            background: #2d1500;
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 14px;
+            border-bottom: 2px solid #5c3a1e;
+        }
+
+        #status-bar.your-turn {
+            background: #3d2000;
+            border-bottom-color: #c4933a;
+        }
+
+        #status-text {
+            font-weight: bold;
+        }
+
+        #hand-container {
+            padding: 12px;
+        }
+
+        #hand-container h2 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #c4933a;
+        }
+
+        #hand-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-btn {
+            padding: 14px 16px;
+            border: 2px solid #5c3a1e;
+            border-radius: 8px;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .card-btn:active {
+            transform: scale(0.97);
+        }
+
+        .card-btn.green { background: #1a3d1a; color: #a0d8a0; border-color: #2d6b2d; }
+        .card-btn.blue { background: #1a2a4d; color: #a0b8e0; border-color: #2d4a7d; }
+        .card-btn.red { background: #4d1a1a; color: #e0a0a0; border-color: #7d2d2d; }
+        .card-btn.black { background: #1a1a1a; color: #c0c0c0; border-color: #4d4d4d; }
+        .card-btn:disabled { opacity: 0.4; cursor: default; }
+
+        .card-target-tag {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-left: 8px;
+        }
+
+        #action-buttons {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid #5c3a1e;
+            border-radius: 8px;
+            font-family: 'Georgia', serif;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        #draw-btn {
+            background: #2d4a1e;
+            color: #c4e0a0;
+            border-color: #4a7d2d;
+        }
+
+        #end-turn-btn {
+            background: #4a2d1e;
+            color: #e0c4a0;
+            border-color: #7d4a2d;
+        }
+
+        .action-btn:disabled { opacity: 0.4; cursor: default; }
+        .action-btn:active:not(:disabled) { transform: scale(0.97); }
+
+        #target-container {
+            display: none;
+            padding: 12px;
+        }
+
+        #target-container h2 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #c4933a;
+        }
+
+        #target-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .target-btn {
+            padding: 14px 16px;
+            background: #2d1500;
+            border: 2px solid #5c3a1e;
+            border-radius: 8px;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            color: #e8d5b0;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .target-btn:active { transform: scale(0.97); }
+
+        #eliminated-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        #eliminated-overlay h1 {
+            font-size: 28px;
+            color: #c44;
+            margin-bottom: 12px;
+        }
+
+        #eliminated-reason {
+            font-size: 16px;
+            color: #e8d5b0;
+        }
+
+        #waiting {
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 18px;
+            color: #8a7a60;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-bar">
+        <span id="status-text">Connecting...</span>
+    </div>
+
+    <div id="waiting">Waiting for game to start...</div>
+
+    <div id="hand-container" style="display: none;">
+        <h2>Your Hand</h2>
+        <div id="hand-list"></div>
+    </div>
+
+    <div id="action-buttons" style="display: none;">
+        <button id="draw-btn" class="action-btn" disabled>Draw Cards</button>
+        <button id="end-turn-btn" class="action-btn" disabled>End Turn</button>
+    </div>
+
+    <div id="target-container">
+        <h2 id="target-header">Choose a Target</h2>
+        <div id="target-list"></div>
+    </div>
+
+    <div id="eliminated-overlay">
+        <h1>Eliminated</h1>
+        <p id="eliminated-reason"></p>
+    </div>
+
+    <script>
+        var airconsole = new AirConsole({ orientation: AirConsole.ORIENTATION_PORTRAIT });
+        var isMyTurn = false;
+
+        airconsole.onReady = function () {
+            document.getElementById('status-text').textContent = 'Connected — waiting for your turn';
+        };
+
+        airconsole.onMessage = function (from, data) {
+            if (!data || !data.type) return;
+
+            switch (data.type) {
+                case 'hand_update':
+                    renderHand(data.cards || []);
+                    break;
+                case 'turn_notify':
+                    handleTurnNotify(data);
+                    break;
+                case 'request_target':
+                    showTargetPicker(data.validTargets || [], data.needsSecondTarget);
+                    break;
+                case 'eliminated':
+                    showEliminated(data.reason);
+                    break;
+                case 'game_phase':
+                    updatePhase(data.phase, data.currentPlayerName);
+                    break;
+            }
+        };
+
+        function renderHand(cards) {
+            document.getElementById('waiting').style.display = 'none';
+            document.getElementById('hand-container').style.display = 'block';
+            document.getElementById('action-buttons').style.display = 'flex';
+
+            var list = document.getElementById('hand-list');
+            list.innerHTML = '';
+
+            cards.forEach(function (card) {
+                var btn = document.createElement('button');
+                btn.className = 'card-btn ' + card.type.toLowerCase();
+                btn.disabled = !isMyTurn;
+
+                var label = card.name;
+                if (card.needsTarget) {
+                    label += '<span class="card-target-tag">(target)</span>';
+                }
+                btn.innerHTML = label;
+
+                btn.addEventListener('click', function () {
+                    if (!isMyTurn) return;
+                    airconsole.message(AirConsole.SCREEN, {
+                        action: 'play_card',
+                        cardIndex: card.index
+                    });
+                });
+
+                list.appendChild(btn);
+            });
+        }
+
+        function handleTurnNotify(data) {
+            isMyTurn = data.isYourTurn;
+            var statusBar = document.getElementById('status-bar');
+            var statusText = document.getElementById('status-text');
+
+            if (isMyTurn) {
+                statusBar.classList.add('your-turn');
+                statusText.textContent = "It's your turn!";
+            } else {
+                statusBar.classList.remove('your-turn');
+                statusText.textContent = 'Waiting for other players...';
+            }
+
+            // Update button states
+            document.getElementById('draw-btn').disabled = !data.canDraw;
+            document.getElementById('end-turn-btn').disabled = !data.isYourTurn;
+
+            // Re-render hand button enabled states
+            var cardBtns = document.querySelectorAll('.card-btn');
+            cardBtns.forEach(function (btn) {
+                btn.disabled = !data.canPlay;
+            });
+
+            // Hide target picker when turn changes
+            document.getElementById('target-container').style.display = 'none';
+        }
+
+        function showTargetPicker(targets, needsSecond) {
+            var container = document.getElementById('target-container');
+            var header = document.getElementById('target-header');
+            var list = document.getElementById('target-list');
+
+            container.style.display = 'block';
+            header.textContent = needsSecond ? 'Choose Second Target' : 'Choose a Target';
+            list.innerHTML = '';
+
+            targets.forEach(function (target) {
+                var btn = document.createElement('button');
+                btn.className = 'target-btn';
+                btn.textContent = target.playerName;
+
+                btn.addEventListener('click', function () {
+                    airconsole.message(AirConsole.SCREEN, {
+                        action: 'select_target',
+                        targetIndex: target.index
+                    });
+                    container.style.display = 'none';
+                });
+
+                list.appendChild(btn);
+            });
+        }
+
+        function showEliminated(reason) {
+            var overlay = document.getElementById('eliminated-overlay');
+            overlay.style.display = 'flex';
+            document.getElementById('eliminated-reason').textContent = reason || 'You have been eliminated.';
+            isMyTurn = false;
+        }
+
+        function updatePhase(phase, currentPlayerName) {
+            var statusText = document.getElementById('status-text');
+            if (!isMyTurn) {
+                statusText.textContent = phase + ' — ' + (currentPlayerName || '');
+            }
+        }
+
+        // Action button handlers
+        document.getElementById('draw-btn').addEventListener('click', function () {
+            if (!isMyTurn) return;
+            airconsole.message(AirConsole.SCREEN, { action: 'draw_cards' });
+            this.disabled = true;
+        });
+
+        document.getElementById('end-turn-btn').addEventListener('click', function () {
+            if (!isMyTurn) return;
+            airconsole.message(AirConsole.SCREEN, { action: 'end_turn' });
+            this.disabled = true;
+        });
+    </script>
+</body>
+</html>

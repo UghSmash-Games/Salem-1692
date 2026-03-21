@@ -20,6 +20,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Salem.AirConsole;
 using Salem.Data;
 using Salem.Deck;
 using Salem.Managers.GameState;
@@ -125,6 +126,12 @@ namespace Salem.GameFlow
             currentTurnAction = TurnActionChoice.None;
             TurnStarted?.Invoke(currentPlayer);
             OnTurnStart?.Invoke();
+
+            // Notify AirConsole controllers of the current turn
+            if (PlayerService.IsAirConsoleMode && AirConsoleManager.Instance != null)
+            {
+                AirConsoleManager.Instance.SendGamePhaseToAll("Day", currentPlayer.PlayerNameText);
+            }
 
             StartCoroutine(RunTurn(currentPlayer));
         }
@@ -264,7 +271,30 @@ namespace Salem.GameFlow
         {
             UIManager.SetPlayerTurnActive(); // your existing UI cue
 
-            if (current.IsHuman && current.IsLocalPlayer)
+            bool isAirConsoleHuman = PlayerService.IsAirConsoleMode
+                && current.IsHuman
+                && !(current is AIPlayer);
+
+            if (isAirConsoleHuman)
+            {
+                // AirConsole mode: notify the player's phone controller that it's their turn
+                waitingForHuman = true;
+                if (AirConsoleManager.Instance != null)
+                {
+                    AirConsoleManager.Instance.SendTurnNotify(current, true);
+                    AirConsoleManager.Instance.SendHandUpdate(current);
+                }
+
+                yield return new WaitUntil(() => waitingForHuman == false);
+
+                // Notify controller that turn ended
+                if (AirConsoleManager.Instance != null)
+                {
+                    AirConsoleManager.Instance.SendTurnNotify(current, false);
+                }
+                yield break;
+            }
+            else if (current.IsHuman && current.IsLocalPlayer)
             {
                 waitingForHuman = true;
                 // Enable local input – e.g., show hand interactivity

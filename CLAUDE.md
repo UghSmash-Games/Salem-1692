@@ -58,6 +58,21 @@ The game progresses through phases managed by `GamePhaseManager`:
 | Managers | `Salem.Managers.GameState` | GameStateManager for state tracking |
 | Debug | `Salem.DebugTools` | DebugPanel, TestManager |
 | Systems | `Salem.Systems` | SceneLoader |
+| AirConsole | `Salem.AirConsole` | AirConsoleManager, InputHandler, message protocol |
+
+### AirConsole Integration
+
+The game uses **AirConsole** so players' phones act as controllers. The integration has three layers:
+
+- **`AirConsoleManager`** — Singleton bridge to the AirConsole SDK (`NDream.AirConsole`). Handles device connections, maps device IDs to `Player` objects, sends game state to phones, receives input messages.
+- **`AirConsoleInputHandler`** — Processes incoming controller messages (`play_card`, `draw_cards`, `select_target`, `end_turn`) and routes them into `GameTurnManager` / `CardEffectManager`.
+- **`AirConsoleMessages`** — Defines the JSON message protocol (C# classes) for screen↔controller communication.
+
+**Controller UI**: `Assets/WebGLTemplates/AirConsole/controller.html` — the HTML/JS page shown on each player's phone. Displays hand, action buttons, and target picker.
+
+**Mode detection**: `PlayerService.IsAirConsoleMode` is set by `AirConsoleManager.Awake()`. When true, `GameTurnManager.RunTurn()` waits for AirConsole input instead of local UI clicks, and `GameManager` skips local player UI setup.
+
+**AirConsole SDK prerequisite**: The AirConsole Unity Plugin (`.unitypackage`) must be imported into the project separately. Download from the Unity Asset Store or the [AirConsole GitHub](https://github.com/AirConsole/airconsole-unity-plugin).
 
 ### AI System
 

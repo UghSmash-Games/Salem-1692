@@ -30,6 +30,12 @@ namespace Salem.Data
         private static readonly List<Player> allPlayers = new();
         public static IReadOnlyList<Player> All => allPlayers;
 
+        /// <summary>
+        /// When true, player input comes from AirConsole phone controllers
+        /// instead of local UI clicks. Set by AirConsoleManager on init.
+        /// </summary>
+        public static bool IsAirConsoleMode { get; set; }
+
         public static event Action<Player, EliminationCause> OnPlayerEliminated;
 
         public static void Register(Player player)
@@ -38,8 +44,8 @@ namespace Salem.Data
             {
                 allPlayers.Add(player);
 
-                // Set first non-AI as local player automatically
-                if (!player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
+                // In AirConsole mode, no player is "local" — input comes from phones
+                if (!IsAirConsoleMode && !player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
                 {
                     player.IsLocalPlayer = true;
                 }
@@ -50,6 +56,7 @@ namespace Salem.Data
         public static void Clear()
         {
             allPlayers.Clear();
+            IsAirConsoleMode = false;
         }
 
         public static Player GetLocalPlayer()
