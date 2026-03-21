@@ -60,9 +60,7 @@ namespace Salem.UI
             this.source = source;
             this.isAttackMode = isAttack;
             this.onSingleTargetConfirm = onConfirm;
-            this.validTargets = validTargets; // Assuming you meant candidateOverride logic here
-            
-            // Map the passed list to the override logic
+
             this.candidateOverride = validTargets;
             this.useOverride = (validTargets != null && validTargets.Count > 0);
 

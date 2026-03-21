@@ -40,7 +40,7 @@ namespace Salem.GameFlow
             // UI: pick someone (not self)
             if (accuser.IsLocalPlayer)
             {
-                targetPicker.Open(accuser, false, (target, _) => StartCoroutine(VoteRoutine(target)));
+                targetPicker.OpenLegacy(accuser, false, (target, _) => StartCoroutine(VoteRoutine(target)));
             }
             else
             {

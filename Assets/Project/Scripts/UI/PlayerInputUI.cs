@@ -102,7 +102,7 @@ namespace Salem.UI
             {
                 bool two = ac.RequiresSecondTarget;
                 // Open the picker; exclude the acting player by default
-                targetPicker.Open(player, two, (primary, secondary) =>
+                targetPicker.OpenLegacy(player, two, (primary, secondary) =>
                 {
                     ac.target = secondary; // second target, if any
                     CardEffectManager.Instance.ExecuteCardEffect(ac, primary);
