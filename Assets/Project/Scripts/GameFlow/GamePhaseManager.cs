@@ -236,15 +236,15 @@ namespace Salem.GameFlow
             {
                 nightTargetPicker.gameObject.SetActive(true);
                 nightTargetPicker.Open(
-                    source: localPlayer, 
-                    isAttack: false, 
-                    onConfirm: (target, _) => 
+                    source: localPlayer,
+                    isAttack: false,
+                    onConfirm: (target, _) =>
                     {
                         ResolveBlackCatAssignment(target);
-                    }, 
-                    validTargets: allPlayers, 
-                    count: 1, 
-                    promptText: "Choose a player to receive the Black Cat (They will start Day 1)."
+                    },
+                    validTargets: allPlayers,
+                    isSingleTarget: true,
+                    promptOverride: "Choose a player to receive the Black Cat (They will start Day 1)."
                 );
             }
             else
