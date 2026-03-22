@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Salem.Cards;
 using Salem.GameFlow;
 using Salem.Players;
 using Salem.Deck;
@@ -94,17 +95,32 @@ namespace Salem.GameFlow
             var alive = PlayerService.GetAlivePlayers();
             if (alive == null || alive.Count == 0) return;
 
-            int witches = alive.Count(p => p.IsWitch && !p.IsEliminated);
-            int nonWitches = alive.Count - witches;
+            // Townspeople win when ALL Witch Tryal cards in the game have been revealed.
+            // Check across all players (alive and eliminated) for any unrevealed Witch cards.
+            bool anyUnrevealedWitch = PlayerService.All.Any(p =>
+                p.TryalCards != null && p.TryalCards.Any(c =>
+                    c.TryalCardType == TryalCardType.Witch && !c.IsRevealed));
 
-            // villagers win if all witches dead
-            if (witches == 0)
+            if (!anyUnrevealedWitch)
             {
                 var winners = alive.Where(p => !p.IsWitch).ToList();
-                RaiseGameEnded(new EndGameResult(Team.Villagers, winners, "All witches eliminated"));
+                RaiseGameEnded(new EndGameResult(Team.Villagers, winners, "All Witch Tryal cards revealed"));
                 return;
             }
 
+            // Witches win when all remaining alive players are witches
+            // (covers both: all townspeople eliminated, OR final townsperson became a witch)
+            int witches = alive.Count(p => p.IsWitch);
+            int nonWitches = alive.Count - witches;
+
+            if (nonWitches == 0)
+            {
+                var winners = alive.Where(p => p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Witches, winners, "All townspeople eliminated or converted"));
+                return;
+            }
+
+            // Witches also win at parity (witches >= townspeople)
             if (witches >= nonWitches)
             {
                 var winners = alive.Where(p => p.IsWitch).ToList();

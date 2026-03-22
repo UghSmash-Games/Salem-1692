@@ -1,5 +1,6 @@
 using System.Linq;
 using Salem.Cards;
+using Salem.GameFlow;
 using Salem.Players;
 using UnityEngine;
 
@@ -25,6 +26,9 @@ namespace Salem.Data
                 {
                     Debug.Log($"[TrialService] {owner.PlayerNameText} revealed a Witch card but has a second Witch — not eliminated. All players notified.");
                     OnDoubleWitchRevealed?.Invoke(owner);
+                    // Check if this was the last unrevealed Witch card in the game
+                    // (townspeople win condition: all Witch Tryal cards revealed)
+                    GameManager.Instance?.EvaluateEndGame();
                     // Do NOT eliminate; fall through to Rebecca Nurse check below
                 }
                 else

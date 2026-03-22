@@ -609,10 +609,18 @@ namespace Salem.Players
 
         public void AddTryalCardAndNotify(TryalCard card)
         {
+            bool wasWitch = IsWitch;
             TryalCards.Add(card);
             // If this player *gained* a Witch, allow DetermineRole to lock in witchhood
             DetermineRole();
             OnTryalCardsChanged?.Invoke();
+
+            // If this player just became a witch (e.g., via Conspiracy swap),
+            // re-evaluate endgame — witches win if all remaining players are now witches
+            if (!wasWitch && IsWitch)
+            {
+                GameManager.Instance?.EvaluateEndGame();
+            }
         }
 
         public bool TryRevealTryalOfType(TryalCardType type)
