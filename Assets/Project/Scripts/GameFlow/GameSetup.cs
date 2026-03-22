@@ -194,9 +194,8 @@ namespace Salem.Gameplay.Setup
                 return;
             }
 
-            // Extract special cards before dealing
+            // Remove Night and Black Cat from the deck before dealing
             Card nightCard = DeckManager.ExtractCardFromDeck("Night");
-            Card conspiracyCard = DeckManager.ExtractCardFromDeck("Conspiracy");
             Card blackCatCard = DeckManager.ExtractCardFromDeck("Black Cat");
 
             // Hold Black Cat for Dawn phase witch vote
@@ -208,7 +207,7 @@ namespace Salem.Gameplay.Setup
             // Shuffle the remaining deck
             DeckManager.ShuffleDeck();
 
-            // Deal 3 cards to each player
+            // Deal 3 cards to each player; if Conspiracy is drawn it stays in the deck
             foreach (var player in players)
             {
                 if (player.HandManager == null)
@@ -216,14 +215,10 @@ namespace Salem.Gameplay.Setup
                     Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager.");
                     continue;
                 }
-                DeckManager.DrawMultipleCards(player.HandManager, 3);
+                DeckManager.DrawMultipleCards(player.HandManager, 3, c => c.Name == "Conspiracy");
             }
 
-            // Add Conspiracy card back at a random position
-            if (conspiracyCard != null)
-                DeckManager.InsertCardAtRandom(conspiracyCard);
-
-            // Add Night card randomly into the bottom half
+            // Cut remaining deck in half and shuffle Night card into the bottom half
             if (nightCard != null)
                 DeckManager.ReshuffleAndPlaceNightCard(nightCard);
         }
