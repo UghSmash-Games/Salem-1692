@@ -48,6 +48,8 @@ namespace Salem.Players
         public static event Action<Player, byte, byte> AccusationCountChanged;
         public static event Action<Player, byte, byte> AccusationThresholdReached;
         public static event Action<Player, TryalCard> TryalCardRevealed;
+        // Fired when accusation limit is reached: (accused, accuser). Listener should reveal a Tryal on accused.
+        public static event Action<Player, Player> OnAccusationRevealNeeded;
 
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
@@ -94,20 +96,6 @@ namespace Salem.Players
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
             }
-
-            //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if (PlayerNameText == "George Burroughs")
-            {
-                baseAccusationLimit++;
-            }
-            else if (PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
-            {
-                townHallAbilityCharges = 1;
-            }
-            else if (PlayerNameText == "Samuel Parris")
-            {
-                townHallAbilityCharges = 2;
-            }
         }
         #endregion
 
@@ -122,9 +110,29 @@ namespace Salem.Players
 
         public void setTownhall(TownHallCard card)
         {
-            if(card == null) { return; }
+            if (card == null) return;
             townhallCard = card;
-            //set art?
+            ApplyTownHallAbility();
+        }
+
+        private void ApplyTownHallAbility()
+        {
+            if (townhallCard == null) return;
+
+            switch (townhallCard.CardName)
+            {
+                case TownhallName.GeorgeBurroughs:
+                    baseAccusationLimit++;
+                    currentAccusationLimit = baseAccusationLimit;
+                    break;
+                case TownhallName.WilliamsPhipps:
+                case TownhallName.Tituba:
+                    townHallAbilityCharges = 1;
+                    break;
+                case TownhallName.SamuelParris:
+                    townHallAbilityCharges = 2;
+                    break;
+            }
         }
 
         public void DetermineRole()
@@ -322,13 +330,13 @@ namespace Salem.Players
 
         //Called in CardEffectManager
         // Accusations & turn effects
-        public void ApplyAccusation(int amount)
+        public void ApplyAccusation(int amount, Player accuser = null)
         {
             Debug.Log("Acc limit:"+currentAccusationLimit);
             Debug.Log("Before Acc:"+currentAccusationCount);
             currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount + amount);
             Debug.Log("After Acc:" + currentAccusationCount);
-            CheckAccusations(); // you already have this
+            CheckAccusations(accuser);
         }
         public void ApplyAlibi(int reduceBy)
         {
@@ -568,14 +576,79 @@ namespace Salem.Players
             if (IsEliminated) return;
             for (int i = 0; i < TryalCards.Count; i++)
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
-            
+
             GameManager.Instance.OnDayLynchResolved();
         }
-        // After any reveal, if eliminated → cascade to Matchmaker partner (only if both statuses exist)
+
+        // Called after IsEliminated is set. Discards hand + status cards,
+        // or transfers them to John Proctor holder if one exists.
+        public void OnElimination()
+        {
+            // Find alive player with John Proctor town hall card
+            var johnProctor = PlayerService.GetAlivePlayers()
+                .FirstOrDefault(p => p != this && p.townhallCard != null
+                    && p.townhallCard.CardName == TownhallName.JohnProctor);
+
+            if (johnProctor != null)
+            {
+                Debug.Log($"[Elimination] {PlayerNameText}'s cards transferred to {johnProctor.PlayerNameText} (John Proctor).");
+                TransferEntireHandTo(johnProctor);
+                // Transfer status cards (excluding Black Cat which is handled separately)
+                var blackCat = RemoveBlackCat(false);
+                foreach (var s in StatusCards.ToList())
+                    johnProctor.AddStatusCard(s);
+                ClearStatusCards();
+                johnProctor.RecomputeStatusFromStatusCards();
+                // Black Cat goes to discard, not to John Proctor
+                if (blackCat != null)
+                {
+                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                    if (dm != null) dm.AddToDiscardPile(blackCat);
+                }
+            }
+            else
+            {
+                Debug.Log($"[Elimination] {PlayerNameText}'s cards discarded.");
+                // Discard all hand cards
+                var handCards = HandManager.GetCards();
+                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                foreach (var c in handCards)
+                {
+                    if (dm != null) dm.AddToDiscardPile(c);
+                }
+                HandManager.ClearHand();
+                // Remove Black Cat
+                var blackCat = RemoveBlackCat(false);
+                if (blackCat != null && dm != null)
+                    dm.AddToDiscardPile(blackCat);
+                // Clear status cards (blue cards in play)
+                ClearStatusCardsAndRecompute();
+            }
+
+            RecomputeStatusFromStatusCards();
+        }
+
+        private bool eliminationNotified;
+
+        // After any reveal, check if this player should be eliminated, then cascade to Matchmaker partner
         private void CheckElimination()
         {
-            if (IsEliminated)
+            // Determine if the player should be eliminated based on revealed Tryals
+            if (!IsEliminated && TryalCards.Count > 0)
             {
+                if (TryalCards.Any(c => c.IsRevealed && c.TryalCardType == TryalCardType.Witch))
+                {
+                    PlayerService.Eliminate(this, EliminationCause.WitchTrialRevealed);
+                }
+                else if (TryalCards.All(c => c.IsRevealed))
+                {
+                    PlayerService.Eliminate(this, EliminationCause.AllTrialsRevealed);
+                }
+            }
+
+            if (IsEliminated && !eliminationNotified)
+            {
+                eliminationNotified = true;
                 Debug.Log($"{PlayerNameText} is ELIMINATED!");
                 GameTurnManager.Instance?.OnPlayerEliminated(this);
 
@@ -594,20 +667,28 @@ namespace Salem.Players
             }
         }
 
-        private void CheckAccusations()
+        private void CheckAccusations(Player accuser = null)
         {
             if (currentAccusationCount >= currentAccusationLimit)
             {
                 AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
-                //setting it as random first to get the main systems hooked together and working
-                int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
-                if (tryalToReveal.HasValue)
-                {
-                    RevealTryalCard(tryalToReveal.Value);
-                }
-                //reveal tryal
                 currentAccusationCount = 0;
                 NotifyAccusationChanged();
+
+                // If there's a listener (CardEffectManager), let the accuser choose which Tryal to reveal.
+                // Otherwise fall back to random reveal.
+                if (OnAccusationRevealNeeded != null && accuser != null)
+                {
+                    OnAccusationRevealNeeded.Invoke(this, accuser);
+                }
+                else
+                {
+                    int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
+                    if (tryalToReveal.HasValue)
+                    {
+                        RevealTryalCard(tryalToReveal.Value);
+                    }
+                }
             }
         }
 

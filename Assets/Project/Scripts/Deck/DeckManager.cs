@@ -34,6 +34,7 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
         private readonly List<Card> DiscardPile = new List<Card>();
+        private Card heldBlackCat;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
@@ -197,8 +198,6 @@ namespace Salem.Deck
                 return;
             }
 
-            ShuffleDeck();
-
             if (Deck.Count == 0)
             {
                 Deck.Add(nightCard);
@@ -206,14 +205,61 @@ namespace Salem.Deck
             }
 
             int lowerHalfStart = Mathf.Clamp(Deck.Count / 2, 0, Deck.Count);
-            int insertIndex = RNGService.Rng.NextInt(lowerHalfStart, Deck.Count + 1);
+            int insertIndex = Rng.NextInt(lowerHalfStart, Deck.Count + 1);
             Deck.Insert(insertIndex, nightCard);
+        }
+
+        /// <summary>
+        /// Post-night reshuffle: merge discard pile into deck, shuffle, then place Night card in bottom half.
+        /// </summary>
+        public void ReshuffleDeckWithDiscard(Card nightCard)
+        {
+            Deck.AddRange(DiscardPile);
+            DiscardPile.Clear();
+            ShuffleDeck();
+            ReshuffleAndPlaceNightCard(nightCard);
+        }
+
+        public void InsertCardAtRandom(Card card)
+        {
+            if (card == null) return;
+            int index = Rng.NextInt(0, Deck.Count + 1);
+            Deck.Insert(index, card);
+        }
+
+        public void HoldBlackCatForDawn(Card card)
+        {
+            heldBlackCat = card;
+        }
+
+        public Card GetHeldBlackCat()
+        {
+            var card = heldBlackCat;
+            heldBlackCat = null;
+            return card;
+        }
+
+        public List<TownHallCard> DrawTownhallCards(int count)
+        {
+            var drawn = new List<TownHallCard>();
+            for (int i = 0; i < count && TownhallDeck.Count > 0; i++)
+            {
+                drawn.Add(TownhallDeck[0]);
+                TownhallDeck.RemoveAt(0);
+            }
+            return drawn;
+        }
+
+        public void DiscardTownhallCard(TownHallCard card)
+        {
+            // Town Hall cards are one-time use; just discard (no reshuffle needed)
+            if (card != null)
+                Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
         }
         #endregion
 
         #region Helper Functions
-        //making this work first.... could easily combine into 1 function to shuffle any deck handed to it, but worried if it will need to be called somewhere that doesn't have access to the deck itself
-        private void ShuffleDeck()
+        public void ShuffleDeck()
         {
             for (int i = 0; i < Deck.Count; i++)
             {

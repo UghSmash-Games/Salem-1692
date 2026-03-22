@@ -64,11 +64,13 @@ namespace Salem.GameFlow
             if (!GamePhaseManager) Debug.LogError("[CardEffectManager] Missing GamePhaseManager reference.");
             if (!DeckManager) Debug.LogError("[CardEffectManager] Missing DeckManager reference.");
 
+            Player.OnAccusationRevealNeeded += HandleAccusationRevealChoice;
+
             _ops = new()
                 {
-                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.PlayerNameText=="Cotton Mather" ? 1 : 3) },
-                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7) },
+                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1, s) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.PlayerNameText=="Cotton Mather" ? 1 : 3, s) },
+                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7, s) },
                     { ActionOp.Alibi,      (s,_,_,_,_) => s.ApplyAlibi(3) },
                     { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (t.PlayerNameText!="Sarah Good") t.ClearHand(); } },
@@ -87,7 +89,7 @@ namespace Salem.GameFlow
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Matchmaker, (s,t,_,_,c) => { s.PlayStatusCardOnTarget(c, t); Player.TryFormMatchmakerLink(); } },
-                    { ActionOp.Conspiracy, (s,_,_,rng,_) => ExecuteConspiracy(rng) },
+                    { ActionOp.Conspiracy, (s,_,_,_,_) => Debug.LogWarning("[Conspiracy] Triggered on draw, not played.") },
                     { ActionOp.BlackCat,   (s,_,_,_,_) => Debug.LogWarning("[Black Cat] Assigned at Dawn, not played.") },
                 };
         }
@@ -103,7 +105,7 @@ namespace Salem.GameFlow
             if (card.Name == "Night")
             {
                 Debug.Log($"[Effect] Night card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
-                GamePhaseManager?.HandleNightCardDrawn();
+                GamePhaseManager?.HandleNightCardDrawn(card);
                 return true;
             }
 
@@ -118,6 +120,14 @@ namespace Salem.GameFlow
                     Debug.LogWarning("[Effect] Black Cat drawn but no player was provided. Card will be discarded.");
                     DeckManager?.AddToDiscardPile(card);
                 }
+                return true;
+            }
+
+            if (card.Name == "Conspiracy")
+            {
+                Debug.Log($"[Effect] Conspiracy card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
+                DeckManager?.AddToDiscardPile(card);
+                GamePhaseManager?.HandleConspiracyCardDrawn(drawer);
                 return true;
             }
 
@@ -187,6 +197,33 @@ namespace Salem.GameFlow
                 op(CurrentPlayer, target, secondary, Rng, action);
             else
                 Debug.LogWarning($"[Effect] Unhandled op {action.Op}");
+        }
+
+        private void HandleAccusationRevealChoice(Player accused, Player accuser)
+        {
+            if (accused == null) return;
+
+            // If the accuser is a local human, let them choose which Tryal to reveal
+            if (accuser != null && accuser.IsHuman && accuser.IsLocalPlayer && TryalPicker != null)
+            {
+                TryalPicker.Open(accused, idx =>
+                {
+                    accused.RevealTryalCard(idx);
+                });
+            }
+            else
+            {
+                // AI or fallback: reveal a random unrevealed Tryal
+                var rng = accuser?.Rng ?? Rng;
+                int? idx = accused.GetRandomUnrevealedTryalIndex(rng);
+                if (idx.HasValue)
+                    accused.RevealTryalCard(idx.Value);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            Player.OnAccusationRevealNeeded -= HandleAccusationRevealChoice;
         }
 
         private void ExecuteConspiracy(IRng rng)
