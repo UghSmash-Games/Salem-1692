@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Cotton Mather
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Evidence cards played against you are worth only 1 accusation.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 4517934172043164133, guid: 6c77ed3dfc34d4f47bcc28dbf45c62c4, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 7
+  RulesText: Evidence cards played against you are worth only 1 accusation.

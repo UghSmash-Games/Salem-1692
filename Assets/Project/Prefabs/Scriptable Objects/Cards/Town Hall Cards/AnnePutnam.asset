@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Anne Putnam
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: When you trigger a Tryal reveal, draw 2 cards before the Tryal is revealed.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -7688039926450947287, guid: 44e5439b40999a444a43f5cbed3c896a, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 10
+  RulesText: When you trigger a Tryal reveal, draw 2 cards before the Tryal is revealed.

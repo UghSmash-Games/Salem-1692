@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Samuel Parris
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Twice per game, draw up to 2 cards from the discard pile instead of the deck. No Black cards.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -3858886279285835928, guid: a416c706371ac3342961b50b221be30d, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 3
+  RulesText: Twice per game, draw up to 2 cards from the discard pile instead of the deck. No Black cards.

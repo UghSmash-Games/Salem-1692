@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: William Phipps
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Once per game, you may confess without revealing one of your Tryal cards.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 3670171428419047502, guid: 1a251fd9f09c849449d855c020f7ce28, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 13
+  RulesText: Once per game, you may confess without revealing one of your Tryal cards.

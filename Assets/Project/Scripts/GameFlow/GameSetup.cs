@@ -183,6 +183,13 @@ namespace Salem.Gameplay.Setup
                 foreach (var player in players)
                     DeckManager.drawTownhallCard(player);
             }
+
+            // Martha Corey: apply copied passive abilities after all town hall cards are assigned
+            foreach (var player in players)
+            {
+                if (player.townhallCard != null && player.townhallCard.CardName == TownhallName.MarthaCorey)
+                    player.ApplyMarthaCoreyCopy();
+            }
         }
 
         // ── Step 3: Play Card Deck ───────────────────────────────────────────

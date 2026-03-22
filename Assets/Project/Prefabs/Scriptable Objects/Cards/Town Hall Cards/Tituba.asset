@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Tituba
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Once per game, on your turn before drawing, rearrange the deck for 60 seconds.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -3839529658055775178, guid: 685ae3d9810caab4cb60f8a34bf1916b, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 8
+  RulesText: Once per game, on your turn before drawing, rearrange the deck for 60 seconds.

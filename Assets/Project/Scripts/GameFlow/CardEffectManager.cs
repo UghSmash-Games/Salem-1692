@@ -69,12 +69,18 @@ namespace Salem.GameFlow
             _ops = new()
                 {
                     { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1, s) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.PlayerNameText=="Cotton Mather" ? 1 : 3, s) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.HasTownHall(TownhallName.CottonMather) ? 1 : 3, s) },
                     { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7, s) },
-                    { ActionOp.Alibi,      (s,_,_,_,_) => s.ApplyAlibi(3) },
+                    { ActionOp.Alibi,      (s,t,_,_,_) => {
+                        // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
+                        if (t != null && s.HasTownHall(TownhallName.WillGrigs))
+                            t.ApplyAccusation(7, s);
+                        else
+                            s.ApplyAlibi(3);
+                    }},
                     { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
-                    { ActionOp.Arson,      (s,t,_,_,_) => { if (t.PlayerNameText!="Sarah Good") t.ClearHand(); } },
-                    { ActionOp.Robbery,    (s,t,u,_,_) => t.TransferEntireHandTo(u) },
+                    { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
+                    { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
                     { ActionOp.Curse,      (s,t,_,_,c) =>
                         {
@@ -88,7 +94,16 @@ namespace Salem.GameFlow
                     },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
-                    { ActionOp.Matchmaker, (s,t,_,_,c) => { s.PlayStatusCardOnTarget(c, t); Player.TryFormMatchmakerLink(); } },
+                    { ActionOp.Matchmaker, (s,t,_,_,c) => {
+                        // Mary Warren is immune to Matchmaker
+                        if (t.HasTownHall(TownhallName.MaryWarren))
+                        {
+                            Debug.Log($"[TownHall] Mary Warren ({t.PlayerNameText}) is immune to Matchmaker.");
+                            return;
+                        }
+                        s.PlayStatusCardOnTarget(c, t);
+                        Player.TryFormMatchmakerLink();
+                    }},
                     { ActionOp.Conspiracy, (s,_,_,_,_) => Debug.LogWarning("[Conspiracy] Triggered on draw, not played.") },
                     { ActionOp.BlackCat,   (s,_,_,_,_) => Debug.LogWarning("[Black Cat] Assigned at Dawn, not played.") },
                 };
@@ -208,7 +223,7 @@ namespace Salem.GameFlow
             {
                 TryalPicker.Open(accused, idx =>
                 {
-                    accused.RevealTryalCard(idx);
+                    accused.RevealTryalCard(idx, fromAccusation: true);
                 });
             }
             else
@@ -217,7 +232,7 @@ namespace Salem.GameFlow
                 var rng = accuser?.Rng ?? Rng;
                 int? idx = accused.GetRandomUnrevealedTryalIndex(rng);
                 if (idx.HasValue)
-                    accused.RevealTryalCard(idx.Value);
+                    accused.RevealTryalCard(idx.Value, fromAccusation: true);
             }
         }
 

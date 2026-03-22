@@ -173,6 +173,36 @@ namespace Salem.Deck
             DiscardPile.Add(card);
         }
 
+        /// <summary>
+        /// Returns a read-only view of the discard pile for UI display (e.g., Samuel Parris ability).
+        /// </summary>
+        public IReadOnlyList<Card> GetDiscardPileCards() => DiscardPile.AsReadOnly();
+
+        /// <summary>
+        /// Draws up to 'count' cards from the discard pile, skipping cards that match the reject predicate.
+        /// Used by Samuel Parris's ability (cannot draw Black cards).
+        /// </summary>
+        public List<Card> DrawFromDiscardPile(HandManager handManager, int count, System.Predicate<Card> rejectPredicate = null)
+        {
+            var drawn = new List<Card>();
+            for (int i = DiscardPile.Count - 1; i >= 0 && drawn.Count < count; i--)
+            {
+                var card = DiscardPile[i];
+                if (card == null) continue;
+                if (rejectPredicate != null && rejectPredicate(card)) continue;
+                drawn.Add(card);
+                DiscardPile.RemoveAt(i);
+            }
+
+            if (handManager != null)
+            {
+                foreach (var card in drawn)
+                    handManager.AddCard(card);
+            }
+
+            return drawn;
+        }
+
         public Card ExtractCardFromDeck(string cardName)
         {
             if (Deck == null || Deck.Count == 0)

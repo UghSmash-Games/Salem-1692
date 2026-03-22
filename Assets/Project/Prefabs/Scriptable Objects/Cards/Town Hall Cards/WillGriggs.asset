@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Will Griggs
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: You may use Alibi cards as Witness cards, worth 7 total accusations.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 3889235269648740336, guid: 58db848fb182b5345a3b36f02344c6c5, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 0
+  RulesText: You may use Alibi cards as Witness cards, worth 7 total accusations.
