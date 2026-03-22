@@ -207,90 +207,133 @@ namespace Salem.GameFlow
 
         private void StartSetupPhase()
         {
-            GameSetup.SetupNewGame(PlayerService.All, PlayerService.All.Count);
+            StartCoroutine(SetupRoutine());
+        }
+
+        private IEnumerator SetupRoutine()
+        {
+            yield return GameSetup.SetupNewGame(PlayerService.All);
             GameTurnManager.Initialize();
-            // Transition to Dawn phase
-            StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
+            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
         }
 
         private void StartDawnPhase()
-    {
-        Debug.Log("Dawn Phase Started: Witches must choose the Black Cat holder.");
-
-        // 1. Identify valid players
-        var localPlayer = PlayerService.GetLocalPlayer();
-        var allPlayers = PlayerService.GetAlivePlayers();
-
-        // 2. Determine if we are a Witch
-        // Note: Assuming Player.cs has an 'IsWitch' property or helper. 
-        // If not, use: localPlayer.myTryalHand.Any(c => c.data.cardName.Contains("Witch"))
-        bool amIAWitch = localPlayer != null && localPlayer.IsWitch;
-
-        if (amIAWitch)
         {
-            // 3. If Witch: Show the Target Picker UI
-            Debug.Log("Local Player is a Witch. Requesting input.");
-            
-            // Reuse the existing Night Target Picker
-            if (nightTargetPicker != null)
+            StartCoroutine(DawnPhaseRoutine());
+        }
+
+        private IEnumerator DawnPhaseRoutine()
+        {
+            Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
+
+            var witches = PlayerService.GetAliveWitches();
+            var allPlayers = PlayerService.GetAlivePlayers();
+            var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+
+            // Retrieve the Black Cat card held during setup
+            var blackCatCard = DeckManager != null ? DeckManager.GetHeldBlackCat() : null;
+
+            if (witches.Count == 0 || allPlayers.Count == 0)
             {
-                nightTargetPicker.gameObject.SetActive(true);
-                nightTargetPicker.Open(
-                    source: localPlayer,
-                    isAttack: false,
-                    onConfirm: (target, _) =>
+                // No witches or no players — assign randomly if we have a card
+                if (blackCatCard != null && allPlayers.Count > 0)
+                {
+                    var fallback = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                    ResolveBlackCatAssignment(fallback, blackCatCard);
+                }
+                yield return ChangePhase(GamePhase.Day, 2.0f);
+                yield break;
+            }
+
+            // Collect a vote from each witch
+            var votes = new Dictionary<Player, Player>();
+
+            foreach (var witch in witches)
+            {
+                if (witch.IsLocalPlayer && witch.IsHuman && !PlayerService.IsAirConsoleMode)
+                {
+                    // Human witch: show UI
+                    if (nightTargetPicker != null)
                     {
-                        ResolveBlackCatAssignment(target);
-                    },
-                    validTargets: allPlayers,
-                    isSingleTarget: true,
-                    promptOverride: "Choose a player to receive the Black Cat (They will start Day 1)."
-                );
+                        bool done = false;
+                        nightTargetPicker.Open(
+                            source: witch,
+                            isAttack: false,
+                            onConfirm: (target, _) =>
+                            {
+                                votes[witch] = target;
+                                done = true;
+                            },
+                            validTargets: allPlayers,
+                            isSingleTarget: true,
+                            promptOverride: "Vote: Who receives the Black Cat?"
+                        );
+                        yield return new WaitUntil(() => done);
+                    }
+                    else
+                    {
+                        votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                    }
+                }
+                else
+                {
+                    // AI witch: pick randomly
+                    yield return new WaitForSeconds(aiDecisionDelay);
+                    votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                }
+            }
+
+            // Tally votes — majority wins, random tiebreak
+            var tally = votes.Values
+                .GroupBy(p => p)
+                .OrderByDescending(g => g.Count())
+                .ToList();
+
+            Player winner;
+            int topCount = tally[0].Count();
+            var tied = tally.Where(g => g.Count() == topCount).Select(g => g.Key).ToList();
+            winner = tied.Count > 1 ? tied[rng.NextInt(0, tied.Count)] : tied[0];
+
+            Debug.Log($"Witch vote result: {winner.PlayerNameText} receives the Black Cat ({votes.Count} votes cast).");
+
+            // Assign the Black Cat
+            if (blackCatCard != null)
+            {
+                ResolveBlackCatAssignment(winner, blackCatCard);
             }
             else
             {
-                Debug.LogError("NightTargetPicker is not assigned in GamePhaseManager Inspector!");
-                // Failsafe: Pick Random if UI is broken
-                ResolveBlackCatAssignment(allPlayers[Random.Range(0, allPlayers.Count)]);
+                Debug.LogWarning("[GamePhaseManager] No Black Cat card available for Dawn assignment.");
+                // Still set turn order based on the voted player
+                SetTurnOrderFromPlayer(winner);
+            }
+
+            // Close picker UI
+            if (nightTargetPicker != null)
+                nightTargetPicker.gameObject.SetActive(false);
+
+            // Transition to Day
+            yield return ChangePhase(GamePhase.Day, 2.0f);
+        }
+
+        private void ResolveBlackCatAssignment(Player target, Card blackCatCard)
+        {
+            if (target == null || blackCatCard == null) return;
+
+            target.AssignBlackCat(blackCatCard);
+            Debug.Log($"The Black Cat has been assigned to {target.PlayerNameText}.");
+            SetTurnOrderFromPlayer(target);
+        }
+
+        private void SetTurnOrderFromPlayer(Player target)
+        {
+            if (GameTurnManager.Instance != null && target != null)
+            {
+                var alivePlayers = PlayerService.GetAlivePlayers();
+                int targetIndex = alivePlayers.IndexOf(target);
+                GameTurnManager.Instance.SetStartingPlayerIndex(targetIndex);
             }
         }
-        else
-        {
-            // 4. If NOT Witch (or AI): Pick Randomly for now
-            // In a full multiplayer game, this would wait for the server/host.
-            Debug.Log("Local Player is NOT a Witch. AI/Random selection.");
-            
-            Player randomTarget = allPlayers[Random.Range(0, allPlayers.Count)];
-            ResolveBlackCatAssignment(randomTarget);
-        }
-    }
-    private void ResolveBlackCatAssignment(Player target)
-    {
-        if (target == null) return;
-
-        Debug.Log($"The Black Cat has visited {target.PlayerNameText}.");
-
-        // 1. Add visual feedback or log entry here
-        // UIManager.Instance.AddLogEntry($"The Black Cat visits {target.PlayerNameText}");
-
-        // 2. Set the Turn Order for the upcoming Day Phase
-        // Note: This requires the Step 3 update to GameTurnManager to work!
-        if (GameTurnManager.Instance != null)
-        {
-            var alivePlayers = PlayerService.GetAlivePlayers();
-            int targetIndex = alivePlayers.IndexOf(target);
-            GameTurnManager.Instance.SetStartingPlayerIndex(targetIndex);
-        }
-
-        // 3. Close UI
-        if (nightTargetPicker != null) 
-        {
-            nightTargetPicker.gameObject.SetActive(false);
-        }
-
-        // 4. Transition to Day after a short delay
-        StartCoroutine(ChangePhase(GamePhase.Day, 2.0f));
-    }
 
         private IEnumerator EnterNight()
         {

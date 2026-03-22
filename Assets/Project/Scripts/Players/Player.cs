@@ -94,20 +94,6 @@ namespace Salem.Players
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
             }
-
-            //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if (PlayerNameText == "George Burroughs")
-            {
-                baseAccusationLimit++;
-            }
-            else if (PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
-            {
-                townHallAbilityCharges = 1;
-            }
-            else if (PlayerNameText == "Samuel Parris")
-            {
-                townHallAbilityCharges = 2;
-            }
         }
         #endregion
 
@@ -122,9 +108,29 @@ namespace Salem.Players
 
         public void setTownhall(TownHallCard card)
         {
-            if(card == null) { return; }
+            if (card == null) return;
             townhallCard = card;
-            //set art?
+            ApplyTownHallAbility();
+        }
+
+        private void ApplyTownHallAbility()
+        {
+            if (townhallCard == null) return;
+
+            switch (townhallCard.CardName)
+            {
+                case TownhallName.GeorgeBurroughs:
+                    baseAccusationLimit++;
+                    currentAccusationLimit = baseAccusationLimit;
+                    break;
+                case TownhallName.WilliamsPhipps:
+                case TownhallName.Tituba:
+                    townHallAbilityCharges = 1;
+                    break;
+                case TownhallName.SamuelParris:
+                    townHallAbilityCharges = 2;
+                    break;
+            }
         }
 
         public void DetermineRole()
