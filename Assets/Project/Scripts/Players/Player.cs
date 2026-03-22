@@ -571,13 +571,13 @@ namespace Salem.Players
         }
         
         // Eliminate immediately (reveal all remaining Tryals safely)
+        // Elimination is triggered by TrialService.OnTrialCardRevealed() on first Witch
+        // reveal or when all Tryals are revealed, which calls PlayerService.Eliminate().
         public void EliminateNow()
         {
             if (IsEliminated) return;
             for (int i = 0; i < TryalCards.Count; i++)
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
-
-            GameManager.Instance.OnDayLynchResolved();
         }
 
         // Called after IsEliminated is set. Discards hand + status cards,
@@ -628,44 +628,11 @@ namespace Salem.Players
             RecomputeStatusFromStatusCards();
         }
 
-        private bool eliminationNotified;
-
-        // After any reveal, check if this player should be eliminated, then cascade to Matchmaker partner
-        private void CheckElimination()
-        {
-            // Determine if the player should be eliminated based on revealed Tryals
-            if (!IsEliminated && TryalCards.Count > 0)
-            {
-                if (TryalCards.Any(c => c.IsRevealed && c.TryalCardType == TryalCardType.Witch))
-                {
-                    PlayerService.Eliminate(this, EliminationCause.WitchTrialRevealed);
-                }
-                else if (TryalCards.All(c => c.IsRevealed))
-                {
-                    PlayerService.Eliminate(this, EliminationCause.AllTrialsRevealed);
-                }
-            }
-
-            if (IsEliminated && !eliminationNotified)
-            {
-                eliminationNotified = true;
-                Debug.Log($"{PlayerNameText} is ELIMINATED!");
-                GameTurnManager.Instance?.OnPlayerEliminated(this);
-
-                if (MatchedPlayer != null &&
-                    HasStatus("Matchmaker") &&
-                    MatchedPlayer.HasStatus("Matchmaker") &&
-                    !MatchedPlayer.IsEliminated)
-                {
-                    // prevent ping-pong; clear link then eliminate partner
-                    var partner = MatchedPlayer;
-                    ClearMatch();
-                    partner.ClearMatch();
-                    partner.EliminateNow();
-                }
-                GameManager.Instance.OnDayLynchResolved();
-            }
-        }
+        // Elimination detection is handled by TrialService.OnTrialCardRevealed(),
+        // which is called from RevealTryalCard(). All post-elimination work
+        // (Matchmaker cascade, turn reindex, endgame eval) is in PlayerService.Eliminate().
+        // This method is kept as a no-op for safety in case any call sites still reference it.
+        private void CheckElimination() { }
 
         private void CheckAccusations(Player accuser = null)
         {
