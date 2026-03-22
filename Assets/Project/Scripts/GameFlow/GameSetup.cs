@@ -37,9 +37,20 @@ namespace Salem.Gameplay.Setup
         [SerializeField] private GameManager GameManager;
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
-        [SerializeField, Range(0f, 1f), Tooltip("Proportion of players assigned the Witch role")]
-        private float witchRatio = 1f / 3f;
         [SerializeField] private TownHallChoiceUI townHallChoiceUI;
+        // Exact Tryal card counts per player count: (NotAWitch, Witch, Constable)
+        private static readonly Dictionary<int, (int notAWitch, int witch, int constable)> TryalDistribution = new()
+        {
+            { 4,  (18, 1, 1) },
+            { 5,  (23, 1, 1) },
+            { 6,  (27, 2, 1) },
+            { 7,  (32, 2, 1) },
+            { 8,  (29, 2, 1) },
+            { 9,  (33, 2, 1) },
+            { 10, (27, 2, 1) },
+            { 11, (30, 2, 1) },
+            { 12, (33, 2, 1) },
+        };
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -74,24 +85,33 @@ namespace Salem.Gameplay.Setup
         // ── Step 1: Tryal Cards ──────────────────────────────────────────────
         private void SetupTryalCards(IReadOnlyList<Player> players)
         {
-            int numberOfWitches = Mathf.Max(1, Mathf.RoundToInt(players.Count * witchRatio));
-            int numberOfTryalCardsNeeded = players.Count * 5;
+            if (!TryalDistribution.TryGetValue(players.Count, out var dist))
+            {
+                Debug.LogError($"[GameSetup] No Tryal distribution defined for {players.Count} players.");
+                return;
+            }
 
-            // Add cards to the deck, start with the Constable
-            TryalCard constableCard = (TryalCard)Instantiate(TryalCards[0]);
-            constableCard.TryalCardType = TryalCardType.Constable;
-            TryalDeck.Add(constableCard);
+            int totalCards = dist.notAWitch + dist.witch + dist.constable;
+            int cardsPerPlayer = totalCards / players.Count;
+
+            // Add Constable card(s)
+            for (int i = 0; i < dist.constable; i++)
+            {
+                TryalCard card = (TryalCard)Instantiate(TryalCards[0]);
+                card.TryalCardType = TryalCardType.Constable;
+                TryalDeck.Add(card);
+            }
 
             // Create Witch cards
-            for (int i = 0; i < numberOfWitches; i++)
+            for (int i = 0; i < dist.witch; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[1]);
                 card.TryalCardType = TryalCardType.Witch;
                 TryalDeck.Add(card);
             }
 
-            // Finish the deck with NotAWitch cards
-            for (int i = TryalDeck.Count; i < numberOfTryalCardsNeeded; i++)
+            // Fill remaining slots with NotAWitch cards
+            for (int i = 0; i < dist.notAWitch; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[2]);
                 card.TryalCardType = TryalCardType.NotAWitch;
@@ -103,7 +123,7 @@ namespace Salem.Gameplay.Setup
 
             foreach (var player in players)
             {
-                player.TryalCards = DrawTryalCards(5, TryalDeck);
+                player.TryalCards = DrawTryalCards(cardsPerPlayer, TryalDeck);
                 player.InvokeOnTryalCardsChanged();
                 player.DetermineRole();
                 player.setRng(GameManager.Rng);
