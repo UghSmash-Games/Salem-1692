@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Mary Warren
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: You are immune to the ill effects of Matchmaker and Black Cat.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 4557740153877582163, guid: e4fcf3fb83a610c408ed920bbcebd952, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 12
+  RulesText: You are immune to the ill effects of Matchmaker and Black Cat.

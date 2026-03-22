@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Sarah Good
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Robbery and Arson cards have no effect on you and are discarded.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -2767702592324726748, guid: 4631d487ec50fe14cb7565589048c5cd, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 1
+  RulesText: Robbery and Arson cards have no effect on you and are discarded.

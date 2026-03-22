@@ -135,6 +135,78 @@ namespace Salem.Players
             }
         }
 
+        /// <summary>
+        /// Checks if this player has the given Town Hall ability, accounting for Martha Corey's copy ability.
+        /// </summary>
+        public bool HasTownHall(TownhallName name)
+        {
+            if (townhallCard == null) return false;
+            if (townhallCard.CardName == name) return true;
+            if (townhallCard.CardName == TownhallName.MarthaCorey)
+                return GetEffectiveTownHallName() == name;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the effective Town Hall identity. For Martha Corey, returns the ability of the
+        /// first living player to her right. For all others, returns their own CardName.
+        /// </summary>
+        public TownhallName? GetEffectiveTownHallName()
+        {
+            if (townhallCard == null) return null;
+            if (townhallCard.CardName != TownhallName.MarthaCorey) return townhallCard.CardName;
+
+            // Find first living player to the right (next in turn order)
+            var allPlayers = PlayerService.All;
+            int myIndex = allPlayers.IndexOf(this);
+            if (myIndex < 0) return null;
+
+            for (int i = 1; i < allPlayers.Count; i++)
+            {
+                var candidate = allPlayers[(myIndex + i) % allPlayers.Count];
+                if (!candidate.IsEliminated && candidate != this && candidate.townhallCard != null)
+                    return candidate.townhallCard.CardName;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Applies passive effects for Martha Corey based on the copied ability.
+        /// Must be called after all players have their Town Hall cards assigned.
+        /// </summary>
+        public void ApplyMarthaCoreyCopy()
+        {
+            var effective = GetEffectiveTownHallName();
+            if (effective == null) return;
+
+            switch (effective.Value)
+            {
+                case TownhallName.GeorgeBurroughs:
+                    baseAccusationLimit++;
+                    currentAccusationLimit = baseAccusationLimit;
+                    break;
+                case TownhallName.WilliamsPhipps:
+                case TownhallName.Tituba:
+                    townHallAbilityCharges = 1;
+                    break;
+                case TownhallName.SamuelParris:
+                    townHallAbilityCharges = 2;
+                    break;
+            }
+            Debug.Log($"[Player] Martha Corey ({PlayerNameText}) copies ability of {effective.Value}.");
+        }
+
+        public void ConsumeTownHallCharge()
+        {
+            if (townHallAbilityCharges > 0) townHallAbilityCharges--;
+        }
+
+        public void ResetAccusationCount()
+        {
+            currentAccusationCount = 0;
+            NotifyAccusationChanged();
+        }
+
         public void DetermineRole()
         {
             RecomputeStatusFromStatusCards();
@@ -147,7 +219,7 @@ namespace Salem.Players
             }
         }
 
-        public void RevealTryalCard(int index)
+        public void RevealTryalCard(int index, bool fromAccusation = false)
         {
             Debug.Log("REVEAL");
             if (index < 0 || index >= TryalCards.Count) return;
@@ -157,14 +229,9 @@ namespace Salem.Players
             {
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
-                /*if (card.TryalCardType == TryalCardType.Witch)
-                {
-                    EliminateNow();
-                }*/
-                TrialService.OnTrialCardRevealed(this, card);
+                TrialService.OnTrialCardRevealed(this, card, fromAccusation);
                 TryalCardRevealed?.Invoke(this, card);
             }
-            //TODO:arent we going to need a check if they try to reveal an already revealed card?
             CheckElimination();
         }
 
@@ -211,11 +278,7 @@ namespace Salem.Players
             OnStatusCardsChanged?.Invoke();
         }
 
-        public void shiftBaseAccusations(bool shiftUp)
-        {
-            if (shiftUp) { baseAccusationLimit++; } // if Thomas Danforth dies.... I think their ability ends, so use this on everyone to bring them back to normal
-            else { baseAccusationLimit--; } //use in the case of Thomas Danforth, his ability will drop everyones limit by 1
-        }
+        // Thomas Danforth's ability is now handled in CheckAccusations() via effectiveLimit reduction.
         #endregion
 
         #region IPlayerController Implementation
@@ -261,11 +324,11 @@ namespace Salem.Players
                     switch (card.name)
                     {
                         case "Arson":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            if (HasTownHall(TownhallName.SarahGood)) { return; } //sarah good's ability makes her immune to this
                             HandManager.ClearHand();
                             break;
                         case "Robbery":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
+                            if (HasTownHall(TownhallName.SarahGood)) { return; } //sarah good's ability makes her immune to this
                             //card.target.HandManager.AddCard(HandManager.GetCards());
                             HandManager.ClearHand();
                             break;
@@ -314,7 +377,7 @@ namespace Salem.Players
                             break;
                         case "Evidence":
                             currentAccusationCount += 3;
-                            if (PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
+                            if (HasTownHall(TownhallName.CottonMather)) { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
                             NotifyAccusationChanged();
                             CheckAccusations();
                             break;
@@ -473,6 +536,15 @@ namespace Salem.Players
                 return;
             }
 
+            // Mary Warren is immune to Black Cat
+            if (HasTownHall(TownhallName.MaryWarren))
+            {
+                Debug.Log($"[TownHall] Mary Warren ({PlayerNameText}) is immune to Black Cat. Discarding.");
+                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                dm?.AddToDiscardPile(card);
+                return;
+            }
+
             if (!StatusCards.Contains(card))
             {
                 AddStatusCard(card);
@@ -626,6 +698,10 @@ namespace Salem.Players
             }
 
             RecomputeStatusFromStatusCards();
+
+            // Town Hall card is visible to all until elimination — clear it now
+            townhallCard = null;
+            townHallCardIcon = null;
         }
 
         // Elimination detection is handled by TrialService.OnTrialCardRevealed(),
@@ -636,9 +712,23 @@ namespace Salem.Players
 
         private void CheckAccusations(Player accuser = null)
         {
-            if (currentAccusationCount >= currentAccusationLimit)
+            // Thomas Danforth: threshold reduced by 1 when he is the accuser
+            int effectiveLimit = currentAccusationLimit;
+            if (accuser != null && accuser.HasTownHall(TownhallName.ThomasDanforth))
+                effectiveLimit = Math.Max(1, effectiveLimit - 1);
+
+            if (currentAccusationCount >= effectiveLimit)
             {
                 AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
+
+                // Ann Putnam: draw 2 cards before reveal when she places the final accusation
+                if (accuser != null && accuser.HasTownHall(TownhallName.AnnePutnam))
+                {
+                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                    dm?.DrawMultipleCards(accuser.HandManager, 2);
+                    Debug.Log($"[TownHall] Ann Putnam ({accuser.PlayerNameText}) draws 2 cards before tryal reveal.");
+                }
+
                 currentAccusationCount = 0;
                 NotifyAccusationChanged();
 
@@ -653,8 +743,15 @@ namespace Salem.Players
                     int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
                     if (tryalToReveal.HasValue)
                     {
-                        RevealTryalCard(tryalToReveal.Value);
+                        RevealTryalCard(tryalToReveal.Value, fromAccusation: true);
                     }
+                }
+
+                // Abigail Williams: clear her own accusations when she triggers a tryal reveal
+                if (accuser != null && accuser.HasTownHall(TownhallName.AbigailWilliams))
+                {
+                    accuser.ResetAccusationCount();
+                    Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations.");
                 }
             }
         }

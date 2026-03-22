@@ -20,6 +20,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Salem.AirConsole;
 using Salem.Data;
 using Salem.Deck;
@@ -204,8 +205,27 @@ namespace Salem.GameFlow
                 return false;
             }
 
+            // Track hand before draw for Giles Corey check
+            int handSizeBefore = requestingPlayer.HandManager.Hand.Count;
             deckManager.DrawMultipleCards(requestingPlayer.HandManager, 2);
             currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+            // Giles Corey: if both drawn cards are Accusation cards, draw a third
+            if (requestingPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
+            {
+                var hand = requestingPlayer.HandManager.Hand;
+                int newCards = hand.Count - handSizeBefore;
+                if (newCards >= 2)
+                {
+                    var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
+                    bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
+                    if (bothAccusation)
+                    {
+                        deckManager.DrawCard(requestingPlayer.HandManager);
+                        Debug.Log($"[TownHall] Giles Corey ({requestingPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
+                    }
+                }
+            }
 
             if (requestingPlayer.IsHuman)
             {
@@ -232,6 +252,87 @@ namespace Salem.GameFlow
             {
                 EndTurn();
             }
+        }
+
+        /// <summary>
+        /// Samuel Parris ability: draw up to 2 cards from the discard pile instead of the deck.
+        /// Counts as the player's turn action. Cannot draw Black cards.
+        /// </summary>
+        public bool TryDrawFromDiscard(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+            {
+                Debug.LogWarning("[TurnManager] Draw from discard attempted outside of turn.");
+                return false;
+            }
+
+            if (currentTurnAction != TurnActionChoice.None)
+            {
+                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot draw from discard.");
+                return false;
+            }
+
+            if (!requestingPlayer.HasTownHall(Salem.Cards.TownhallName.SamuelParris) || requestingPlayer.townHallAbilityCharges <= 0)
+            {
+                Debug.LogWarning("[TurnManager] Player does not have Samuel Parris ability or no charges left.");
+                return false;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager) return false;
+
+            // Draw up to 2, reject Black cards
+            deckManager.DrawFromDiscardPile(requestingPlayer.HandManager, 2,
+                c => c.Type == Salem.Cards.Card.CardColor.Black);
+            requestingPlayer.ConsumeTownHallCharge();
+            currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+            Debug.Log($"[TownHall] Samuel Parris ({requestingPlayer.PlayerNameText}) draws from discard pile. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+
+            if (requestingPlayer.IsHuman)
+            {
+                waitingForHuman = false;
+            }
+
+            EndTurn();
+            return true;
+        }
+
+        /// <summary>
+        /// Tituba ability: once per game, on her turn before drawing, rearrange the deck.
+        /// Current implementation: shuffles the deck. TODO: Full 60-second deck rearrangement UI.
+        /// </summary>
+        public bool TryUseTitubaAbility(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+                return false;
+
+            if (currentTurnAction != TurnActionChoice.None)
+            {
+                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot use Tituba ability.");
+                return false;
+            }
+
+            if (!requestingPlayer.HasTownHall(Salem.Cards.TownhallName.Tituba) || requestingPlayer.townHallAbilityCharges <= 0)
+            {
+                Debug.LogWarning("[TurnManager] Player does not have Tituba ability or no charges left.");
+                return false;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager) return false;
+
+            // TODO: Replace with full 60-second deck rearrangement UI
+            deckManager.ShuffleDeck();
+            requestingPlayer.ConsumeTownHallCharge();
+            Debug.Log($"[TownHall] Tituba ({requestingPlayer.PlayerNameText}) rearranged the deck. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+
+            // Tituba's ability counts as the turn action — end turn
+            currentTurnAction = TurnActionChoice.DrawTwoCards; // Prevents further actions this turn
+            if (requestingPlayer.IsHuman)
+                waitingForHuman = false;
+            EndTurn();
+            return true;
         }
 
         public void RequestEndTurn(Player requestingPlayer)

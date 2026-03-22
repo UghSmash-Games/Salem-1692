@@ -543,8 +543,15 @@ namespace Salem.GameFlow
                     bool done = false;
                     bool confessed = false;
 
+                    // William Phipps: can fake confess without revealing a Tryal
+                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
+
                     // Show tryal picker — player can choose a Tryal to reveal (confess)
                     // or we need a skip mechanism. Use nightTargetPicker as a Yes/No prompt first.
+                    string prompt = canFakeConfess
+                        ? confessionPrompt + " (William Phipps: you may fake confess without revealing a Tryal)"
+                        : confessionPrompt;
+
                     if (nightTargetPicker != null)
                     {
                         Player chosen = null;
@@ -552,21 +559,31 @@ namespace Salem.GameFlow
                         {
                             chosen = primary;
                             done = true;
-                        }, new List<Player> { player }, true, confessionPrompt);
+                        }, new List<Player> { player }, true, prompt);
 
                         yield return new WaitUntil(() => done || nightTargetPicker == null || !nightTargetPicker.gameObject.activeSelf);
 
                         if (done && chosen != null)
                         {
-                            // Player chose to confess — now pick which Tryal to reveal
-                            bool tryalChosen = false;
-                            tryalPicker.Open(player, idx =>
+                            if (canFakeConfess)
                             {
-                                player.RevealTryalCard(idx);
+                                // William Phipps: fake confess — no Tryal reveal, just mark as confessor
+                                player.ConsumeTownHallCharge();
                                 confessed = true;
-                                tryalChosen = true;
-                            });
-                            yield return new WaitUntil(() => tryalChosen);
+                                Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) used fake confession ability.");
+                            }
+                            else
+                            {
+                                // Normal confession: pick which Tryal to reveal
+                                bool tryalChosen = false;
+                                tryalPicker.Open(player, idx =>
+                                {
+                                    player.RevealTryalCard(idx);
+                                    confessed = true;
+                                    tryalChosen = true;
+                                });
+                                yield return new WaitUntil(() => tryalChosen);
+                            }
                         }
                     }
 
@@ -580,6 +597,16 @@ namespace Salem.GameFlow
                 {
                     // AI or non-local: small chance to confess if they have a safe Tryal to reveal
                     yield return new WaitForSeconds(aiDecisionDelay);
+
+                    // William Phipps AI: use fake confession to protect Witch tryals
+                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
+                    if (canFakeConfess && player.IsWitch && rng.NextInt(0, 100) < 50)
+                    {
+                        player.ConsumeTownHallCharge();
+                        plan.Confessors.Add(player);
+                        Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) (AI) used fake confession.");
+                        continue;
+                    }
 
                     bool hasNonWitchToReveal = player.TryalCards.Any(c =>
                         !c.IsRevealed && c.TryalCardType != TryalCardType.Witch);

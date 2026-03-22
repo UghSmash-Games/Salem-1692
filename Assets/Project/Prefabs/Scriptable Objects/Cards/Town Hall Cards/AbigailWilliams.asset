@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Abigail Williams
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: When you trigger a Tryal reveal, discard all accusations in front of your own Tryals.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 360187739049842669, guid: 9ab550bae86abc14c837f4f8e5f69156, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 9
+  RulesText: When you trigger a Tryal reveal, discard all accusations in front of your own Tryals.

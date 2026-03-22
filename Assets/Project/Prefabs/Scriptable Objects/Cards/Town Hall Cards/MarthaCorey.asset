@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Martha Corey
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: You have the same ability as the first living player to your right.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 699576528662589918, guid: c9a381ea13f9199449c50d3493e49066, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 5
+  RulesText: You have the same ability as the first living player to your right.

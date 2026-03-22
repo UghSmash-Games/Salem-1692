@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Rebecca Nurse
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: Each time a Tryal is revealed on another player (from accusations), draw 1 card.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -4926091400924112911, guid: e75ffddc4ba8bce4d942d3e9f03e0128, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 4
+  RulesText: Each time a Tryal is revealed on another player (from accusations), draw 1 card.

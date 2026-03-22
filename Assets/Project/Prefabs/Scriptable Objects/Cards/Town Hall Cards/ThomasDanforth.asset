@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Thomas Danforth
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: When you accuse, the threshold is reduced by 1 (6th accusation triggers reveal).
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -2340475472156105306, guid: f28b6338b194b2c4b83705734e83e3fb, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 6
+  RulesText: When you accuse, the threshold is reduced by 1 (6th accusation triggers reveal).

@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: George Burroughs
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: 8 total accusations must be played against you to reveal a Tryal.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: 5685341028308765632, guid: 2681499ab070a8e4c9eaac486e591966, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 14
+  RulesText: 8 total accusations must be played against you to reveal a Tryal.

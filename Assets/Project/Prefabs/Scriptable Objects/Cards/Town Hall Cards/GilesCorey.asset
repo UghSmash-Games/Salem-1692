@@ -15,10 +15,11 @@ MonoBehaviour:
   Name: Giles Corey
   Type: 0
   RequiresTarget: 0
-  Effect: 
+  Effect: If you draw 2 Accusation cards on your turn, show them and draw a 3rd card.
   HiddenCardImage: {fileID: -175361020501913716, guid: 279e64ac76663014c8019744ae04a9ef, type: 3}
   RevealedCardImage: {fileID: -4048703291902219468, guid: 84d5034453e710a4baf3645c7f3e52f0, type: 3}
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
   CardName: 11
+  RulesText: If you draw 2 Accusation cards on your turn, show them and draw a 3rd card.
