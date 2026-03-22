@@ -90,6 +90,9 @@ namespace Salem.Data
 
             player.IsEliminated = true;
 
+            // Discard hand + status cards (or transfer to John Proctor holder)
+            player.OnElimination();
+
             OnPlayerEliminated?.Invoke(player, cause);
 
             // Trigger endgame evaluation in one place if you like,
