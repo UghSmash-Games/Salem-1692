@@ -93,10 +93,22 @@ namespace Salem.Data
             // Discard hand + status cards (or transfer to John Proctor holder)
             player.OnElimination();
 
-            OnPlayerEliminated?.Invoke(player, cause);
+            // Matchmaker cascade: if eliminated player has Matchmaker bond, eliminate partner too
+            if (player.MatchedPlayer != null &&
+                player.HasStatus("Matchmaker") &&
+                player.MatchedPlayer.HasStatus("Matchmaker") &&
+                !player.MatchedPlayer.IsEliminated)
+            {
+                var partner = player.MatchedPlayer;
+                player.ClearMatch();
+                partner.ClearMatch();
+                partner.EliminateNow();
+            }
 
-            // Trigger endgame evaluation in one place if you like,
-            // or have GameManager subscribe to OnPlayerEliminated.
+            // Re-index turn order after removal
+            GameTurnManager.Instance?.OnPlayerEliminated(player);
+
+            OnPlayerEliminated?.Invoke(player, cause);
             GameManager.Instance?.EvaluateEndGame();
         }
     }
