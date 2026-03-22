@@ -29,6 +29,7 @@ namespace Salem.GameFlow
         {
             public Player ConstableTarget { get; set; }
             public Dictionary<Player, Player> WitchVotes { get; } = new();
+            public HashSet<Player> Confessors { get; } = new();
 
             public void SetWitchVote(Player witch, Player target)
             {
@@ -80,8 +81,13 @@ namespace Salem.GameFlow
                 return;
             }
 
-            // Eliminate victim (reveal remaining Tryals)
-            //victim.EliminateNow();
+            if (plan.Confessors.Contains(victim))
+            {
+                Debug.Log($"[NightResolver] {victim.PlayerNameText} confessed and is saved from the night kill.");
+                return;
+            }
+
+            // Eliminate victim
             PlayerService.Eliminate(victim, EliminationCause.NightKill);
         }
     }

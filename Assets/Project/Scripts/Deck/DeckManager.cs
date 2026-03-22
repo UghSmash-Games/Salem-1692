@@ -209,6 +209,17 @@ namespace Salem.Deck
             Deck.Insert(insertIndex, nightCard);
         }
 
+        /// <summary>
+        /// Post-night reshuffle: merge discard pile into deck, shuffle, then place Night card in bottom half.
+        /// </summary>
+        public void ReshuffleDeckWithDiscard(Card nightCard)
+        {
+            Deck.AddRange(DiscardPile);
+            DiscardPile.Clear();
+            ShuffleDeck();
+            ReshuffleAndPlaceNightCard(nightCard);
+        }
+
         public void InsertCardAtRandom(Card card)
         {
             if (card == null) return;
