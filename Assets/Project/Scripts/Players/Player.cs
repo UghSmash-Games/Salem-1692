@@ -626,6 +626,10 @@ namespace Salem.Players
             }
 
             RecomputeStatusFromStatusCards();
+
+            // Town Hall card is visible to all until elimination — clear it now
+            townhallCard = null;
+            townHallCardIcon = null;
         }
 
         // Elimination detection is handled by TrialService.OnTrialCardRevealed(),
