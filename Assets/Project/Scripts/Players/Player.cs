@@ -203,7 +203,7 @@ namespace Salem.Players
 
         public void ResetAccusationCount()
         {
-            currentAccusationCount = 0;
+            DiscardRedStatusCards();
             NotifyAccusationChanged();
         }
 
@@ -333,9 +333,7 @@ namespace Salem.Players
                             HandManager.ClearHand();
                             break;
                         case "Alibi":
-                            currentAccusationCount -= 3;
-                            if (currentAccusationCount < 0) { currentAccusationCount = 0; }
-                            NotifyAccusationChanged();
+                            ApplyAlibi(3);
                             break;
                         case "Stocks":
                             skipTurn = true;
@@ -367,45 +365,42 @@ namespace Salem.Players
                     }
                     break;
                 case Card.CardColor.Red:
-                    //played, then check for tryal reveal
-                    switch (card.name)
-                    {
-                        case "Accusations":
-                            currentAccusationCount++;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Evidence":
-                            currentAccusationCount += 3;
-                            if (HasTownHall(TownhallName.CottonMather)) { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Witness":
-                            currentAccusationCount += 7;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                    }
+                    // Red cards are placed in front of the player (StatusCards) by the caller.
+                    // Recompute count from cards and check threshold.
+                    RecomputeStatusFromStatusCards();
+                    NotifyAccusationChanged();
+                    CheckAccusations();
                     break;
             }
         }
 
         //Called in CardEffectManager
-        // Accusations & turn effects
+        // Accusations & turn effects — count is derived from red cards in StatusCards
         public void ApplyAccusation(int amount, Player accuser = null)
         {
-            Debug.Log("Acc limit:"+currentAccusationLimit);
-            Debug.Log("Before Acc:"+currentAccusationCount);
-            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount + amount);
-            Debug.Log("After Acc:" + currentAccusationCount);
+            RecomputeStatusFromStatusCards();
+            Debug.Log($"Acc limit:{currentAccusationLimit} Acc count:{currentAccusationCount}");
             CheckAccusations(accuser);
         }
-        public void ApplyAlibi(int reduceBy)
+        public void ApplyAlibi(int removeCount)
         {
-            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
+            // Remove up to N Accusation cards from in front of this player
+            int removed = 0;
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            for (int i = StatusCards.Count - 1; i >= 0 && removed < removeCount; i--)
+            {
+                if (StatusCards[i] is ActionCardSO ac && ac.Op == ActionOp.Accusation)
+                {
+                    dm?.AddToDiscardPile(StatusCards[i]);
+                    StatusCards.RemoveAt(i);
+                    removed++;
+                }
+            }
+            if (removed > 0)
+                OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
             NotifyAccusationChanged();
-        }        
+        }
         public void ApplyStocks(int turns = 1) => skipTurn = true; // extend later if you track duration
 
         // Hand
@@ -477,9 +472,6 @@ namespace Salem.Players
             // Reset to base; then re-apply statuses each time
             currentAccusationLimit = baseAccusationLimit;
 
-
-            hasAsylum = StatusCards.Any(c => c.Name == "Asylum"); // protected at Night
-
             bool hasPiety = StatusCards.Any(c => c.Name == "Piety"); // doubles limit
             if (hasPiety) currentAccusationLimit = (byte)(baseAccusationLimit * 2);
 
@@ -489,6 +481,20 @@ namespace Salem.Players
             // If Matchmaker status fell off, clear the bond
             if (!StatusCards.Any(c => c.Name == "Matchmaker") && MatchedPlayer != null)
                 ClearMatch();
+
+            // Derive accusation count from red cards in front of this player
+            byte accusationTotal = 0;
+            foreach (var c in StatusCards)
+            {
+                if (c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) continue;
+                switch (ac.Op)
+                {
+                    case ActionOp.Accusation: accusationTotal += 1; break;
+                    case ActionOp.Evidence: accusationTotal += (byte)(HasTownHall(TownhallName.CottonMather) ? 1 : 3); break;
+                    case ActionOp.Witness: accusationTotal += 7; break;
+                }
+            }
+            currentAccusationCount = accusationTotal;
         }
 
         // Matchmaker link (two-way)
@@ -728,12 +734,13 @@ namespace Salem.Players
                 // Ann Putnam: draw 2 cards before reveal when she places the final accusation
                 if (accuser != null && accuser.HasTownHall(TownhallName.AnnePutnam))
                 {
-                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                    dm?.DrawMultipleCards(accuser.HandManager, 2);
+                    var dm2 = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                    dm2?.DrawMultipleCards(accuser.HandManager, 2);
                     Debug.Log($"[TownHall] Ann Putnam ({accuser.PlayerNameText}) draws 2 cards before tryal reveal.");
                 }
 
-                currentAccusationCount = 0;
+                // Discard all red cards in front of this player
+                DiscardRedStatusCards();
                 NotifyAccusationChanged();
 
                 // If there's a listener (CardEffectManager), let the accuser choose which Tryal to reveal.
@@ -758,6 +765,21 @@ namespace Salem.Players
                     Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations.");
                 }
             }
+        }
+
+        private void DiscardRedStatusCards()
+        {
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            for (int i = StatusCards.Count - 1; i >= 0; i--)
+            {
+                if (StatusCards[i].Type == Card.CardColor.Red)
+                {
+                    dm?.AddToDiscardPile(StatusCards[i]);
+                    StatusCards.RemoveAt(i);
+                }
+            }
+            OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
         }
 
         private void NotifyAccusationChanged()

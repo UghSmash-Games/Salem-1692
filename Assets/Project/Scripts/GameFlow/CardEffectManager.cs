@@ -203,6 +203,14 @@ namespace Salem.GameFlow
                 }
             }
 
+            // Red cards: place in front of target BEFORE executing effect
+            // (so they're tracked when threshold check runs)
+            if (card.Type == Card.CardColor.Red && target != null)
+            {
+                CurrentPlayer.HandManager.RemoveCard(card);
+                target.AddStatusCard(card);
+            }
+
             if (card is ActionCardSO action)
             {
                 ExecuteActionOp(action, target);
@@ -212,8 +220,8 @@ namespace Salem.GameFlow
                 Debug.LogWarning($"[Effect] Non-action card played via effect path: {card.Name}");
             }
 
-            // Remove from hand if appropriate
-            if (card.Type == Card.CardColor.Green || card.Type == Card.CardColor.Red)
+            // Green cards: remove from hand after effect (goes to discard)
+            if (card.Type == Card.CardColor.Green)
                 CurrentPlayer.HandManager.RemoveCard(card);
 
             // Raise event for CardLogManager to listen to
