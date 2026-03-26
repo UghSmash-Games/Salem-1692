@@ -68,9 +68,9 @@ namespace Salem.GameFlow
 
             _ops = new()
                 {
-                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1, s) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.HasTownHall(TownhallName.CottonMather) ? 1 : 3, s) },
-                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7, s) },
+                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(0, s) },
                     { ActionOp.Alibi,      (s,t,_,_,_) => {
                         // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
                         if (t != null && s.HasTownHall(TownhallName.WillGrigs))

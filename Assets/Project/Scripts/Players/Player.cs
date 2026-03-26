@@ -377,9 +377,13 @@ namespace Salem.Players
 
         //Called in CardEffectManager
         // Accusations & turn effects — count is derived from red cards in StatusCards
-        public void ApplyAccusation(int amount, Player accuser = null)
+        public void ApplyAccusation(int bonusAmount, Player accuser = null)
         {
             RecomputeStatusFromStatusCards();
+            // bonusAmount adds accusations beyond what's tracked by physical cards
+            // (e.g., Will Griggs offensive Alibi). Normal card ops pass 0.
+            if (bonusAmount > 0)
+                currentAccusationCount = (byte)Math.Min(255, currentAccusationCount + bonusAmount);
             Debug.Log($"Acc limit:{currentAccusationLimit} Acc count:{currentAccusationCount}");
             CheckAccusations(accuser);
         }
@@ -723,7 +727,11 @@ namespace Salem.Players
                 var blackCat = RemoveBlackCat(false);
                 if (blackCat != null && dm != null)
                     dm.AddToDiscardPile(blackCat);
-                // Clear status cards (blue cards in play)
+                // Discard status cards (red, blue, Stocks) to discard pile
+                foreach (var sc in StatusCards)
+                {
+                    if (dm != null) dm.AddToDiscardPile(sc);
+                }
                 ClearStatusCardsAndRecompute();
             }
 
