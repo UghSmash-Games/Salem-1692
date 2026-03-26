@@ -21,6 +21,6 @@ MonoBehaviour:
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
-  Op: 0
+  Op: 1
   NeedsTarget: 1
   RulesText: Target player's next turn is skipped.

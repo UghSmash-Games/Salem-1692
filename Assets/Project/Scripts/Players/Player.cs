@@ -483,10 +483,6 @@ namespace Salem.Players
             bool hasPiety = StatusCards.Any(c => c.Name == "Piety"); // doubles limit
             if (hasPiety) currentAccusationLimit = (byte)(baseAccusationLimit * 2);
 
-            // Curse makes accusations easier to trigger (limit -1, min 1)
-            bool hasCurse = StatusCards.Any(c => c.Name == "Curse");
-            if (hasCurse) currentAccusationLimit = (byte)Mathf.Max(1, currentAccusationLimit - 1);
-
             // Asylum blocks Night targeting/elimination
             hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
 

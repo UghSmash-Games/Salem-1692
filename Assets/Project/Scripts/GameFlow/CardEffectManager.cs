@@ -75,8 +75,10 @@ namespace Salem.GameFlow
                         // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
                         if (t != null && s.HasTownHall(TownhallName.WillGrigs))
                             t.ApplyAccusation(7, s);
+                        else if (t != null)
+                            t.ApplyAlibi(3);
                         else
-                            s.ApplyAlibi(3);
+                            Debug.LogWarning("[Alibi] No target provided.");
                     }},
                     { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
@@ -84,12 +86,28 @@ namespace Salem.GameFlow
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
                     { ActionOp.Curse,      (s,t,_,_,c) =>
                         {
-                            var removed = t.RemoveBlackCat(false);
-                            if (removed != null)
+                            // Discard one Blue status card from the target
+                            if (t.IsBlackCatHolder)
                             {
-                                DeckManager?.AddToDiscardPile(removed);
+                                var removed = t.RemoveBlackCat(true);
+                                if (removed != null)
+                                    DeckManager?.AddToDiscardPile(removed);
                             }
-                            t.AddStatusCardAndRecompute(c);
+                            else
+                            {
+                                var blueStatus = t.StatusCards.Find(sc => sc.Type == Card.CardColor.Blue);
+                                if (blueStatus != null)
+                                {
+                                    t.RemoveStatusCard(blueStatus);
+                                    t.RecomputeStatusFromStatusCards();
+                                    DeckManager?.AddToDiscardPile(blueStatus);
+                                    Debug.Log($"[Curse] Removed {blueStatus.Name} from {t.PlayerNameText}.");
+                                }
+                                else
+                                {
+                                    Debug.Log($"[Curse] {t.PlayerNameText} has no Blue cards to discard.");
+                                }
+                            }
                         }
                     },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
