@@ -336,7 +336,8 @@ namespace Salem.Players
                             ApplyAlibi(3);
                             break;
                         case "Stocks":
-                            skipTurn = true;
+                            // Stocks card stays in front of player (should be in StatusCards)
+                            RecomputeStatusFromStatusCards();
                             break;
                         case "Scapegoat":
                             card.target.StatusCards.AddRange(StatusCards);
@@ -401,7 +402,23 @@ namespace Salem.Players
             RecomputeStatusFromStatusCards();
             NotifyAccusationChanged();
         }
-        public void ApplyStocks(int turns = 1) => skipTurn = true; // extend later if you track duration
+        public void ApplyStocks(int turns = 1) => RecomputeStatusFromStatusCards();
+
+        /// <summary>
+        /// Removes one Stocks card from in front of this player and discards it.
+        /// Called when the player's turn is skipped due to Stocks.
+        /// </summary>
+        public void ConsumeOneStocks()
+        {
+            int idx = StatusCards.FindIndex(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
+            if (idx < 0) return;
+            var card = StatusCards[idx];
+            StatusCards.RemoveAt(idx);
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            dm?.AddToDiscardPile(card);
+            OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
+        }
 
         // Hand
         public void ClearHand()
@@ -477,6 +494,9 @@ namespace Salem.Players
 
             // Asylum blocks Night targeting/elimination
             hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
+
+            // Stocks: skip turn if any Stocks cards are in front of this player
+            skipTurn = StatusCards.Any(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
 
             // If Matchmaker status fell off, clear the bond
             if (!StatusCards.Any(c => c.Name == "Matchmaker") && MatchedPlayer != null)

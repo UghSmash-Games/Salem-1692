@@ -80,7 +80,13 @@ namespace Salem.GameFlow
                         else
                             Debug.LogWarning("[Alibi] No target provided.");
                     }},
-                    { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
+                    { ActionOp.Stocks,     (s,t,_,_,c) => {
+                        // Stocks stays in front of the target until their turn is skipped
+                        t.AddStatusCard(c);
+                        t.RecomputeStatusFromStatusCards();
+                        // Remove from source hand (not discarded — placed in front of target)
+                        s.HandManager.RemoveCard(c);
+                    }},
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
@@ -221,7 +227,8 @@ namespace Salem.GameFlow
             }
 
             // Green cards: remove from hand after effect (goes to discard)
-            if (card.Type == Card.CardColor.Green)
+            // Exception: Stocks stays in front of target (already handled in its op)
+            if (card.Type == Card.CardColor.Green && card is ActionCardSO greenAc && greenAc.Op != ActionOp.Stocks)
                 CurrentPlayer.HandManager.RemoveCard(card);
 
             // Raise event for CardLogManager to listen to

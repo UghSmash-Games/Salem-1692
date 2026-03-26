@@ -122,6 +122,16 @@ namespace Salem.GameFlow
             currentPlayer = players[CurrentPlayerIndex];
             Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
+            // Stocks: if this player has a Stocks card, skip their turn and consume one
+            if (currentPlayer.skipTurn)
+            {
+                Debug.Log($"{currentPlayer.PlayerNameText}'s turn is skipped (Stocks).");
+                currentPlayer.ConsumeOneStocks();
+                int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
+                StartTurn(nextIndex);
+                return;
+            }
+
             isTurnActive = true;
             waitingForHuman = false;
             currentTurnAction = TurnActionChoice.None;
