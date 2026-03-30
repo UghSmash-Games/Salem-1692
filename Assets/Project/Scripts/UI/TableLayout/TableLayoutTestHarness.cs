@@ -17,7 +17,10 @@ namespace Salem.UI
     {
         [SerializeField] private TableLayoutController layoutController;
         [SerializeField] private RectTransform playerBoardPrefab;
-        [SerializeField] private Transform playerContainer;
+        [SerializeField] private RectTransform playerContainer;
+
+        [Header("Automation")]
+        [SerializeField] private bool spawnOnEnable = true;
 
         [Range(4, 12)]
         [SerializeField] private int playerCount = 6;
@@ -27,10 +30,23 @@ namespace Salem.UI
         [ContextMenu("Spawn Test Players")]
         public void SpawnTestPlayers()
         {
+            if (layoutController == null || playerBoardPrefab == null || playerContainer == null)
+            {
+                Debug.LogWarning("TableLayoutTestHarness: Missing references. Assign layoutController, playerBoardPrefab, and playerContainer.");
+                return;
+            }
+
             // Clear old
             for (int i = playerContainer.childCount - 1; i >= 0; i--)
             {
-                DestroyImmediate(playerContainer.GetChild(i).gameObject);
+                if (Application.isPlaying)
+                {
+                    Destroy(playerContainer.GetChild(i).gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(playerContainer.GetChild(i).gameObject);
+                }
             }
 
             var seats = new List<TableLayoutController.PlayerSeat>();
@@ -49,6 +65,28 @@ namespace Salem.UI
 
             layoutController.SetPlayers(seats, localPlayerId);
         }
+
+        private void Reset()
+        {
+            if (layoutController == null)
+            {
+                layoutController = GetComponent<TableLayoutController>();
+            }
+
+            if (playerContainer == null)
+            {
+                playerContainer = GetComponent<RectTransform>();
+            }
+        }
+
+        private void OnEnable()
+        {
+            if (!Application.isPlaying || !spawnOnEnable)
+            {
+                return;
+            }
+
+            SpawnTestPlayers();
+        }
     }
 }
-

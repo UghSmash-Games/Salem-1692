@@ -97,7 +97,10 @@ namespace Salem.UI
         public void SetPlayers(List<PlayerSeat> seats, string localPlayerId)
         {
             _seats.Clear();
-            _seats.AddRange(seats);
+            if (seats != null)
+            {
+                _seats.AddRange(seats);
+            }
             _localPlayerId = localPlayerId;
 
             ForceLayout();
