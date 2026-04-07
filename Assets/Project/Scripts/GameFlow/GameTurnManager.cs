@@ -39,7 +39,7 @@ namespace Salem.GameFlow
         public static GameTurnManager Instance;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private UIManager UIManager;
-        [SerializeField] private float turnDuration = 30f;
+        [SerializeField] private float turnDuration = 60f;
         public Player CurrentPlayer => currentPlayer;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
         public UnityEvent OnTurnStart;
@@ -91,9 +91,46 @@ namespace Salem.GameFlow
             turnTimer -= Time.deltaTime;
             if (turnTimer <= 0f)
             {
-                Debug.Log("Turn timer expired.");
-                EndTurn();
+                Debug.Log($"[IdleTimer] {currentPlayer?.PlayerNameText} idle for {turnDuration}s — forcing draw two cards.");
+                ForceDrawAndEndTurn();
             }
+        }
+
+        /// <summary>
+        /// Called when the idle timer expires. Forces the current player to draw
+        /// two cards (applying Giles Corey if applicable) and ends their turn.
+        /// </summary>
+        private void ForceDrawAndEndTurn()
+        {
+            if (!isTurnActive || currentPlayer == null) return;
+
+            EnsureDeckManager();
+            if (deckManager != null)
+            {
+                int handSizeBefore = currentPlayer.HandManager.Hand.Count;
+                deckManager.DrawMultipleCards(currentPlayer.HandManager, 2);
+                currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+                // Giles Corey: if both drawn cards are Accusation cards, draw a third
+                if (currentPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
+                {
+                    var hand = currentPlayer.HandManager.Hand;
+                    int newCards = hand.Count - handSizeBefore;
+                    if (newCards >= 2)
+                    {
+                        var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
+                        bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
+                        if (bothAccusation)
+                        {
+                            deckManager.DrawCard(currentPlayer.HandManager);
+                            Debug.Log($"[TownHall] Giles Corey ({currentPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
+                        }
+                    }
+                }
+            }
+
+            waitingForHuman = false;
+            EndTurn();
         }
 
 
