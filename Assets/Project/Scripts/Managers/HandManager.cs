@@ -77,6 +77,21 @@ namespace Salem.Managers.Hands
             }
         }
 
+        /// <summary>
+        /// Removes a card from the hand WITHOUT sending it to the discard pile.
+        /// Use this when the card is being transferred to another location (e.g.,
+        /// placed in front of a target as a status card).
+        /// </summary>
+        public bool TakeCard(Card card)
+        {
+            if (Hand.Remove(card))
+            {
+                OnHandChanged?.Invoke();
+                return true;
+            }
+            return false;
+        }
+
         public void ClearHand()
         {
             Hand.Clear();

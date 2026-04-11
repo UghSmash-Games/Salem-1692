@@ -439,8 +439,9 @@ namespace Salem.Players
         // Status (Blue) cards
         public void PlayStatusCardOnTarget(ActionCardSO statusCard, Player target)
         {
-            // Remove from my hand (fires OnHandChanged for UI)
-            HandManager.RemoveCard(statusCard);
+            // Take from my hand WITHOUT discarding — the card is being transferred
+            // to the target's status cards, not sent to the discard pile.
+            HandManager.TakeCard(statusCard);
 
             // Add to target's statuses and recompute (fires OnStatusCardsChanged + updates derived flags)
             target.AddStatusCard(statusCard);

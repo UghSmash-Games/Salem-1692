@@ -81,11 +81,12 @@ namespace Salem.GameFlow
                             Debug.LogWarning("[Alibi] No target provided.");
                     }},
                     { ActionOp.Stocks,     (s,t,_,_,c) => {
-                        // Stocks stays in front of the target until their turn is skipped
+                        // Stocks stays in front of the target until their turn is skipped.
+                        // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+                        // being transferred to the target's status cards, not discarded.
+                        s.HandManager.TakeCard(c);
                         t.AddStatusCard(c);
                         t.RecomputeStatusFromStatusCards();
-                        // Remove from source hand (not discarded — placed in front of target)
-                        s.HandManager.RemoveCard(c);
                     }},
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
@@ -211,9 +212,11 @@ namespace Salem.GameFlow
 
             // Red cards: place in front of target BEFORE executing effect
             // (so they're tracked when threshold check runs)
+            // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+            // being transferred to the target's status cards, not discarded.
             if (card.Type == Card.CardColor.Red && target != null)
             {
-                CurrentPlayer.HandManager.RemoveCard(card);
+                CurrentPlayer.HandManager.TakeCard(card);
                 target.AddStatusCard(card);
             }
 
