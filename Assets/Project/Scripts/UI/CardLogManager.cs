@@ -49,6 +49,7 @@ namespace Salem.UI
             Player.AccusationThresholdReached += HandleAccusationThreshold;
             Player.TryalCardRevealed += HandleTryalRevealed;
             PlayerService.OnPlayerEliminated += HandlePlayerEliminated;
+            TrialService.OnDoubleWitchRevealed += HandleDoubleWitchRevealed;
         }
 
 
@@ -59,6 +60,7 @@ namespace Salem.UI
             Player.AccusationThresholdReached -= HandleAccusationThreshold;
             Player.TryalCardRevealed -= HandleTryalRevealed;
             PlayerService.OnPlayerEliminated -= HandlePlayerEliminated;
+            TrialService.OnDoubleWitchRevealed -= HandleDoubleWitchRevealed;
         }
 
         private void HandleCardPlayed(string message) => AddLogEntry(message);
@@ -102,6 +104,12 @@ namespace Salem.UI
             }
 
             AddLogEntry($"{player.PlayerNameText} was eliminated ({cause}).");
+        }
+
+        private void HandleDoubleWitchRevealed(Player player)
+        {
+            if (player == null) return;
+            AddLogEntry($"WARNING: {player.PlayerNameText} revealed a Witch card but has a SECOND Witch card! They survive.");
         }
 
         public static void Log(string message)

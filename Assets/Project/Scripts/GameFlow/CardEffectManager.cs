@@ -68,28 +68,53 @@ namespace Salem.GameFlow
 
             _ops = new()
                 {
-                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1, s) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.HasTownHall(TownhallName.CottonMather) ? 1 : 3, s) },
-                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7, s) },
+                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(0, s) },
                     { ActionOp.Alibi,      (s,t,_,_,_) => {
                         // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
                         if (t != null && s.HasTownHall(TownhallName.WillGrigs))
                             t.ApplyAccusation(7, s);
+                        else if (t != null)
+                            t.ApplyAlibi(3);
                         else
-                            s.ApplyAlibi(3);
+                            Debug.LogWarning("[Alibi] No target provided.");
                     }},
-                    { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
+                    { ActionOp.Stocks,     (s,t,_,_,c) => {
+                        // Stocks stays in front of the target until their turn is skipped.
+                        // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+                        // being transferred to the target's status cards, not discarded.
+                        s.HandManager.TakeCard(c);
+                        t.AddStatusCard(c);
+                        t.RecomputeStatusFromStatusCards();
+                    }},
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
                     { ActionOp.Curse,      (s,t,_,_,c) =>
                         {
-                            var removed = t.RemoveBlackCat(false);
-                            if (removed != null)
+                            // Discard one Blue status card from the target
+                            if (t.IsBlackCatHolder)
                             {
-                                DeckManager?.AddToDiscardPile(removed);
+                                var removed = t.RemoveBlackCat(true);
+                                if (removed != null)
+                                    DeckManager?.AddToDiscardPile(removed);
                             }
-                            t.AddStatusCardAndRecompute(c);
+                            else
+                            {
+                                var blueStatus = t.StatusCards.Find(sc => sc.Type == Card.CardColor.Blue);
+                                if (blueStatus != null)
+                                {
+                                    t.RemoveStatusCard(blueStatus);
+                                    t.RecomputeStatusFromStatusCards();
+                                    DeckManager?.AddToDiscardPile(blueStatus);
+                                    Debug.Log($"[Curse] Removed {blueStatus.Name} from {t.PlayerNameText}.");
+                                }
+                                else
+                                {
+                                    Debug.Log($"[Curse] {t.PlayerNameText} has no Blue cards to discard.");
+                                }
+                            }
                         }
                     },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
@@ -185,6 +210,16 @@ namespace Salem.GameFlow
                 }
             }
 
+            // Red cards: place in front of target BEFORE executing effect
+            // (so they're tracked when threshold check runs)
+            // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+            // being transferred to the target's status cards, not discarded.
+            if (card.Type == Card.CardColor.Red && target != null)
+            {
+                CurrentPlayer.HandManager.TakeCard(card);
+                target.AddStatusCard(card);
+            }
+
             if (card is ActionCardSO action)
             {
                 ExecuteActionOp(action, target);
@@ -194,8 +229,9 @@ namespace Salem.GameFlow
                 Debug.LogWarning($"[Effect] Non-action card played via effect path: {card.Name}");
             }
 
-            // Remove from hand if appropriate
-            if (card.Type == Card.CardColor.Green || card.Type == Card.CardColor.Red)
+            // Green cards: remove from hand after effect (goes to discard)
+            // Exception: Stocks stays in front of target (already handled in its op)
+            if (card.Type == Card.CardColor.Green && card is ActionCardSO greenAc && greenAc.Op != ActionOp.Stocks)
                 CurrentPlayer.HandManager.RemoveCard(card);
 
             // Raise event for CardLogManager to listen to

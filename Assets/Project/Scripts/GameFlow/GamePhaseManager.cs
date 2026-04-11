@@ -627,7 +627,7 @@ namespace Salem.GameFlow
 
         private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
         {
-            var constable = alivePlayers.FirstOrDefault(p => p.TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable));
+            var constable = alivePlayers.FirstOrDefault(p => p.IsConstable);
             if (constable == null)
                 yield break;
 
