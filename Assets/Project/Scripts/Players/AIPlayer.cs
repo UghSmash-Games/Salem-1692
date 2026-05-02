@@ -36,7 +36,7 @@ namespace Salem.Players
         [SerializeField] private Player player;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private DeckManager deckManager;
-        private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
+        //private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         #endregion
 

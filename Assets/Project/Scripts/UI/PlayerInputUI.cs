@@ -1,3 +1,4 @@
+using System.Linq;
 using Salem.Cards;
 using Salem.Deck;
 using Salem.GameFlow;
@@ -15,6 +16,10 @@ namespace Salem.UI
         [SerializeField] private Button drawCardButton;
         [SerializeField] private Button endTurnButton;
         [SerializeField] private DeckManager deckManager;
+
+        [Header("Town Hall Ability Buttons")]
+        [SerializeField] private Button drawFromDiscardButton;  // Samuel Parris
+        [SerializeField] private Button titubaAbilityButton;    // Tituba
 
         private Player player;
         private bool isLocalPlayersTurn;
@@ -42,6 +47,22 @@ namespace Salem.UI
             {
                 endTurnButton.onClick.AddListener(OnEndTurnClicked);
                 endTurnButton.interactable = false;
+            }
+
+            // Samuel Parris: draw from discard button
+            if (drawFromDiscardButton != null)
+            {
+                drawFromDiscardButton.onClick.AddListener(OnDrawFromDiscardClicked);
+                drawFromDiscardButton.interactable = false;
+                drawFromDiscardButton.gameObject.SetActive(false);
+            }
+
+            // Tituba: rearrange deck button
+            if (titubaAbilityButton != null)
+            {
+                titubaAbilityButton.onClick.AddListener(OnTitubaAbilityClicked);
+                titubaAbilityButton.interactable = false;
+                titubaAbilityButton.gameObject.SetActive(false);
             }
 
             if (GameTurnManager.Instance != null)
@@ -85,6 +106,7 @@ namespace Salem.UI
             }
 
             hasStartedPlayingThisTurn = true;
+
             if (drawCardButton != null)
             {
                 drawCardButton.interactable = false;
@@ -98,11 +120,33 @@ namespace Salem.UI
                 return;
             }
 
-            if (ac.NeedsTarget)
+             // Will Griggs: Alibi cards can be used offensively as Witness (+7 accusations on target)
+            if (ac.Op == Salem.Cards.ActionOp.Alibi && player.HasTownHall(Salem.Cards.TownhallName.WillGrigs))
+            {
+                // Offer choice: use target picker to select a target for offensive Alibi
+                // If player skips/cancels, play defensively on self
+                if (targetPicker != null)
+                {
+                    var alivePlayers = Salem.Data.PlayerService.GetAlivePlayers()
+                        .Where(p => p != player).ToList();
+                    targetPicker.Open(player, true, (primary, _) =>
+                    {
+                        if (primary != null)
+                            CardEffectManager.Instance.ExecuteCardEffect(ac, primary);
+                        else
+                            CardEffectManager.Instance.ExecuteCardEffect(ac, null);
+                    }, alivePlayers, true, "Will Griggs: Choose a target for +7 accusations, or close to use Alibi (-3 on self)");
+                }
+                else
+                {
+                    CardEffectManager.Instance.ExecuteCardEffect(ac, null);
+                }
+            }
+            else if (ac.NeedsTarget)
             {
                 bool two = ac.RequiresSecondTarget;
                 // Open the picker; exclude the acting player by default
-                targetPicker.Open(player, two, (primary, secondary) =>
+                targetPicker.OpenLegacy(player, two, (primary, secondary) =>
                 {
                     ac.target = secondary; // second target, if any
                     CardEffectManager.Instance.ExecuteCardEffect(ac, primary);
@@ -188,6 +232,59 @@ namespace Salem.UI
             }
         }
 
+         private void OnDrawFromDiscardClicked()
+        {
+            if (player == null || !isLocalPlayersTurn) return;
+
+            if (GameTurnManager.Instance != null)
+            {
+                if (GameTurnManager.Instance.TryDrawFromDiscard(player))
+                {
+                    SetTownHallButtonsInteractable(false);
+                }
+            }
+        }
+
+        private void OnTitubaAbilityClicked()
+        {
+            if (player == null || !isLocalPlayersTurn) return;
+
+            if (GameTurnManager.Instance != null)
+            {
+                if (GameTurnManager.Instance.TryUseTitubaAbility(player))
+                {
+                    SetTownHallButtonsInteractable(false);
+                }
+            }
+        }
+
+        private void SetTownHallButtonsInteractable(bool interactable)
+        {
+            if (drawFromDiscardButton != null)
+                drawFromDiscardButton.interactable = interactable;
+            if (titubaAbilityButton != null)
+                titubaAbilityButton.interactable = interactable;
+        }
+
+        private void UpdateTownHallButtons(bool isMyTurn)
+        {
+            // Samuel Parris: show draw from discard button when he has charges
+            if (drawFromDiscardButton != null)
+            {
+                bool showParris = isMyTurn && player.HasTownHall(TownhallName.SamuelParris) && player.townHallAbilityCharges > 0;
+                drawFromDiscardButton.gameObject.SetActive(showParris);
+                drawFromDiscardButton.interactable = showParris;
+            }
+
+            // Tituba: show rearrange deck button when she has charges
+            if (titubaAbilityButton != null)
+            {
+                bool showTituba = isMyTurn && player.HasTownHall(TownhallName.Tituba) && player.townHallAbilityCharges > 0;
+                titubaAbilityButton.gameObject.SetActive(showTituba);
+                titubaAbilityButton.interactable = showTituba;
+            }
+        }
+
         private void HandleTurnStarted(Player activePlayer)
         {
             if (player == null)
@@ -219,6 +316,8 @@ namespace Salem.UI
                     endTurnButton.interactable = false;
                 }
             }
+
+            UpdateTownHallButtons(isLocalPlayersTurn);
         }
 
         private void HandleTurnEnded(Player activePlayer)
@@ -258,6 +357,16 @@ namespace Salem.UI
             if (endTurnButton != null)
             {
                 endTurnButton.onClick.RemoveListener(OnEndTurnClicked);
+            }
+
+            if (drawFromDiscardButton != null)
+            {
+                drawFromDiscardButton.onClick.RemoveListener(OnDrawFromDiscardClicked);
+            }
+
+            if (titubaAbilityButton != null)
+            {
+                titubaAbilityButton.onClick.RemoveListener(OnTitubaAbilityClicked);
             }
 
             if (GameTurnManager.Instance != null)
