@@ -17,10 +17,10 @@
 
 using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
 using Salem.Cards;
 using Salem.Players;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Salem.UI
 {
@@ -31,7 +31,7 @@ namespace Salem.UI
 
         public void Open(Player target, Action<int> onIndexChosen)
         {
-            gameObject.SetActive(true);
+             gameObject.SetActive(true);
             foreach (Transform c in listParent) Destroy(c.gameObject);
             var indices = new List<int>();
             for (int i = 0; i < target.TryalCards.Count; i++)

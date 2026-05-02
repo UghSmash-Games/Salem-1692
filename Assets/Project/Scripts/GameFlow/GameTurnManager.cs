@@ -20,6 +20,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Salem.Data;
 using Salem.Deck;
 using Salem.Managers.GameState;
@@ -37,7 +38,7 @@ namespace Salem.GameFlow
         public static GameTurnManager Instance;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private UIManager UIManager;
-        [SerializeField] private float turnDuration = 30f;
+        [SerializeField] private float turnDuration = 60f;
         public Player CurrentPlayer => currentPlayer;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
         public UnityEvent OnTurnStart;
@@ -51,6 +52,7 @@ namespace Salem.GameFlow
         private bool isTurnActive = false;
         private bool waitingForHuman;
         private bool turnsStarted;
+        private int forcedStartingIndex = 0;
 
         private enum TurnActionChoice
         {
@@ -88,8 +90,9 @@ namespace Salem.GameFlow
             turnTimer -= Time.deltaTime;
             if (turnTimer <= 0f)
             {
-                Debug.Log("Turn timer expired.");
-                EndTurn();
+                //EndTurn();
+                Debug.Log($"[IdleTimer] {currentPlayer?.PlayerNameText} idle for {turnDuration}s — forcing draw two cards.");
+                ForceDrawAndEndTurn();
             }
         }
 
@@ -100,6 +103,14 @@ namespace Salem.GameFlow
             var phase = FindFirstObjectByType<GamePhaseManager>();
             if (phase != null) phase.OnPhaseChange += HandlePhaseChanged;
         }
+
+
+        public void SetStartingPlayerIndex(int index)
+        {
+            Debug.Log($"Turn Order Override: Day 1 will start with player index {index}");
+            forcedStartingIndex = index;
+        }
+
         public void StartTurn(int playerIndex)
         {
             var players = PlayerService.GetAlivePlayers();
@@ -114,11 +125,29 @@ namespace Salem.GameFlow
             currentPlayer = players[CurrentPlayerIndex];
             Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
+            // Stocks: if this player has a Stocks card, skip their turn and consume one
+            if (currentPlayer.skipTurn)
+            {
+                Debug.Log($"{currentPlayer.PlayerNameText}'s turn is skipped (Stocks).");
+                currentPlayer.ConsumeOneStocks();
+                int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
+                StartTurn(nextIndex);
+                return;
+            }
+
             isTurnActive = true;
             waitingForHuman = false;
             currentTurnAction = TurnActionChoice.None;
             TurnStarted?.Invoke(currentPlayer);
             OnTurnStart?.Invoke();
+
+            /*AIRCONSOLE DISABLED TEMP 4/28/26
+            // Notify AirConsole controllers of the current turn
+            if (PlayerService.IsAirConsoleMode && AirConsoleManager.Instance != null)
+            {
+                AirConsoleManager.Instance.SendGamePhaseToAll("Day", currentPlayer.PlayerNameText);
+            }
+            */
 
             StartCoroutine(RunTurn(currentPlayer));
         }
@@ -191,14 +220,114 @@ namespace Salem.GameFlow
                 return false;
             }
 
+             // Track hand before draw for Giles Corey check
+            int handSizeBefore = requestingPlayer.HandManager.Hand.Count;
             deckManager.DrawMultipleCards(requestingPlayer.HandManager, 2);
             currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+            // Giles Corey: if both drawn cards are Accusation cards, draw a third
+            if (requestingPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
+            {
+                var hand = requestingPlayer.HandManager.Hand;
+                int newCards = hand.Count - handSizeBefore;
+                if (newCards >= 2)
+                {
+                    var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
+                    bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
+                    if (bothAccusation)
+                    {
+                        deckManager.DrawCard(requestingPlayer.HandManager);
+                        Debug.Log($"[TownHall] Giles Corey ({requestingPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
+                    }
+                }
+            }
 
             if (requestingPlayer.IsHuman)
             {
                 waitingForHuman = false;
             }
 
+            EndTurn();
+            return true;
+        }
+
+         /// <summary>
+        /// Samuel Parris ability: draw up to 2 cards from the discard pile instead of the deck.
+        /// Counts as the player's turn action. Cannot draw Black cards.
+        /// </summary>
+        public bool TryDrawFromDiscard(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+            {
+                Debug.LogWarning("[TurnManager] Draw from discard attempted outside of turn.");
+                return false;
+            }
+
+            if (currentTurnAction != TurnActionChoice.None)
+            {
+                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot draw from discard.");
+                return false;
+            }
+
+            if (!requestingPlayer.HasTownHall(Salem.Cards.TownhallName.SamuelParris) || requestingPlayer.townHallAbilityCharges <= 0)
+            {
+                Debug.LogWarning("[TurnManager] Player does not have Samuel Parris ability or no charges left.");
+                return false;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager) return false;
+
+            // Draw up to 2, reject Black cards
+            deckManager.DrawFromDiscardPile(requestingPlayer.HandManager, 2,
+                c => c.Type == Salem.Cards.Card.CardColor.Black);
+            requestingPlayer.ConsumeTownHallCharge();
+            currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+            Debug.Log($"[TownHall] Samuel Parris ({requestingPlayer.PlayerNameText}) draws from discard pile. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+
+            if (requestingPlayer.IsHuman)
+            {
+                waitingForHuman = false;
+            }
+
+            EndTurn();
+            return true;
+        }
+
+         /// <summary>
+        /// Tituba ability: once per game, on her turn before drawing, rearrange the deck.
+        /// Current implementation: shuffles the deck. TODO: Full 60-second deck rearrangement UI.
+        /// </summary>
+        public bool TryUseTitubaAbility(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer))
+                return false;
+
+            if (currentTurnAction != TurnActionChoice.None)
+            {
+                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot use Tituba ability.");
+                return false;
+            }
+
+            if (!requestingPlayer.HasTownHall(Salem.Cards.TownhallName.Tituba) || requestingPlayer.townHallAbilityCharges <= 0)
+            {
+                Debug.LogWarning("[TurnManager] Player does not have Tituba ability or no charges left.");
+                return false;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager) return false;
+
+            // TODO: Replace with full 60-second deck rearrangement UI
+            deckManager.ShuffleDeck();
+            requestingPlayer.ConsumeTownHallCharge();
+            Debug.Log($"[TownHall] Tituba ({requestingPlayer.PlayerNameText}) rearranged the deck. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+
+            // Tituba's ability counts as the turn action — end turn
+            currentTurnAction = TurnActionChoice.DrawTwoCards; // Prevents further actions this turn
+            if (requestingPlayer.IsHuman)
+                waitingForHuman = false;
             EndTurn();
             return true;
         }
@@ -256,7 +385,33 @@ namespace Salem.GameFlow
 
         private IEnumerator RunTurn(Player current)
         {
-            UIManager.SetPlayerTurnActive(); // your existing UI cue
+            UIManager.SetPlayerTurnActive(); // existing UI cue
+
+             /*AIRCONSOLE DISABLED 4/28/26
+             bool isAirConsoleHuman = PlayerService.IsAirConsoleMode
+                && current.IsHuman
+                && !(current is AIPlayer);
+
+            if (isAirConsoleHuman)
+            {
+                // AirConsole mode: notify the player's phone controller that it's their turn
+                waitingForHuman = true;
+                if (AirConsoleManager.Instance != null)
+                {
+                    AirConsoleManager.Instance.SendTurnNotify(current, true);
+                    AirConsoleManager.Instance.SendHandUpdate(current);
+                }
+
+                yield return new WaitUntil(() => waitingForHuman == false);
+
+                // Notify controller that turn ended
+                if (AirConsoleManager.Instance != null)
+                {
+                    AirConsoleManager.Instance.SendTurnNotify(current, false);
+                }
+                yield break;
+            }
+            else if  then code below*/
 
             if (current.IsHuman && current.IsLocalPlayer)
             {
@@ -298,6 +453,43 @@ namespace Salem.GameFlow
             }
         }
 
+         /// <summary>
+        /// Called when the idle timer expires. Forces the current player to draw
+        /// two cards (applying Giles Corey if applicable) and ends their turn.
+        /// </summary>
+        private void ForceDrawAndEndTurn()
+        {
+            if (!isTurnActive || currentPlayer == null) return;
+
+            EnsureDeckManager();
+            if (deckManager != null)
+            {
+                int handSizeBefore = currentPlayer.HandManager.Hand.Count;
+                deckManager.DrawMultipleCards(currentPlayer.HandManager, 2);
+                currentTurnAction = TurnActionChoice.DrawTwoCards;
+
+                // Giles Corey: if both drawn cards are Accusation cards, draw a third
+                if (currentPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
+                {
+                    var hand = currentPlayer.HandManager.Hand;
+                    int newCards = hand.Count - handSizeBefore;
+                    if (newCards >= 2)
+                    {
+                        var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
+                        bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
+                        if (bothAccusation)
+                        {
+                            deckManager.DrawCard(currentPlayer.HandManager);
+                            Debug.Log($"[TownHall] Giles Corey ({currentPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
+                        }
+                    }
+                }
+            }
+
+            waitingForHuman = false;
+            EndTurn();
+        }
+
         private void HandlePhaseChanged(GamePhase phase)
         {
             if (phase == GamePhase.Day)
@@ -305,7 +497,7 @@ namespace Salem.GameFlow
                 if (!turnsStarted)
                 {
                     turnsStarted = true;
-                    StartTurn(0); // first ever turn, AFTER Setup+Dawn finished
+                    StartTurn(forcedStartingIndex); // first ever turn, AFTER Setup+Dawn finished
                 }
                 else
                 {

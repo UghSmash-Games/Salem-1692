@@ -6,11 +6,11 @@
 * FIXME: [Known bugs or issues]
 */
 
-using UnityEngine;
-using System.Collections.Generic;
-using Salem.Players;
-using Salem.GameFlow;
 using System;
+using System.Collections.Generic;
+using Salem.GameFlow;
+using Salem.Players;
+using UnityEngine;
 
 namespace Salem.Data
 {
@@ -30,6 +30,12 @@ namespace Salem.Data
         private static readonly List<Player> allPlayers = new();
         public static IReadOnlyList<Player> All => allPlayers;
 
+        /// <summary>
+        /// When true, player input comes from AirConsole phone controllers
+        /// instead of local UI clicks. Set by AirConsoleManager on init.
+        /// </summary>
+        //public static bool IsAirConsoleMode { get; set; } AIRCONSOLE TEMP DISABLED 4/28/26
+
         public static event Action<Player, EliminationCause> OnPlayerEliminated;
 
         public static void Register(Player player)
@@ -37,6 +43,14 @@ namespace Salem.Data
             if (!allPlayers.Contains(player))
             {
                 allPlayers.Add(player);
+                
+                /*AIRCONSOLE TEMP DISABLED 4/28/26
+                // In AirConsole mode, no player is "local" — input comes from phones
+                if (!IsAirConsoleMode && !player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
+                {
+                    player.IsLocalPlayer = true;
+                }
+                */
 
                 // Set first non-AI as local player automatically
                 if (!player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
@@ -50,6 +64,7 @@ namespace Salem.Data
         public static void Clear()
         {
             allPlayers.Clear();
+            //IsAirConsoleMode = false; AIRCONSOLE TEMP DISABLED 4/28/26
         }
 
         public static Player GetLocalPlayer()
@@ -83,10 +98,25 @@ namespace Salem.Data
 
             player.IsEliminated = true;
 
-            OnPlayerEliminated?.Invoke(player, cause);
+            // Discard hand + status cards (or transfer to John Proctor holder)
+            player.OnElimination();
 
-            // Trigger endgame evaluation in one place if you like,
-            // or have GameManager subscribe to OnPlayerEliminated.
+            // Matchmaker cascade: if eliminated player has Matchmaker bond, eliminate partner too
+            if (player.MatchedPlayer != null &&
+                player.HasStatus("Matchmaker") &&
+                player.MatchedPlayer.HasStatus("Matchmaker") &&
+                !player.MatchedPlayer.IsEliminated)
+            {
+                var partner = player.MatchedPlayer;
+                player.ClearMatch();
+                partner.ClearMatch();
+                partner.EliminateNow();
+            }
+
+            // Re-index turn order after removal
+            GameTurnManager.Instance?.OnPlayerEliminated(player);
+
+            OnPlayerEliminated?.Invoke(player, cause);
             GameManager.Instance?.EvaluateEndGame();
         }
     }

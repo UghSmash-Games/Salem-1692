@@ -16,10 +16,10 @@
 */
 using System.Collections;
 using System.Linq;
-using UnityEngine;
 using Salem.Data;
 using Salem.Players;
 using Salem.UI;
+using UnityEngine;
 
 namespace Salem.GameFlow
 {
@@ -40,7 +40,7 @@ namespace Salem.GameFlow
             // UI: pick someone (not self)
             if (accuser.IsLocalPlayer)
             {
-                targetPicker.Open(accuser, false, (target, _) => StartCoroutine(VoteRoutine(target)));
+                targetPicker.OpenLegacy(accuser, false, (target, _) => StartCoroutine(VoteRoutine(target)));
             }
             else
             {

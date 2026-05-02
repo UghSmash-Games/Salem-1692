@@ -43,12 +43,15 @@ namespace Salem.GameFlow
         [SerializeField] private float PhaseChangeDelay = 0.5f;
         [SerializeField] private DeckManager DeckManager;
         [SerializeField] private TargetPickerUI nightTargetPicker;
+        [SerializeField] private TryalPickerUI tryalPicker;
         [SerializeField] private float aiDecisionDelay = 0.25f;
         [SerializeField] private bool witchesCanTargetWitches = false;
         [SerializeField] private bool constableCanSelfProtect = false;
         [SerializeField] private string constablePrompt = "Choose a player to protect";
         [SerializeField] private string witchPrompt = "Choose a player to eliminate";
         [SerializeField] private string dawnBlackCatPrompt = "Witches choose who receives the Black Cat";
+        [SerializeField] private float confessionAiChance = 0.15f;
+        [SerializeField] private string confessionPrompt = "Confess? Reveal a Tryal to protect yourself.";
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
@@ -58,6 +61,7 @@ namespace Salem.GameFlow
         private GameSetup GameSetup;
         private GameTurnManager GameTurnManager;
         private Coroutine activeNightSequence;
+        private Card heldNightCard;
         #endregion
 
         #region Standard Functions
@@ -135,12 +139,23 @@ namespace Salem.GameFlow
             */
         }
 
-        public void HandleNightCardDrawn()
+        public void HandleNightCardDrawn(Card nightCard)
         {
+            heldNightCard = nightCard;
             if (!BeginNightSequence())
             {
                 ResolveNightImmediately();
             }
+        }
+
+        public void HandleConspiracyCardDrawn(Player drawer)
+        {
+            if (!isActiveAndEnabled)
+            {
+                Debug.LogWarning("[GamePhaseManager] Conspiracy triggered while manager disabled.");
+                return;
+            }
+            StartCoroutine(ConspiracyRoutine(drawer));
         }
 
         public void StartNightPhase()
@@ -208,10 +223,18 @@ namespace Salem.GameFlow
 
         private void StartSetupPhase()
         {
-            GameSetup.SetupNewGame(PlayerService.All, PlayerService.All.Count);
-            GameTurnManager.Initialize();
+            //GameSetup.SetupNewGame(PlayerService.All, PlayerService.All.Count);
+            //GameTurnManager.Initialize();
             // Transition to Dawn phase
-            StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
+            //StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
+            StartCoroutine(SetupRoutine());
+        }
+
+         private IEnumerator SetupRoutine()
+        {
+            yield return GameSetup.SetupNewGame(PlayerService.All);
+            GameTurnManager.Initialize();
+            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
         }
 
         private void StartDawnPhase()
@@ -222,8 +245,201 @@ namespace Salem.GameFlow
 
         private IEnumerator DawnPhaseRoutine()
         {
-            yield return ExecuteDawnBlackCatChoice();
-            yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
+            Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
+
+            var witches = PlayerService.GetAliveWitches();
+            var allPlayers = PlayerService.GetAlivePlayers();
+            var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+
+            // Retrieve the Black Cat card held during setup
+            var blackCatCard = DeckManager != null ? DeckManager.GetHeldBlackCat() : null;
+
+            if (witches.Count == 0 || allPlayers.Count == 0)
+            {
+                // No witches or no players — assign randomly if we have a card
+                if (blackCatCard != null && allPlayers.Count > 0)
+                {
+                    var fallback = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                    ResolveBlackCatAssignment(fallback, blackCatCard);
+                }
+                yield return ChangePhase(GamePhase.Day, 2.0f);
+                yield break;
+            }
+
+            // Collect a vote from each witch
+            var votes = new Dictionary<Player, Player>();
+
+            foreach (var witch in witches)
+            {
+                if (witch.IsLocalPlayer && witch.IsHuman) // && !PlayerService.IsAirConsoleMode) AIRCONSOLE TEMP DISABLED 4/28/26
+                {
+                    // Human witch: show UI
+                    if (nightTargetPicker != null)
+                    {
+                        bool done = false;
+                        nightTargetPicker.Open(
+                            source: witch,
+                            isAttack: false,
+                            onConfirm: (target, _) =>
+                            {
+                                votes[witch] = target;
+                                done = true;
+                            },
+                            validTargets: allPlayers,
+                            isSingleTarget: true,
+                            promptOverride: "Vote: Who receives the Black Cat?"
+                        );
+                        yield return new WaitUntil(() => done);
+                    }
+                    else
+                    {
+                        votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                    }
+                }
+                else
+                {
+                    // AI witch: pick randomly
+                    yield return new WaitForSeconds(aiDecisionDelay);
+                    votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
+                }
+            }
+
+            // Tally votes — majority wins, random tiebreak
+            var tally = votes.Values
+                .GroupBy(p => p)
+                .OrderByDescending(g => g.Count())
+                .ToList();
+
+            Player winner;
+            int topCount = tally[0].Count();
+            var tied = tally.Where(g => g.Count() == topCount).Select(g => g.Key).ToList();
+            winner = tied.Count > 1 ? tied[rng.NextInt(0, tied.Count)] : tied[0];
+
+            Debug.Log($"Witch vote result: {winner.PlayerNameText} receives the Black Cat ({votes.Count} votes cast).");
+
+            // Assign the Black Cat
+            if (blackCatCard != null)
+            {
+                ResolveBlackCatAssignment(winner, blackCatCard);
+            }
+            else
+            {
+                Debug.LogWarning("[GamePhaseManager] No Black Cat card available for Dawn assignment.");
+                // Still set turn order based on the voted player
+                SetTurnOrderFromPlayer(winner);
+            }
+
+            // Close picker UI
+            if (nightTargetPicker != null)
+                nightTargetPicker.gameObject.SetActive(false);
+
+            // Transition to Day
+            yield return ChangePhase(GamePhase.Day, 2.0f);
+        }
+
+         private void ResolveBlackCatAssignment(Player target, Card blackCatCard)
+        {
+            if (target == null || blackCatCard == null) return;
+
+            target.AssignBlackCat(blackCatCard);
+            Debug.Log($"The Black Cat has been assigned to {target.PlayerNameText}.");
+            SetTurnOrderFromPlayer(target);
+        }
+
+        private void SetTurnOrderFromPlayer(Player target)
+        {
+            if (GameTurnManager.Instance != null && target != null)
+            {
+                var alivePlayers = PlayerService.GetAlivePlayers();
+                int targetIndex = alivePlayers.IndexOf(target);
+                GameTurnManager.Instance.SetStartingPlayerIndex(targetIndex);
+            }
+        }
+
+         private IEnumerator ConspiracyRoutine(Player drawer)
+        {
+            Debug.Log("[Conspiracy] Conspiracy card drawn. Resolving...");
+            var alivePlayers = PlayerService.GetAlivePlayers();
+            var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+
+            // Step 1: Drawer chooses a Tryal to reveal on the Black Cat holder
+            var blackCatHolder = alivePlayers.Find(p => p.IsBlackCatHolder);
+            if (blackCatHolder != null)
+            {
+                var unrevealed = new List<int>();
+                for (int i = 0; i < blackCatHolder.TryalCards.Count; i++)
+                    if (!blackCatHolder.TryalCards[i].IsRevealed) unrevealed.Add(i);
+
+                if (unrevealed.Count > 0)
+                {
+                    if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tryalPicker != null)
+                    {
+                        bool done = false;
+                        tryalPicker.Open(blackCatHolder, idx =>
+                        {
+                            blackCatHolder.RevealTryalCard(idx);
+                            done = true;
+                        });
+                        yield return new WaitUntil(() => done);
+                    }
+                    else
+                    {
+                        yield return new WaitForSeconds(aiDecisionDelay);
+                        int pick = unrevealed[rng.NextInt(0, unrevealed.Count)];
+                        blackCatHolder.RevealTryalCard(pick);
+                    }
+                }
+            }
+            else
+            {
+                Debug.Log("[Conspiracy] No Black Cat in play — skipping Tryal reveal step.");
+            }
+
+            // Step 2: Clockwise Tryal pass — each player takes one unrevealed Tryal from the player to their left
+            if (alivePlayers.Count >= 2)
+            {
+                // Build the pass: each player takes from the player to their left (previous index, wrapping)
+                var passedCards = new TryalCard[alivePlayers.Count];
+                for (int i = 0; i < alivePlayers.Count; i++)
+                {
+                    int leftIdx = (i - 1 + alivePlayers.Count) % alivePlayers.Count;
+                    var leftPlayer = alivePlayers[leftIdx];
+                    int? tryalIdx = leftPlayer.GetRandomUnrevealedTryalIndex(rng);
+                    if (tryalIdx.HasValue)
+                        passedCards[i] = leftPlayer.RemoveTryalAt(tryalIdx.Value);
+                }
+
+                // Distribute received cards
+                for (int i = 0; i < alivePlayers.Count; i++)
+                {
+                    if (passedCards[i] != null)
+                    {
+                        Debug.Log($"[Conspiracy] {alivePlayers[i].PlayerNameText} received a {passedCards[i].TryalCardType} from their left (private).");
+                        alivePlayers[i].AddTryalCardAndNotify(passedCards[i]);
+                    }
+                }
+            }
+
+            // Step 3: Rearrange face-down Tryals (auto-shuffle for now)
+            foreach (var player in alivePlayers)
+            {
+                // Shuffle unrevealed Tryal positions
+                var unrevealed = new List<int>();
+                for (int i = 0; i < player.TryalCards.Count; i++)
+                    if (!player.TryalCards[i].IsRevealed) unrevealed.Add(i);
+
+                // Fisher-Yates on unrevealed positions
+                for (int i = unrevealed.Count - 1; i > 0; i--)
+                {
+                    int j = rng.NextInt(0, i + 1);
+                    var temp = player.TryalCards[unrevealed[i]];
+                    player.TryalCards[unrevealed[i]] = player.TryalCards[unrevealed[j]];
+                    player.TryalCards[unrevealed[j]] = temp;
+                }
+                player.InvokeOnTryalCardsChanged();
+            }
+
+            Debug.Log("[Conspiracy] Conspiracy resolved. Resuming Day phase.");
         }
 
         private IEnumerator EnterNight()
@@ -263,6 +479,13 @@ namespace Salem.GameFlow
             }
 
             NightResolver.Resolve(rng, null, witchesCanTargetWitches);
+
+            if (heldNightCard != null && DeckManager != null)
+            {
+                DeckManager.ReshuffleDeckWithDiscard(heldNightCard);
+                heldNightCard = null;
+            }
+
             GameManager.Instance.EvaluateEndGame();
         }
 
@@ -270,6 +493,16 @@ namespace Salem.GameFlow
         {
             yield return ChangePhase(GamePhase.Night, PhaseChangeDelay);
             yield return NightPhaseRoutine();
+
+            // Post-night deck reshuffle: merge discard into deck, shuffle, place Night card in bottom half
+            if (heldNightCard != null && DeckManager != null)
+            {
+                DeckManager.ReshuffleDeckWithDiscard(heldNightCard);
+                Debug.Log("[GamePhaseManager] Post-night deck reshuffle complete. Night card placed in bottom half.");
+                heldNightCard = null;
+            }
+
+            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay); //Remove? We shouldnt hit Dawn Again. Dawn = Setup
 
             yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
 
@@ -289,90 +522,118 @@ namespace Salem.GameFlow
             var alivePlayers = PlayerService.GetAlivePlayers();
             var localPlayer = PlayerService.GetLocalPlayer();
 
-            yield return ExecuteConstableChoice(alivePlayers, localPlayer, plan, rng);
+            // Rules order: witches vote, then constable protects, then confession round
             yield return ExecuteLocalWitchChoice(alivePlayers, localPlayer, plan, rng);
+            yield return ExecuteConstableChoice(alivePlayers, localPlayer, plan, rng);
+            yield return ExecuteConfessionRound(alivePlayers, localPlayer, plan, rng);
 
             NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
             GameManager.Instance.EvaluateEndGame();
         }
 
-        private IEnumerator ExecuteDawnBlackCatChoice()
+        private IEnumerator ExecuteConfessionRound(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
         {
-            var rng = GameManager.Instance?.Rng;
-            if (rng == null)
-            {
-                Debug.LogWarning("[GamePhaseManager] Dawn Black Cat assignment skipped: missing RNG instance.");
-                yield break;
-            }
+            Debug.Log("[GamePhaseManager] Confession round begins.");
 
-            var alivePlayers = PlayerService.GetAlivePlayers();
-            if (alivePlayers.Count == 0)
+            foreach (var player in alivePlayers)
             {
-                yield break;
-            }
+                if (player.IsEliminated) continue;
 
-            var witches = alivePlayers.Where(p => p.IsWitch).ToList();
-            var currentHolder = PlayerService.All.FirstOrDefault(p => p.IsBlackCatHolder);
-            Card blackCatCard = null;
+                // Check if this player has any unrevealed Tryals to confess
+                bool hasUnrevealed = player.TryalCards.Any(c => !c.IsRevealed);
+                if (!hasUnrevealed) continue;
 
-            if (currentHolder != null)
-            {
-                blackCatCard = currentHolder.RemoveBlackCat(false);
-                currentHolder.RecomputeStatusFromStatusCards();
-            }
-
-            if (blackCatCard == null)
-            {
-                if (DeckManager == null)
+                if (player == localPlayer && player.IsHuman && tryalPicker != null)
                 {
-                    Debug.LogWarning("[GamePhaseManager] Cannot assign Black Cat during Dawn without a DeckManager reference.");
-                    yield break;
+                    // Human local player: open TryalPickerUI on themselves
+                    bool done = false;
+                    bool confessed = false;
+
+                    // William Phipps: can fake confess without revealing a Tryal
+                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
+
+                    // Show tryal picker — player can choose a Tryal to reveal (confess)
+                    // or we need a skip mechanism. Use nightTargetPicker as a Yes/No prompt first.
+                    string prompt = canFakeConfess
+                        ? confessionPrompt + " (William Phipps: you may fake confess without revealing a Tryal)"
+                        : confessionPrompt;
+
+                    if (nightTargetPicker != null)
+                    {
+                        Player chosen = null;
+                        nightTargetPicker.Open(player, false, (primary, _) =>
+                        {
+                            chosen = primary;
+                            done = true;
+                        }, new List<Player> { player }, true, prompt);
+
+                        yield return new WaitUntil(() => done || nightTargetPicker == null || !nightTargetPicker.gameObject.activeSelf);
+
+                        if (done && chosen != null)
+                        {
+                            if (canFakeConfess)
+                            {
+                                // William Phipps: fake confess — no Tryal reveal, just mark as confessor
+                                player.ConsumeTownHallCharge();
+                                confessed = true;
+                                Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) used fake confession ability.");
+                            }
+                            else
+                            {
+                                // Normal confession: pick which Tryal to reveal
+                                bool tryalChosen = false;
+                                tryalPicker.Open(player, idx =>
+                                {
+                                    player.RevealTryalCard(idx);
+                                    confessed = true;
+                                    tryalChosen = true;
+                                });
+                                yield return new WaitUntil(() => tryalChosen);
+                            }
+                        }
+                    }
+
+                    if (confessed)
+                    {
+                        plan.Confessors.Add(player);
+                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} confessed (revealed a Tryal).");
+                    }
                 }
-
-                blackCatCard = DeckManager.ExtractCardFromDeck("Black Cat");
-                if (blackCatCard == null)
+                else
                 {
-                    Debug.LogWarning("[GamePhaseManager] No Black Cat card found for Dawn assignment.");
-                    yield break;
-                }
-            }
-
-            Player chosen = null;
-            var localWitch = witches.FirstOrDefault(w => w.IsLocalPlayer && w.IsHuman);
-            if (localWitch != null && nightTargetPicker != null)
-            {
-                bool done = false;
-                var picker = nightTargetPicker;
-                picker.Open(localWitch, false, (primary, _) =>
-                {
-                    chosen = primary;
-                    done = true;
-                }, alivePlayers, true, dawnBlackCatPrompt);
-
-                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
-            }
-
-            if (chosen == null)
-            {
-                if (localWitch != null && nightTargetPicker == null)
-                {
-                    Debug.LogWarning("[GamePhaseManager] Dawn target picker not assigned; Black Cat assignment defaulting to random.");
-                }
-
-                if (witches.Count > 0)
-                {
+                    // AI or non-local: small chance to confess if they have a safe Tryal to reveal
                     yield return new WaitForSeconds(aiDecisionDelay);
-                }
 
-                chosen = alivePlayers[rng.NextInt(0, alivePlayers.Count)];
+                    // William Phipps AI: use fake confession to protect Witch tryals
+                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
+                    if (canFakeConfess && player.IsWitch && rng.NextInt(0, 100) < 50)
+                    {
+                        player.ConsumeTownHallCharge();
+                        plan.Confessors.Add(player);
+                        Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) (AI) used fake confession.");
+                        continue;
+                    }
+
+                    bool hasNonWitchToReveal = player.TryalCards.Any(c =>
+                        !c.IsRevealed && c.TryalCardType != TryalCardType.Witch);
+
+                    if (hasNonWitchToReveal && rng.NextInt(0, 100) < (int)(confessionAiChance * 100))
+                    {
+                        if (player.TryConfessToSurvive())
+                        {
+                            plan.Confessors.Add(player);
+                            Debug.Log($"[GamePhaseManager] {player.PlayerNameText} (AI) confessed.");
+                        }
+                    }
+                }
             }
 
-            chosen.AssignBlackCat(blackCatCard);
+            Debug.Log("[GamePhaseManager] Confession round ends.");
         }
-        
+
         private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
         {
-            var constable = alivePlayers.FirstOrDefault(p => p.TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable));
+            var constable = alivePlayers.FirstOrDefault(p => p.IsConstable);
             if (constable == null)
                 yield break;
 
