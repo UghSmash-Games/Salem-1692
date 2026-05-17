@@ -40,10 +40,14 @@ namespace Salem.UI
 
         private void Awake()
         {
-            if (rootPanel != null) rootPanel.SetActive(false);
+            if (rootPanel != null)
+                rootPanel.SetActive(false);
 
-            backToMainMenuButton.onClick.AddListener(BackToMainMenu);
-            quitButton.onClick.AddListener(QuitGame);
+            if (backToMainMenuButton != null)
+                backToMainMenuButton.onClick.AddListener(BackToMainMenu);
+
+            if (quitButton != null)
+                quitButton.onClick.AddListener(QuitGame);
         }
 
         private void OnEnable()
@@ -68,6 +72,15 @@ namespace Salem.UI
                 GameManager.Instance.OnGameEnded -= HandleGameEnded;
             }
             initialized = false;
+        }
+
+        private void OnDestroy()
+        {
+            if (backToMainMenuButton != null)
+                backToMainMenuButton.onClick.RemoveListener(BackToMainMenu);
+
+            if (quitButton != null)
+                quitButton.onClick.RemoveListener(QuitGame);
         }
 
         private void HandleGameEnded(EndGameResult result)
@@ -97,12 +110,17 @@ namespace Salem.UI
             // Populate winners
             foreach (var p in result.Winners)
             {
-                var go = Instantiate(winnerEntryPrefab, winnersContainer);
-                var entry = go.GetComponent<WinningPlayerEntryUI>();
-                if (entry != null)
+                GameObject entryObj = Instantiate(winnerEntryPrefab, winnersContainer);
+
+                WinningPlayerEntryUI entryUI = entryObj.GetComponent<WinningPlayerEntryUI>();
+
+                if (entryUI == null)
                 {
-                    entry.Bind(p);
+                    Debug.LogError("[EndGameUIController] Winner entry prefab is missing WinningPlayerEntryUI.");
+                    return;
                 }
+
+                entryUI.Bind(p);
             }
 
             // Optional: also show result.Reason somewhere if you want

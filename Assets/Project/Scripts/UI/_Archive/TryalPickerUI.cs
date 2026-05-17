@@ -26,12 +26,18 @@ namespace Salem.UI
 {
     public class TryalPickerUI : MonoBehaviour
     {
+        [SerializeField] private GameObject holder;
         [SerializeField] private Transform listParent;
         [SerializeField] private GameObject buttonPrefab;
 
+        void Awake()
+        {
+            holder.SetActive(false);
+        }
+
         public void Open(Player target, Action<int> onIndexChosen)
         {
-             gameObject.SetActive(true);
+             holder.SetActive(true);
             foreach (Transform c in listParent) Destroy(c.gameObject);
             var indices = new List<int>();
             for (int i = 0; i < target.TryalCards.Count; i++)
@@ -42,7 +48,7 @@ namespace Salem.UI
                 var b = Instantiate(buttonPrefab, listParent).GetComponent<Button>();
                 b.GetComponentInChildren<TMPro.TMP_Text>().text = $"Reveal Tryal {idx+1}";
                 int captured = idx;
-                b.onClick.AddListener(() => { onIndexChosen?.Invoke(captured); gameObject.SetActive(false); });
+                b.onClick.AddListener(() => { onIndexChosen?.Invoke(captured); holder.SetActive(false); });
             }
         }
     }

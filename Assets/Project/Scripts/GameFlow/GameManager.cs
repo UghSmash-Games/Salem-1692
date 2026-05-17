@@ -19,7 +19,6 @@
  * FIXME: [Known bugs or issues]
 */
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Salem.Cards;
 using Salem.Data;
@@ -50,7 +49,6 @@ namespace Salem.GameFlow
 
 
         private bool isGameActive;
-        private bool endGameHandlersRegistered;
         private bool gameAlreadyEnded = false;
         #endregion
 
@@ -74,8 +72,6 @@ namespace Salem.GameFlow
                 Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
             }
             */
-            //Temp Disable for testing new UI Layout controller 2/16/26
-            //UIManager.BindAllPlayerStatusUI();
             UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
 
             /*AIR CONSOLE DISABLED 4/28/26
@@ -138,7 +134,7 @@ namespace Salem.GameFlow
         {
             Seed = seed ?? (useFixedSeed ? fixedSeed : (ulong)System.DateTime.UtcNow.Ticks);
             Rng  = new XorShiftRng(Seed);
-            Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
+            //Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
         }
 
         // Optional for replays/debug:
@@ -177,41 +173,6 @@ namespace Salem.GameFlow
             }
         }
 
-        /*private void RestartGame()
-        {
-            Debug.Log("Restarting Game...");
-            if (endGameHandlersRegistered)
-            {
-                EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
-                EndGameUI.OnQuit -= QuitGame;
-                endGameHandlersRegistered = false;
-            }
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
-        }
-
-        private void QuitGame()
-        {
-            Debug.Log("Quitting Game...");
-            if (endGameHandlersRegistered)
-            {
-                EndGameUI.OnRestart -= RestartGame;
-                EndGameUI.OnQuit -= QuitGame;
-                endGameHandlersRegistered = false;
-            }
-            Application.Quit();
-        }
-
-        private static string FormatVictoryMessage(string faction, IReadOnlyCollection<Player> winners)
-        {
-            if (winners == null || winners.Count == 0)
-            {
-                return $"{faction} Win!";
-            }
-
-            string survivorList = string.Join(", ", winners.Select(p => p.PlayerNameText));
-            return $"{faction} Win!\nSurvivors: {survivorList}";
-        }*/
-
         private void RaiseGameEnded(EndGameResult result)
         {
             if (gameAlreadyEnded) return;
@@ -233,5 +194,20 @@ namespace Salem.GameFlow
             EvaluateEndGame();
         }
         #endregion
+
+        //TEMP FOR TESTING 5/16/26
+        [ContextMenu("TEST End Game - Villagers Win")]
+        private void TestVillagersWin()
+        {
+            var winners = PlayerService.GetAlivePlayers()
+                .Where(p => !p.IsWitch)
+                .ToList();
+
+            RaiseGameEnded(new EndGameResult(
+                Team.Villagers,
+                winners,
+                "Test villagers win"
+            ));
+        }
     }
 }

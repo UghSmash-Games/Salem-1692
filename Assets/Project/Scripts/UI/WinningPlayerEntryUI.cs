@@ -1,34 +1,28 @@
-/*
-* AUTHOR: Ron Bresett
-* REFERENCES:
-* NOTES:
-* TODO: [Planned improvements]
-* FIXME: [Known bugs or issues]
-*/
-
-using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 using Salem.Players;
+using TMPro;
+using UnityEngine;
 
 namespace Salem.UI
 {
     public class WinningPlayerEntryUI : MonoBehaviour
     {
-        [SerializeField] private Image iconImage;
-        [SerializeField] private TMP_Text nameText;
+        [SerializeField] private TMP_Text playerNameText;
 
         public void Bind(Player player)
         {
-            nameText.text = player.PlayerNameText;
-
-            
-            var icon = player.townHallCardIcon; 
-            if (iconImage != null)
+            if (playerNameText == null)
             {
-                iconImage.sprite = icon;
-                iconImage.enabled = icon != null;
+                Debug.LogError("[WinningPlayerEntryUI] Missing playerNameText reference.");
+                return;
             }
+
+            if (player == null)
+            {
+                playerNameText.text = "Unknown Player";
+                return;
+            }
+
+            playerNameText.text = player.PlayerNameText;
         }
     }
 }

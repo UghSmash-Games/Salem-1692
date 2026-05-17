@@ -28,6 +28,7 @@ namespace Salem.UI
 {
     public class TargetPickerUI : MonoBehaviour
     {
+        [SerializeField] private GameObject holder;
         [SerializeField] private Transform listParent;
         [SerializeField] private GameObject buttonPrefab;
         [SerializeField] private Button confirmButton;
@@ -52,6 +53,11 @@ namespace Salem.UI
         private List<Player> candidateOverride;
         private bool useOverride;
 
+        void Awake()
+        {
+            holder.SetActive(false);
+        }
+
         // -----------------------------------------------------------------------------------
         // OPEN METHOD (Supports Black Cat & Night Actions)
         // -----------------------------------------------------------------------------------
@@ -68,7 +74,7 @@ namespace Salem.UI
             this.requireTwo = !isSingleTarget; 
 
             isOpen = true;
-            gameObject.SetActive(true);
+            holder.SetActive(true);
 
             // Reset Selection
             primary = null;
@@ -115,7 +121,7 @@ namespace Salem.UI
             this.useOverride = this.candidateOverride != null && this.candidateOverride.Any();
 
             isOpen = true;
-            gameObject.SetActive(true);
+            holder.SetActive(true);
             
             primary = null;
             secondary = null;
@@ -206,7 +212,7 @@ namespace Salem.UI
             }
 
             Cleanup();
-            gameObject.SetActive(false);
+            holder.SetActive(false);
         }
 
         private void OnDisable() => Cleanup();

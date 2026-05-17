@@ -283,8 +283,8 @@ namespace Salem.Deck
         public void DiscardTownhallCard(TownHallCard card)
         {
             // Town Hall cards are one-time use; just discard (no reshuffle needed)
-            if (card != null)
-                Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
+            if (card != null) return;
+                //Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
         }
 
         public void ShuffleDeck()

@@ -48,9 +48,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   useFixedSeed: 1
-  fixedSeed: 123456789
-  EndGameUI: {fileID: 0}
+  fixedSeed: 2
   UIManager: {fileID: 0}
+  pauseOnGameEnd: 1
 --- !u!114 &888482270252131910
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -65,6 +65,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   PhaseChangeDelay: 0.5
   DeckManager: {fileID: 0}
+  aiDecisionDelay: 0.25
+  witchesCanTargetWitches: 0
+  constableCanSelfProtect: 0
+  constablePrompt: Choose a player to protect
+  witchPrompt: Choose a player to eliminate
+  dawnBlackCatPrompt: Witches choose who receives the Black Cat
+  confessionAiChance: 0.15
+  confessionPrompt: Confess? Reveal a Tryal to protect yourself.
+  tableLayoutController: {fileID: 0}
+  confessionChoiceUI: {fileID: 0}
   DebugAdvancePhaseKey: 112
 --- !u!114 &10584536985301213
 MonoBehaviour:
@@ -78,16 +88,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f403e664fea4d94c803d4805d616010, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GameManager: {fileID: 0}
+  GameManager: {fileID: 453637763892266643}
   UIManager: {fileID: 0}
+  TableLayoutController: {fileID: 0}
   turnDuration: 30
+  endTurnButtonUI: {fileID: 0}
+  drawFromDiscardButtonUI: {fileID: 0}
+  debugTurnAdvanceKey: 110
   OnTurnStart:
     m_PersistentCalls:
       m_Calls: []
   OnPhaseTransition:
     m_PersistentCalls:
       m_Calls: []
-  debugTurnAdvanceKey: 110
 --- !u!114 &3676762132175056136
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -100,9 +113,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 50927294217a9154bb47b92eb13a5002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GameManager: {fileID: 0}
+  GameManager: {fileID: 453637763892266643}
+  tableLayoutController: {fileID: 0}
   TryalCards:
   - {fileID: 11400000, guid: ad865bcd6243810478a888739223829a, type: 2}
   - {fileID: 11400000, guid: c8009f4c9b5a6f446bb1cbf6dfb88e4e, type: 2}
   - {fileID: 11400000, guid: cb372f1797ef6ed4b8d595f454f96848, type: 2}
-  witchRatio: 0.33333334
+  townHallChoiceUI: {fileID: 0}

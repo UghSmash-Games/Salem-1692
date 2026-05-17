@@ -19,6 +19,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using Salem.Cards;
+using Salem.Players;
+using UnityEngine.EventSystems;
+using System;
 
 namespace Salem.UI
 {
@@ -26,17 +29,38 @@ namespace Salem.UI
     {
         #region Vars
         [SerializeField] private Image CardImage;
-        public Card Card => card;
+        [SerializeField] private Button cardButton;
+        public Card Card => boundCard;
+
+        public event Action<Card, Player> OnCardClicked;
         
-        private Card card;
+        private Card boundCard;
         private bool faceUp;
+        private Player owner;
         #endregion
 
-        #region Accessor Functions
-        public void SetCard(Card c, bool isFaceUp)
+        private void Awake()
         {
-            card = c;
+            if (cardButton == null)
+                cardButton = GetComponent<Button>();
+
+            cardButton.onClick.AddListener(HandleClicked);
+        }
+
+        private void OnDestroy()
+        {
+            cardButton.onClick.RemoveListener(HandleClicked);
+        }
+
+        #region Accessor Functions
+        public void SetCard(Card c, bool isFaceUp, Player playerOwner)
+        {
+            boundCard = c;
             faceUp = isFaceUp;
+            owner = playerOwner;
+
+            Debug.Log($"[GameCardUI] SetCard: {boundCard?.Name} | Owner: {owner?.PlayerNameText}");
+
             Refresh();
         }
 
@@ -47,17 +71,27 @@ namespace Salem.UI
         }
         #endregion
 
+        private void HandleClicked()
+        {
+            Debug.Log($"[GameCardUI] Clicked card: {gameObject.name}");
+
+            if (boundCard == null || owner == null)
+                return;
+
+            OnCardClicked?.Invoke(boundCard, owner);
+        }
+
         private void Refresh()
         {
-            if (card == null || CardImage == null) return;
+            if (boundCard == null || CardImage == null) return;
 
             // Front for face-up, back for face-down
-            var sprite = faceUp ? card.RevealedCardImage : card.HiddenCardImage;
+            var sprite = faceUp ? boundCard.RevealedCardImage : boundCard.HiddenCardImage;
             CardImage.sprite = sprite;
 
             // Optional: fallback if a sprite is missing
             if (CardImage.sprite == null)
-                Debug.LogWarning($"[GameCardUI] {card?.Name} missing {(faceUp ? "Revealed" : "Hidden")} sprite.");
+                Debug.LogWarning($"[GameCardUI] {boundCard?.Name} missing {(faceUp ? "Revealed" : "Hidden")} sprite.");
         }
     }
 }

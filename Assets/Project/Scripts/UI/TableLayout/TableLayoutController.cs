@@ -11,6 +11,9 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using Salem.Players;
+using Salem.Cards;
+using Salem.GameFlow;
 
 namespace Salem.UI
 {
@@ -19,7 +22,8 @@ namespace Salem.UI
     {
         [Header("References")]
         [SerializeField] private RectTransform tableArea;          // The middle area (stretch in the center)
-        [SerializeField] private RectTransform playerContainer;    // Where PlayerBoardUI instances live
+        [SerializeField] private RectTransform playerContainer; 
+        [SerializeField] private GameObject playerBoardPrefab;   // Where PlayerBoardUI instances live
 
         [Header("Local Player Placement")]
         [Tooltip("Normalized position within tableArea. (0.5, 0) is bottom-center.")]
@@ -49,6 +53,8 @@ namespace Salem.UI
         [Tooltip("If false, remote players will be centered on the arc (symmetrical).")]
         [SerializeField] private bool centerPlayersOnArc = true;
 
+        [SerializeField] private EndTurnButtonUI endTurnButtonUI;
+
         // Public: call SetPlayers() when the roster changes.
         private readonly List<PlayerSeat> _seats = new();
         private string _localPlayerId;
@@ -56,6 +62,21 @@ namespace Salem.UI
         // Track changes to re-layout automatically when the screen/table changes.
         private Vector2 _lastTableSize;
         private int _lastPlayerCount;
+
+        //Targeting Section
+        private Card selectedCard;
+        private Player selectedCardOwner;
+        private bool isSelectingTarget;
+
+        //Tryal Targeting Section
+        private bool isSelectingTryal;
+        private Player selectedTryalPlayer;
+        private Action<int> pendingTryalCallback;
+
+        private readonly Dictionary<Player, PlayerBoardUI> playerBoards = new();
+
+        private Action<Player> pendingTargetCallback;
+        private Func<Player, bool> pendingTargetValidator;
 
         [Serializable]
         public class PlayerSeat
@@ -94,14 +115,14 @@ namespace Salem.UI
         /// Provide all seats (local included) and the local player id.
         /// Call this when player count changes or seating order changes.
         /// </summary>
-        public void SetPlayers(List<PlayerSeat> seats, string localPlayerId)
+        public void SetPlayers(List<PlayerSeat> seats) //string localPlayerId
         {
             _seats.Clear();
             if (seats != null)
             {
                 _seats.AddRange(seats);
             }
-            _localPlayerId = localPlayerId;
+            //_localPlayerId = localPlayerId;
 
             ForceLayout();
         }
@@ -126,7 +147,7 @@ namespace Salem.UI
             for (int i = 0; i < _seats.Count; i++)
             {
                 var s = _seats[i];
-                s.isLocal = (!string.IsNullOrEmpty(_localPlayerId) && s.playerId == _localPlayerId);
+                //s.isLocal = (!string.IsNullOrEmpty(_localPlayerId) && s.playerId == _localPlayerId);
                 if (s.isLocal) local = s;
                 else remotes.Add(s);
             }
@@ -280,5 +301,231 @@ namespace Salem.UI
             return Mathf.Abs(delta) >= Mathf.Abs(deltaAlt) ? delta : deltaAlt;
         }
 
+        public void BuildTable(IReadOnlyList<Player> players) //string localPlayerId removed unitl implemented
+        {
+            foreach (Transform child in playerContainer)
+            {
+                Destroy(child.gameObject);
+            }
+
+            List<PlayerSeat> seats = new();
+
+            foreach (Player player in players)
+            {
+                GameObject boardObj = Instantiate(playerBoardPrefab, playerContainer);
+                RectTransform boardRect = boardObj.GetComponent<RectTransform>();
+
+                PlayerBoardUI boardUI = boardObj.GetComponent<PlayerBoardUI>();
+                if (boardUI != null)
+                {
+                    boardUI.Bind(player);
+                    playerBoards[player] = boardUI;
+                    boardUI.OnHandCardClicked += BeginTargetSelection;
+                    boardUI.OnBoardClicked += HandlePlayerBoardClicked;
+                    boardUI.OnTryalCardClicked += HandleTryalCardClicked;
+                }
+
+                seats.Add(new PlayerSeat
+                {
+                    playerId = player.PlayerNameText,
+                    board = boardRect,
+                    isLocal = player.IsLocalPlayer
+                });
+            }
+
+            SetPlayers(seats); //, localPlayerId
+        }
+
+        public void SetCurrentTurn(Player currentPlayer)
+        {
+            /*Debug.Log(
+                $"[TableLayoutController] Setting current turn to: " +
+                $"{currentPlayer.PlayerNameText}"
+            );*/
+
+            foreach (var pair in playerBoards)
+            {
+                bool isCurrentPlayer = pair.Key == currentPlayer;
+
+                /*Debug.Log(
+                    $"[TableLayoutController] Updating board: " +
+                    $"{pair.Key.PlayerNameText} | isCurrentPlayer = {isCurrentPlayer}"
+                );*/
+
+                pair.Value.SetTurnIndicator(isCurrentPlayer);
+            }
+        }
+
+        public void BeginTargetSelection(
+            Player source,
+            string prompt,
+            Func<Player, bool> isValidTarget,
+            Action<Player> onTargetChosen)
+        {
+            isSelectingTarget = true;
+
+            selectedCard = null;
+            selectedCardOwner = source;
+
+            pendingTargetCallback = onTargetChosen;
+            pendingTargetValidator = isValidTarget;
+
+            Debug.Log($"[TableLayoutController] {prompt}");
+
+            foreach (var pair in playerBoards)
+            {
+                Player player = pair.Key;
+                PlayerBoardUI board = pair.Value;
+
+                bool canTarget = isValidTarget(player);
+
+                board.SetTargetHighlight(canTarget);
+                board.SetInteractable(canTarget);
+            }
+        }
+
+        public void BeginTryalSelection(Player targetPlayer, Action<int> onTryalChosen)
+        {
+            if (targetPlayer == null)
+            {
+                Debug.LogWarning("[TableLayoutController] Cannot begin Tryal selection. Target player is null.");
+                return;
+            }
+
+            selectedTryalPlayer = targetPlayer;
+            pendingTryalCallback = onTryalChosen;
+            isSelectingTryal = true;
+
+            Debug.Log($"[TableLayoutController] Select an unrevealed Tryal for {targetPlayer.PlayerNameText}.");
+
+            foreach (var pair in playerBoards)
+            {
+                Player player = pair.Key;
+                PlayerBoardUI board = pair.Value;
+
+                bool isTargetBoard = player == targetPlayer;
+
+                board.SetTargetHighlight(isTargetBoard);
+                board.SetInteractable(false);
+            }
+        }
+
+        private void BeginTargetSelection(Card card, Player owner)
+        {
+            selectedCard = card;
+            selectedCardOwner = owner;
+            isSelectingTarget = true;
+
+            Debug.Log($"[TableLayoutController] Selected card: {card.Name} from {owner.PlayerNameText}. Pick a target.");
+
+            if (!GameTurnManager.Instance.TryBeginPlayPhase(owner))
+            {
+                Debug.LogWarning("[TableLayoutController] Cannot play card right now.");
+                return;
+            }
+
+            foreach (var pair in playerBoards)
+            {
+                Player player = pair.Key;
+                PlayerBoardUI board = pair.Value;
+
+                bool canTarget = player != owner && !player.IsEliminated;
+
+                board.SetTargetHighlight(canTarget);
+                board.SetInteractable(canTarget);
+            }
+        }
+
+        private void HandlePlayerBoardClicked(PlayerBoardUI boardUI, Player target)
+        {
+            if (!isSelectingTarget)
+                return;
+
+            if (pendingTargetCallback != null)
+            {
+                if (pendingTargetValidator != null && !pendingTargetValidator(target))
+                {
+                    Debug.LogWarning($"[TableLayoutController] Invalid target: {target.PlayerNameText}");
+                    return;
+                }
+
+                pendingTargetCallback.Invoke(target);
+
+                pendingTargetCallback = null;
+                pendingTargetValidator = null;
+
+                ClearTargetSelection();
+                return;
+            }
+
+            if (selectedCard == null || selectedCardOwner == null)
+                return;
+
+            Debug.Log($"[TableLayoutController] Playing {selectedCard.Name} from {selectedCardOwner.PlayerNameText} on {target.PlayerNameText}");
+
+            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+
+            GameTurnManager.Instance.NotifyCardPlayed(selectedCardOwner);
+
+            endTurnButtonUI.Show();
+
+            ClearTargetSelection();
+        }
+
+        private void ClearTargetSelection()
+        {
+            selectedCard = null;
+            selectedCardOwner = null;
+            isSelectingTarget = false;
+
+            foreach (var pair in playerBoards)
+            {
+                pair.Value.SetTargetHighlight(false);
+                pair.Value.SetInteractable(true);
+            }
+        }
+
+        private void HandleTryalCardClicked(Player player, int tryalIndex)
+        {
+            if (!isSelectingTryal)
+                return;
+
+            if (player != selectedTryalPlayer)
+            {
+                Debug.LogWarning("[TableLayoutController] Wrong player's Tryal card clicked.");
+                return;
+            }
+
+            if (tryalIndex < 0 || tryalIndex >= player.TryalCards.Count)
+            {
+                Debug.LogWarning("[TableLayoutController] Invalid Tryal index.");
+                return;
+            }
+
+            if (player.TryalCards[tryalIndex].IsRevealed)
+            {
+                Debug.LogWarning("[TableLayoutController] That Tryal card is already revealed.");
+                return;
+            }
+
+            Debug.Log($"[TableLayoutController] Tryal selected: {player.PlayerNameText}, Index {tryalIndex}");
+
+            pendingTryalCallback?.Invoke(tryalIndex);
+
+            ClearTryalSelection();
+        }
+
+        private void ClearTryalSelection()
+        {
+            isSelectingTryal = false;
+            selectedTryalPlayer = null;
+            pendingTryalCallback = null;
+
+            foreach (var pair in playerBoards)
+            {
+                pair.Value.SetTargetHighlight(false);
+                pair.Value.SetInteractable(true);
+            }
+        }
     }
 }
