@@ -15,34 +15,46 @@ using UnityEngine;
 using UnityEngine.UI;
 using Salem.Cards;
 using TMPro;
+using System.Collections.Generic;
 
 namespace Salem.UI
 {
     public class TownHallChoiceUI : MonoBehaviour
     {
+        [SerializeField] private GameObject holder;
         [SerializeField] private Transform listParent;
         [SerializeField] private GameObject buttonPrefab;
         [SerializeField] private Button confirmButton;
         [SerializeField] private TextMeshProUGUI headerLabel;
+        [SerializeField] private GameObject townHallCardPrefab;
 
         private TownHallCard selected;
         private TownHallCard optionA;
         private TownHallCard optionB;
         private Action<TownHallCard, TownHallCard> onChosen;
+        private readonly List<TownHallCardUI> spawnedCards = new();
+
+        void Awake()
+        {
+            holder.SetActive(false);
+        }
 
         public void Open(TownHallCard a, TownHallCard b, Action<TownHallCard, TownHallCard> onChosenCallback)
         {
+            //Debug.Log($"[TownHallChoiceUI] Running Open");
             optionA = a;
             optionB = b;
             onChosen = onChosenCallback;
             selected = null;
 
-            gameObject.SetActive(true);
+            holder.SetActive(true);
             foreach (Transform c in listParent) Destroy(c.gameObject);
+            
+            spawnedCards.Clear();
 
             if (headerLabel != null)
                 headerLabel.text = "Choose a Town Hall Card";
-
+            
             SpawnOption(a);
             SpawnOption(b);
 
@@ -56,18 +68,20 @@ namespace Salem.UI
 
         private void SpawnOption(TownHallCard card)
         {
-            var go = Instantiate(buttonPrefab, listParent);
-            var btn = go.GetComponent<Button>();
-            var label = btn.GetComponentInChildren<TMP_Text>();
-            if (label != null)
-                label.text = card.CardName.ToString();
+            GameObject go = Instantiate(townHallCardPrefab, listParent);
 
-            btn.onClick.AddListener(() =>
+            TownHallCardUI cardUI = go.GetComponent<TownHallCardUI>();
+
+            if (cardUI == null)
             {
-                selected = card;
-                if (confirmButton != null)
-                    confirmButton.interactable = true;
-            });
+                Debug.LogError("[TownHallChoiceUI] TownHallCard prefab is missing TownHallCardUI.");
+                return;
+            }
+
+            cardUI.Bind(card);
+            cardUI.OnClicked += HandleCardSelected;
+
+            spawnedCards.Add(cardUI);
         }
 
         private void Confirm()
@@ -75,8 +89,21 @@ namespace Salem.UI
             if (selected == null) return;
 
             var discarded = (selected == optionA) ? optionB : optionA;
-            gameObject.SetActive(false);
+            holder.SetActive(false);
             onChosen?.Invoke(selected, discarded);
+        }
+
+        private void HandleCardSelected(TownHallCardUI clickedUI, TownHallCard card)
+        {
+            selected = card;
+
+            foreach (TownHallCardUI cardUI in spawnedCards)
+            {
+                cardUI.SetSelected(cardUI == clickedUI);
+            }
+
+            if (confirmButton != null)
+                confirmButton.interactable = true;
         }
     }
 }

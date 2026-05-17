@@ -34,6 +34,11 @@ namespace Salem.Systems
                 Debug.LogWarning("[SceneLoader] No fade CanvasGroup assigned. Fades will be skipped.");
         }
 
+        private void Start()
+        {
+            ResetFadeCanvas();
+        }
+
         // ---- Public API ----
 
         public void LoadScene(string sceneName)         => StartCoroutine(LoadSceneRoutine(sceneName));
@@ -56,12 +61,26 @@ namespace Salem.Systems
 
         private IEnumerator LoadSceneRoutine(string sceneName)
         {
-            if (isTransitioning) yield break;
+            Debug.Log($"[SceneLoader] LoadSceneRoutine started: {sceneName}");
+
+            if (isTransitioning)
+            {
+                Debug.LogWarning("[SceneLoader] Already transitioning.");
+                yield break;
+            }
+
             isTransitioning = true;
 
             // Fade out
             if (fadeCanvasGroup)
+            {
+                Debug.Log("[SceneLoader] Starting fade OUT.");
                 yield return Fade(1f);
+            }
+            else
+            {
+                Debug.LogError("[SceneLoader] Missing fadeCanvasGroup.");
+            }
 
             // Begin load (async)
             var op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
@@ -74,19 +93,27 @@ namespace Salem.Systems
 
             // Fade in
             if (fadeCanvasGroup)
+            {
+                Debug.Log("[SceneLoader] Starting fade IN.");
                 yield return Fade(0f);
+            }
 
             isTransitioning = false;
         }
 
         private IEnumerator Fade(float targetAlpha)
         {
-            if (fadeCanvasGroup == null) yield break;
+            Debug.Log($"[SceneLoader] Fade called. Target alpha: {targetAlpha}, Duration: {fadeDuration}");
 
-            if (blockInputDuringFade)
-                fadeCanvasGroup.blocksRaycasts = true;
+            if (fadeCanvasGroup == null)
+            {
+                Debug.LogError("[SceneLoader] Fade stopped. fadeCanvasGroup is null.");
+                yield break;
+            } 
 
             fadeCanvasGroup.gameObject.SetActive(true);
+            fadeCanvasGroup.blocksRaycasts = blockInputDuringFade;
+            fadeCanvasGroup.interactable = blockInputDuringFade;
 
             float start = fadeCanvasGroup.alpha;
             float t = 0f;
@@ -98,9 +125,12 @@ namespace Salem.Systems
             }
             fadeCanvasGroup.alpha = targetAlpha;
 
+            Debug.Log($"[SceneLoader] Fade complete. Alpha: {fadeCanvasGroup.alpha}");
+
             if (targetAlpha <= 0f)
             {
                 fadeCanvasGroup.blocksRaycasts = false;
+                fadeCanvasGroup.interactable = false;
                 fadeCanvasGroup.gameObject.SetActive(false);
             }
         }
@@ -124,6 +154,17 @@ namespace Salem.Systems
                 go.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
                 DontDestroyOnLoad(go);
             }
+        }
+
+        private void ResetFadeCanvas()
+        {
+            if (fadeCanvasGroup == null)
+                return;
+
+            fadeCanvasGroup.alpha = 0f;
+            fadeCanvasGroup.blocksRaycasts = false;
+            fadeCanvasGroup.interactable = false;
+            fadeCanvasGroup.gameObject.SetActive(false);
         }
     }
 }

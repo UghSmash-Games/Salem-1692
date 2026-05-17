@@ -26,28 +26,12 @@ namespace Salem.GameFlow
     public class TurnPhaseController : MonoBehaviour
     {
         [SerializeField] private float voteWindowSeconds = 10f;
-        [SerializeField] private TargetPickerUI targetPicker;
 
         private IRng rng;
 
         void Awake()
         {
             rng = new XorShiftRng((ulong)System.DateTime.UtcNow.Ticks);
-        }
-
-        public void BeginAccusationPhase(Player accuser)
-        {
-            // UI: pick someone (not self)
-            if (accuser.IsLocalPlayer)
-            {
-                targetPicker.OpenLegacy(accuser, false, (target, _) => StartCoroutine(VoteRoutine(target)));
-            }
-            else
-            {
-                var others = PlayerService.GetAlivePlayers().Where(p => p != accuser).ToList();
-                var target = others[rng.NextInt(0, others.Count)];
-                StartCoroutine(VoteRoutine(target));
-            }
         }
 
         private IEnumerator VoteRoutine(Player accused)

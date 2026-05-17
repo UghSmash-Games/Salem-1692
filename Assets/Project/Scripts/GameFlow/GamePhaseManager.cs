@@ -23,6 +23,7 @@ using Salem.Deck;
 using Salem.Gameplay.Setup;
 using Salem.Players;
 using Salem.UI;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace Salem.GameFlow
@@ -42,8 +43,6 @@ namespace Salem.GameFlow
         #region Vars
         [SerializeField] private float PhaseChangeDelay = 0.5f;
         [SerializeField] private DeckManager DeckManager;
-        [SerializeField] private TargetPickerUI nightTargetPicker;
-        [SerializeField] private TryalPickerUI tryalPicker;
         [SerializeField] private float aiDecisionDelay = 0.25f;
         [SerializeField] private bool witchesCanTargetWitches = false;
         [SerializeField] private bool constableCanSelfProtect = false;
@@ -52,6 +51,8 @@ namespace Salem.GameFlow
         [SerializeField] private string dawnBlackCatPrompt = "Witches choose who receives the Black Cat";
         [SerializeField] private float confessionAiChance = 0.15f;
         [SerializeField] private string confessionPrompt = "Confess? Reveal a Tryal to protect yourself.";
+        [SerializeField] private TableLayoutController tableLayoutController;
+        [SerializeField] private ConfessionChoiceUI confessionChoiceUI;
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
@@ -78,6 +79,7 @@ namespace Salem.GameFlow
             GameSetup = GetComponent<GameSetup>();
             GameTurnManager = GetComponent<GameTurnManager>();
             if (!DeckManager) DeckManager = FindFirstObjectByType<DeckManager>();
+            if (!tableLayoutController) tableLayoutController = FindFirstObjectByType<TableLayoutController>();
 
             OnPhaseChange += HandlePhaseChange;
         }
@@ -85,7 +87,6 @@ namespace Salem.GameFlow
         void Start()
         {
             StartCoroutine(ChangePhase(GamePhase.Setup, PhaseChangeDelay));
-
         }
         #endregion
 
@@ -98,45 +99,6 @@ namespace Salem.GameFlow
             CurrentPhase = newPhase;
             OnPhaseChange?.Invoke(newPhase);
             Debug.Log($"Game Phase Changed to: {newPhase}");
-        }
-
-        public void StartDayPhase()
-        {
-            /*
-            foreach (Player player in players)
-            {
-                player.TakeTurn();
-
-                // Check for Conspiracy or Night card
-                if (player.DrewCard(CardType.Conspiracy))
-                {
-                    GamePhaseManager.ChangePhase(GamePhase.Conspiracy);
-                    break;
-                }
-                else if (player.DrewCard(CardType.Night))
-                {
-                    GamePhaseManager.ChangePhase(GamePhase.Night);
-                    break;
-                }
-            }
-            */
-        }
-
-        public void StartConspiracyPhase()
-        {
-            /*
-            Player blackCatHolder = FindBlackCatHolder();
-            blackCatHolder.RevealTryalCard();
-
-            // Pass Tryal cards to the left
-            foreach (Player player in players)
-            {
-                player.PassTryalCardToLeft();
-            }
-
-            // Transition back to Day phase
-            GamePhaseManager.ChangePhase(GamePhase.Day);
-            */
         }
 
         public void HandleNightCardDrawn(Card nightCard)
@@ -156,29 +118,6 @@ namespace Salem.GameFlow
                 return;
             }
             StartCoroutine(ConspiracyRoutine(drawer));
-        }
-
-        public void StartNightPhase()
-        {
-            if (!BeginNightSequence())
-            {
-                // If we could not queue the sequence (e.g., manager disabled), fall back to immediate resolve.
-                ResolveNightImmediately();
-            }
-        }
-
-        public void StartEndGamePhase()
-        {
-            /*
-            if (AreAllWitchesEliminated())
-            {
-                DisplayVictoryScreen("Villagers Win!");
-            }
-            else if (AreAllVillagersEliminated())
-            {
-                DisplayVictoryScreen("Witches Win!");
-            }
-            */
         }
 
         public void DebugChangePhase()
@@ -202,8 +141,6 @@ namespace Salem.GameFlow
                     break;
             }
         }
-
-
         #endregion
 
         #region Helper Fucntions
@@ -223,10 +160,6 @@ namespace Salem.GameFlow
 
         private void StartSetupPhase()
         {
-            //GameSetup.SetupNewGame(PlayerService.All, PlayerService.All.Count);
-            //GameTurnManager.Initialize();
-            // Transition to Dawn phase
-            //StartCoroutine(ChangePhase(GamePhase.Dawn, PhaseChangeDelay));
             StartCoroutine(SetupRoutine());
         }
 
@@ -245,7 +178,7 @@ namespace Salem.GameFlow
 
         private IEnumerator DawnPhaseRoutine()
         {
-            Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
+            //Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
 
             var witches = PlayerService.GetAliveWitches();
             var allPlayers = PlayerService.GetAlivePlayers();
@@ -274,25 +207,28 @@ namespace Salem.GameFlow
                 if (witch.IsLocalPlayer && witch.IsHuman) // && !PlayerService.IsAirConsoleMode) AIRCONSOLE TEMP DISABLED 4/28/26
                 {
                     // Human witch: show UI
-                    if (nightTargetPicker != null)
+                    if (tableLayoutController != null)
                     {
                         bool done = false;
-                        nightTargetPicker.Open(
-                            source: witch,
-                            isAttack: false,
-                            onConfirm: (target, _) =>
+
+                        tableLayoutController.BeginTargetSelection(
+                            witch,
+                            "Vote: Who receives the Black Cat?",
+                            target =>
+                                target != null &&
+                                !target.IsEliminated,
+                            target =>
                             {
                                 votes[witch] = target;
                                 done = true;
-                            },
-                            validTargets: allPlayers,
-                            isSingleTarget: true,
-                            promptOverride: "Vote: Who receives the Black Cat?"
+                            }
                         );
+
                         yield return new WaitUntil(() => done);
                     }
                     else
                     {
+                        Debug.LogWarning("[GamePhaseManager] Missing TableLayoutController. Black Cat vote defaulting to random.");
                         votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
                     }
                 }
@@ -315,7 +251,7 @@ namespace Salem.GameFlow
             var tied = tally.Where(g => g.Count() == topCount).Select(g => g.Key).ToList();
             winner = tied.Count > 1 ? tied[rng.NextInt(0, tied.Count)] : tied[0];
 
-            Debug.Log($"Witch vote result: {winner.PlayerNameText} receives the Black Cat ({votes.Count} votes cast).");
+            //Debug.Log($"Witch vote result: {winner.PlayerNameText} receives the Black Cat ({votes.Count} votes cast).");
 
             // Assign the Black Cat
             if (blackCatCard != null)
@@ -329,10 +265,6 @@ namespace Salem.GameFlow
                 SetTurnOrderFromPlayer(winner);
             }
 
-            // Close picker UI
-            if (nightTargetPicker != null)
-                nightTargetPicker.gameObject.SetActive(false);
-
             // Transition to Day
             yield return ChangePhase(GamePhase.Day, 2.0f);
         }
@@ -342,7 +274,7 @@ namespace Salem.GameFlow
             if (target == null || blackCatCard == null) return;
 
             target.AssignBlackCat(blackCatCard);
-            Debug.Log($"The Black Cat has been assigned to {target.PlayerNameText}.");
+            //Debug.Log($"The Black Cat has been assigned to {target.PlayerNameText}.");
             SetTurnOrderFromPlayer(target);
         }
 
@@ -372,10 +304,10 @@ namespace Salem.GameFlow
 
                 if (unrevealed.Count > 0)
                 {
-                    if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tryalPicker != null)
+                    if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
                     {
                         bool done = false;
-                        tryalPicker.Open(blackCatHolder, idx =>
+                        tableLayoutController.BeginTryalSelection(blackCatHolder, idx =>
                         {
                             blackCatHolder.RevealTryalCard(idx);
                             done = true;
@@ -442,15 +374,6 @@ namespace Salem.GameFlow
             Debug.Log("[Conspiracy] Conspiracy resolved. Resuming Day phase.");
         }
 
-        private IEnumerator EnterNight()
-        {
-            // pause turns: GameTurnManager already stops on phase change
-            NightResolver.Resolve(GameManager.Instance.Rng);
-            // (Optional: Constable protect hook here)
-            yield return null;
-            ChangePhase(GamePhase.Day, PhaseChangeDelay); // turn manager will restart on this
-        }
-
         private bool BeginNightSequence()
         {
             if (!isActiveAndEnabled)
@@ -501,9 +424,7 @@ namespace Salem.GameFlow
                 Debug.Log("[GamePhaseManager] Post-night deck reshuffle complete. Night card placed in bottom half.");
                 heldNightCard = null;
             }
-
-            yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay); //Remove? We shouldnt hit Dawn Again. Dawn = Setup
-
+            
             yield return ChangePhase(GamePhase.Day, PhaseChangeDelay);
 
             activeNightSequence = null;
@@ -543,60 +464,44 @@ namespace Salem.GameFlow
                 bool hasUnrevealed = player.TryalCards.Any(c => !c.IsRevealed);
                 if (!hasUnrevealed) continue;
 
-                if (player == localPlayer && player.IsHuman && tryalPicker != null)
+                if (player == localPlayer && player.IsHuman && tableLayoutController != null)
                 {
-                    // Human local player: open TryalPickerUI on themselves
-                    bool done = false;
-                    bool confessed = false;
+                    bool choiceMade = false;
+                    ConfessionChoiceUI.ConfessionChoice choice = ConfessionChoiceUI.ConfessionChoice.Skip;
 
-                    // William Phipps: can fake confess without revealing a Tryal
-                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
-
-                    // Show tryal picker — player can choose a Tryal to reveal (confess)
-                    // or we need a skip mechanism. Use nightTargetPicker as a Yes/No prompt first.
-                    string prompt = canFakeConfess
-                        ? confessionPrompt + " (William Phipps: you may fake confess without revealing a Tryal)"
-                        : confessionPrompt;
-
-                    if (nightTargetPicker != null)
+                    confessionChoiceUI.Open(player, selectedChoice =>
                     {
-                        Player chosen = null;
-                        nightTargetPicker.Open(player, false, (primary, _) =>
-                        {
-                            chosen = primary;
-                            done = true;
-                        }, new List<Player> { player }, true, prompt);
+                        choice = selectedChoice;
+                        choiceMade = true;
+                    });
 
-                        yield return new WaitUntil(() => done || nightTargetPicker == null || !nightTargetPicker.gameObject.activeSelf);
+                    yield return new WaitUntil(() => choiceMade);
 
-                        if (done && chosen != null)
-                        {
-                            if (canFakeConfess)
-                            {
-                                // William Phipps: fake confess — no Tryal reveal, just mark as confessor
-                                player.ConsumeTownHallCharge();
-                                confessed = true;
-                                Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) used fake confession ability.");
-                            }
-                            else
-                            {
-                                // Normal confession: pick which Tryal to reveal
-                                bool tryalChosen = false;
-                                tryalPicker.Open(player, idx =>
-                                {
-                                    player.RevealTryalCard(idx);
-                                    confessed = true;
-                                    tryalChosen = true;
-                                });
-                                yield return new WaitUntil(() => tryalChosen);
-                            }
-                        }
-                    }
-
-                    if (confessed)
+                    if (choice == ConfessionChoiceUI.ConfessionChoice.FakeConfess)
                     {
+                        player.ConsumeTownHallCharge();
                         plan.Confessors.Add(player);
-                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} confessed (revealed a Tryal).");
+
+                        Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) used fake confession ability.");
+                    }
+                    else if (choice == ConfessionChoiceUI.ConfessionChoice.Confess)
+                    {
+                        bool tryalChosen = false;
+
+                        tableLayoutController.BeginTryalSelection(player, idx =>
+                        {
+                            player.RevealTryalCard(idx);
+                            plan.Confessors.Add(player);
+                            tryalChosen = true;
+                        });
+
+                        yield return new WaitUntil(() => tryalChosen);
+
+                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} confessed.");
+                    }
+                    else
+                    {
+                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} skipped confession.");
                     }
                 }
                 else
@@ -644,18 +549,26 @@ namespace Salem.GameFlow
             if (candidates.Count == 0)
                 yield break;
 
-            if (constable == localPlayer && constable.IsHuman && nightTargetPicker != null)
+            if (constable == localPlayer && constable.IsHuman && tableLayoutController != null)
             {
                 bool done = false;
                 Player chosen = null;
-                var picker = nightTargetPicker;
-                picker.Open(constable, false, (primary, _) =>
-                {
-                    chosen = primary;
-                    done = true;
-                }, candidates, constableCanSelfProtect, constablePrompt);
 
-                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
+                tableLayoutController.BeginTargetSelection(
+                    constable,
+                    constablePrompt,
+                    target =>
+                        target != null &&
+                        !target.IsEliminated &&
+                        (constableCanSelfProtect || target != constable),
+                    target =>
+                    {
+                        chosen = target;
+                        done = true;
+                    }
+                );
+
+                yield return new WaitUntil(() => done);
 
                 if (done && chosen != null)
                 {
@@ -669,7 +582,7 @@ namespace Salem.GameFlow
             }
             else
             {
-                if (constable == localPlayer && nightTargetPicker == null)
+                if (constable == localPlayer && tableLayoutController == null)
                     Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; constable protection defaulting to random.");
 
                 yield return new WaitForSeconds(aiDecisionDelay);
@@ -694,18 +607,25 @@ namespace Salem.GameFlow
             if (eligible.Count == 0)
                 yield break;
 
-            if (nightTargetPicker != null)
+            if (tableLayoutController != null)
             {
                 bool done = false;
                 Player voteTarget = null;
-                var picker = nightTargetPicker;
-                picker.Open(localPlayer, false, (primary, _) =>
-                {
-                    voteTarget = primary;
-                    done = true;
-                }, eligible, false, witchPrompt);
 
-                yield return new WaitUntil(() => done || picker == null || !picker.gameObject.activeSelf);
+                tableLayoutController.BeginTargetSelection(
+                    localPlayer,
+                    witchPrompt,
+                    target =>
+                        target != null &&
+                        eligible.Contains(target),
+                    target =>
+                    {
+                        voteTarget = target;
+                        done = true;
+                    }
+                );
+
+                yield return new WaitUntil(() => done);
 
                 if (done && voteTarget != null)
                 {

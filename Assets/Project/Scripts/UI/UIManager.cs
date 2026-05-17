@@ -27,7 +27,7 @@ namespace Salem.UI
 {
     public class UIManager : MonoBehaviour
     {
-        [SerializeField] private List<PlayerStatusUI> statusPanels;
+        //[SerializeField] private List<PlayerStatusUI> statusPanels; disabled for new UI possible delete 5/15/26
         [SerializeField] private PlayerInputUI localPlayerInputUI;
 
         [Header("Phase Indicator")]
@@ -38,7 +38,7 @@ namespace Salem.UI
         [SerializeField] private Sprite nightPhaseSprite;
 
         private GamePhaseManager GamePhaseManager;
-        private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new();
+        //private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new(); disabled for new UI possible delete 5/15/26
 
         private void Awake()
         {
@@ -92,6 +92,8 @@ namespace Salem.UI
             }
         }
         */
+
+        /* disabled for new UI possible delete 5/15/26
         private void BindStatusUI(Player player, PlayerStatusUI statusUI)
         {
             // Link the UI to this player's updates
@@ -109,6 +111,7 @@ namespace Salem.UI
             playerToStatusUI[player] = statusUI;
             SetPlayerName(player, statusUI);
         }
+        */
 
         public void SetupLocalPlayerUI(Player localPlayer)
         {
@@ -122,6 +125,7 @@ namespace Salem.UI
 
         }
 
+        /* disabled for new UI possible delete 5/15/26
         public void SetPlayerTurnActive()
         {
             foreach (var ui in playerToStatusUI.Values)
@@ -147,11 +151,14 @@ namespace Salem.UI
                 Debug.LogWarning("UIManager: No StatusUI found for current player.");
             }
         }
+        */
 
+        /* disabled for new UI possible delete 5/15/26
         private void SetPlayerName(Player player, PlayerStatusUI statusUI)
         {
             statusUI.PlayerName.text = player.PlayerNameText;
         }
+        */
 
         private void HandlePhaseIconChanged(GamePhase phase)
         {

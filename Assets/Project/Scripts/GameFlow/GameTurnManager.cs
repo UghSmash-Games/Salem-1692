@@ -38,7 +38,10 @@ namespace Salem.GameFlow
         public static GameTurnManager Instance;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private UIManager UIManager;
+        [SerializeField] private TableLayoutController TableLayoutController;
         [SerializeField] private float turnDuration = 60f;
+        [SerializeField] private EndTurnButtonUI endTurnButtonUI;
+        [SerializeField] private DrawFromDiscardButtonUI drawFromDiscardButtonUI;
         public Player CurrentPlayer => currentPlayer;
         public KeyCode debugTurnAdvanceKey = KeyCode.N;
         public UnityEvent OnTurnStart;
@@ -90,12 +93,10 @@ namespace Salem.GameFlow
             turnTimer -= Time.deltaTime;
             if (turnTimer <= 0f)
             {
-                //EndTurn();
                 Debug.Log($"[IdleTimer] {currentPlayer?.PlayerNameText} idle for {turnDuration}s — forcing draw two cards.");
                 ForceDrawAndEndTurn();
             }
         }
-
 
         #region Accessor Functions
         public void Initialize()
@@ -104,15 +105,15 @@ namespace Salem.GameFlow
             if (phase != null) phase.OnPhaseChange += HandlePhaseChanged;
         }
 
-
         public void SetStartingPlayerIndex(int index)
         {
-            Debug.Log($"Turn Order Override: Day 1 will start with player index {index}");
+            //Debug.Log($"Turn Order Override: Day 1 will start with player index {index}");
             forcedStartingIndex = index;
         }
 
         public void StartTurn(int playerIndex)
         {
+            endTurnButtonUI.Hide();
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0) return;
 
@@ -123,7 +124,9 @@ namespace Salem.GameFlow
             CurrentPlayerIndex = playerIndex;
 
             currentPlayer = players[CurrentPlayerIndex];
-            Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
+
+            TableLayoutController.SetCurrentTurn(currentPlayer);
+            //Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
             // Stocks: if this player has a Stocks card, skip their turn and consume one
             if (currentPlayer.skipTurn)
@@ -139,6 +142,7 @@ namespace Salem.GameFlow
             waitingForHuman = false;
             currentTurnAction = TurnActionChoice.None;
             TurnStarted?.Invoke(currentPlayer);
+            UpdateTownHallActionButtons(CurrentPlayer);
             OnTurnStart?.Invoke();
 
             /*AIRCONSOLE DISABLED TEMP 4/28/26
@@ -163,7 +167,7 @@ namespace Salem.GameFlow
                 return;
             }
 
-            int newIndex = players.IndexOf(currentPlayer);
+            int newIndex = players.IndexOf(eliminatedPlayer);
             if (newIndex == -1)
             {
                 CurrentPlayerIndex %= players.Count;
@@ -174,7 +178,6 @@ namespace Salem.GameFlow
                 CurrentPlayerIndex = newIndex;
             }
 
-            UIManager.SetPlayerTurnActive();
             GameManager?.EvaluateEndGame();
         }
 
@@ -196,6 +199,8 @@ namespace Salem.GameFlow
             {
                 currentTurnAction = TurnActionChoice.PlayCards;
             }
+
+            drawFromDiscardButtonUI?.Hide();
 
             return true;
         }
@@ -224,6 +229,7 @@ namespace Salem.GameFlow
             int handSizeBefore = requestingPlayer.HandManager.Hand.Count;
             deckManager.DrawMultipleCards(requestingPlayer.HandManager, 2);
             currentTurnAction = TurnActionChoice.DrawTwoCards;
+            drawFromDiscardButtonUI?.Hide();
 
             // Giles Corey: if both drawn cards are Accusation cards, draw a third
             if (requestingPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
@@ -251,7 +257,7 @@ namespace Salem.GameFlow
             return true;
         }
 
-         /// <summary>
+        /// <summary>
         /// Samuel Parris ability: draw up to 2 cards from the discard pile instead of the deck.
         /// Counts as the player's turn action. Cannot draw Black cards.
         /// </summary>
@@ -371,6 +377,7 @@ namespace Salem.GameFlow
             isTurnActive = false;
 
             TurnEnded?.Invoke(currentPlayer);
+            drawFromDiscardButtonUI?.Hide();
 
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0) return;
@@ -385,8 +392,6 @@ namespace Salem.GameFlow
 
         private IEnumerator RunTurn(Player current)
         {
-            UIManager.SetPlayerTurnActive(); // existing UI cue
-
              /*AIRCONSOLE DISABLED 4/28/26
              bool isAirConsoleHuman = PlayerService.IsAirConsoleMode
                 && current.IsHuman
@@ -416,8 +421,6 @@ namespace Salem.GameFlow
             if (current.IsHuman && current.IsLocalPlayer)
             {
                 waitingForHuman = true;
-                // Enable local input – e.g., show hand interactivity
-                //PlayerInputUI.EnableInputFor(current);
 
                 // Wait until a card is played or End Turn is pressed
                 yield return new WaitUntil(() => waitingForHuman == false);
@@ -432,8 +435,6 @@ namespace Salem.GameFlow
                 }
                 else GameTurnManager.Instance.EndTurn();
             }
-
-            // advance to next player (your existing logic)
         }
 
         private bool IsCurrentPlayersTurn(Player player)
@@ -511,6 +512,28 @@ namespace Salem.GameFlow
                 // Not Day → pause/stop the turn loop
                 isTurnActive = false;
                 StopAllCoroutines();
+            }
+        }
+
+        private void UpdateTownHallActionButtons(Player player)
+        {
+            if (drawFromDiscardButtonUI == null)
+                return;
+
+            bool canUseSamuelParris =
+                player != null &&
+                player.IsHuman &&
+                player.HasTownHall(Salem.Cards.TownhallName.SamuelParris) &&
+                player.townHallAbilityCharges > 0 &&
+                currentTurnAction == TurnActionChoice.None;
+
+            if (canUseSamuelParris)
+            {
+                drawFromDiscardButtonUI.Show();
+            }
+            else
+            {
+                drawFromDiscardButtonUI.Hide();
             }
         }
     }

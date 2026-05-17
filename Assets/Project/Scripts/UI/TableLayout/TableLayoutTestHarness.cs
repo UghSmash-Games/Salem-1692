@@ -63,7 +63,7 @@ namespace Salem.UI
                 });
             }
 
-            layoutController.SetPlayers(seats, localPlayerId);
+            layoutController.SetPlayers(seats);
         }
 
         private void Reset()

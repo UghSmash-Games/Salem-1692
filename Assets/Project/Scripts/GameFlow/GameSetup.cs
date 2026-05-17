@@ -38,9 +38,11 @@ namespace Salem.Gameplay.Setup
     {
         #region Vars
         [SerializeField] private GameManager GameManager;
+        [SerializeField] private TableLayoutController tableLayoutController;
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
-         [SerializeField] private TownHallChoiceUI townHallChoiceUI;
+        [SerializeField] private TownHallChoiceUI townHallChoiceUI;
+        
         // Exact Tryal card counts per player count: (NotAWitch, Witch, Constable)
         private static readonly Dictionary<int, (int notAWitch, int witch, int constable)> TryalDistribution = new()
         {
@@ -80,11 +82,13 @@ namespace Salem.Gameplay.Setup
         #endregion
 
         #region Accessor Functions
-        //Called In GamePhaseManager durning Setup
-         // Called in GamePhaseManager during Setup (now a coroutine to support Town Hall UI choice)
+        //Called in GamePhaseManager during Setup (now a coroutine to support Town Hall UI choice)
         public IEnumerator SetupNewGame(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupNewGame");
             SetupTryalCards(players);
+            tableLayoutController.BuildTable(players);
+            
             yield return SetupTownhallCards(players);
             SetupPlayDeck(players);
         }
@@ -93,6 +97,7 @@ namespace Salem.Gameplay.Setup
         #region Helper Functions
         private void SetupTryalCards(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupTryalCards");
              if (!TryalDistribution.TryGetValue(players.Count, out var dist))
             {
                 Debug.LogError($"[GameSetup] No Tryal distribution defined for {players.Count} players.");
@@ -141,6 +146,7 @@ namespace Salem.Gameplay.Setup
 
          private IEnumerator SetupTownhallCards(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupTownhallCards");
             if (players.Count <= 7)
             {
                 // Each player gets 2 cards and chooses 1
@@ -202,6 +208,7 @@ namespace Salem.Gameplay.Setup
 
         private void SetupPlayDeck(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupPlayDeck");
             if (DeckManager == null)
             {
                 Debug.LogError("[GameSetup] DeckManager is null; cannot set up play deck.");
@@ -237,11 +244,6 @@ namespace Salem.Gameplay.Setup
                 DeckManager.ReshuffleAndPlaceNightCard(nightCard);
         }
 
-         private bool ShouldRejectInitialHandCard(Card card)
-        {
-            return card != null && InitialHandRestrictedCards.Contains(card.Name);
-        }
-
         //Have players draw their Tryal Cards
         private List<TryalCard> DrawTryalCards(int count, List<TryalCard> deck)
         {
@@ -257,12 +259,6 @@ namespace Salem.Gameplay.Setup
                 int randomIndex = RNGService.Rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
-            
-            //Debug.Log("Shuffled Tryal Deck:");
-            /*for (int i = 0; i < TryalDeck.Count; i++)
-            {
-                Debug.Log($"[{i}] {TryalDeck[i].TryalCardType}");
-            }*/
         }
         #endregion
     }

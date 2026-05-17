@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
@@ -32,11 +31,10 @@ namespace Salem.GameFlow
     {
         public static CardEffectManager Instance { get; private set; }
         public static event Action<string> OnCardPlayed;
-        [SerializeField] private TargetPickerUI TargetPicker;
-        [SerializeField] private TryalPickerUI TryalPicker;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private GamePhaseManager GamePhaseManager;
         [SerializeField] private DeckManager DeckManager;
+        [SerializeField] private TableLayoutController tableLayoutController;
 
         private Player CurrentPlayer;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -149,15 +147,44 @@ namespace Salem.GameFlow
 
             if (card.Name == "Black Cat")
             {
-                if (drawer != null)
-                {
-                    drawer.AssignBlackCat(card);
-                }
-                else
+                if (drawer == null)
                 {
                     Debug.LogWarning("[Effect] Black Cat drawn but no player was provided. Card will be discarded.");
                     DeckManager?.AddToDiscardPile(card);
+                    return true;
                 }
+
+                if (drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
+                {
+                    tableLayoutController.BeginTargetSelection(
+                        drawer,
+                        "Choose a player to receive Black Cat.",
+                        target =>
+                            target != null &&
+                            !target.IsEliminated &&
+                            target != drawer &&
+                            !target.HasTownHall(TownhallName.MaryWarren),
+                        target =>
+                        {
+                            target.AssignBlackCat(card);
+                            Debug.Log($"[Black Cat] {drawer.PlayerNameText} assigned Black Cat to {target.PlayerNameText}.");
+                        }
+                    );
+                }
+                else
+                {
+                    Player target = AITargetingHelper.SelectRandomTarget(drawer);
+
+                    if (target != null)
+                    {
+                        target.AssignBlackCat(card);
+                    }
+                    else
+                    {
+                        DeckManager?.AddToDiscardPile(card);
+                    }
+                }
+
                 return true;
             }
 
@@ -182,7 +209,7 @@ namespace Salem.GameFlow
             }
 
             UpdateCurrentPlayer();
-            Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
+            //Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
 
             if (card is ActionCardSO ac)
             {
@@ -240,7 +267,7 @@ namespace Salem.GameFlow
 
         private void ExecuteActionOp(ActionCardSO action, Player target)
         {          
-            Debug.Log(action.Op.ToString() );
+            //Debug.Log(action.Op.ToString() );
             var secondary = action.RequiresSecondTarget ? action.target : null;
             if (_ops.TryGetValue(action.Op, out var op))
                 op(CurrentPlayer, target, secondary, Rng, action);
@@ -253,9 +280,9 @@ namespace Salem.GameFlow
             if (accused == null) return;
 
             // If the accuser is a local human, let them choose which Tryal to reveal
-            if (accuser != null && accuser.IsHuman && accuser.IsLocalPlayer && TryalPicker != null)
+            if (accuser != null && accuser.IsHuman && accuser.IsLocalPlayer && tableLayoutController != null)
             {
-                TryalPicker.Open(accused, idx =>
+                tableLayoutController.BeginTryalSelection(accused, idx =>
                 {
                     accused.RevealTryalCard(idx, fromAccusation: true);
                 });
@@ -270,88 +297,14 @@ namespace Salem.GameFlow
             }
         }
 
-        private void OnDestroy()
+        private void OnEnable()
+        {
+            Player.OnAccusationRevealNeeded += HandleAccusationRevealChoice;
+        }
+
+        private void OnDisable()
         {
             Player.OnAccusationRevealNeeded -= HandleAccusationRevealChoice;
-        }
-
-        private void ExecuteConspiracy(IRng rng)
-        {
-            var alive = PlayerService.GetAlivePlayers();
-            var blackCat = alive.Find(p => p.IsBlackCatHolder);
-
-            void AfterReveal()
-            {
-                ExecuteConspiracySwap(rng); // your existing swap code
-            }
-
-            if (blackCat != null && CurrentPlayer.IsLocalPlayer && TryalPicker != null)
-            {
-                // local drawer chooses which Tryal the Black Cat reveals
-                TryalPicker.Open(blackCat, idx => { blackCat.RevealTryalCard(idx); AfterReveal(); });
-            }
-            else
-            {
-                // fallback: RNG choice
-                var choices = new List<int>();
-                for (int i = 0; i < blackCat?.TryalCards.Count; i++)
-                    if (!blackCat.TryalCards[i].IsRevealed) choices.Add(i);
-                if (blackCat != null && choices.Count > 0)
-                    blackCat.RevealTryalCard(choices[rng.NextInt(0, choices.Count)]);
-                AfterReveal();
-            }
-        }
-        private void ExecuteConspiracySwap(IRng rng)
-        {
-            // Candidates: alive players who have at least one unrevealed Tryal
-            var candidates = PlayerService.GetAlivePlayers()
-                .Where(p => p.TryalCards != null && p.TryalCards.Any(tc => !tc.IsRevealed))
-                .ToList();
-
-            if (candidates.Count < 2)
-            {
-                Debug.LogWarning("[Conspiracy] Not enough candidates to swap Tryal cards.");
-                return;
-            }
-
-            // Pick two distinct players deterministically
-            int aIndex = rng.NextInt(0, candidates.Count);
-            int bIndex = aIndex;
-            // Ensure bIndex != aIndex
-            if (candidates.Count > 1)
-                while (bIndex == aIndex) bIndex = rng.NextInt(0, candidates.Count);
-
-            var playerA = candidates[aIndex];
-            var playerB = candidates[bIndex];
-
-            // Pick one unrevealed Tryal index for each
-            var aTryalIndex = playerA.GetRandomUnrevealedTryalIndex(rng);
-            var bTryalIndex = playerB.GetRandomUnrevealedTryalIndex(rng);
-
-            if (aTryalIndex == null || bTryalIndex == null)
-            {
-                Debug.LogWarning("[Conspiracy] Could not find unrevealed Tryal indices for both players.");
-                return;
-            }
-
-            // Remove selected cards
-            var aCard = playerA.RemoveTryalAt(aTryalIndex.Value);
-            var bCard = playerB.RemoveTryalAt(bTryalIndex.Value);
-
-            if (aCard == null || bCard == null)
-            {
-                Debug.LogWarning("[Conspiracy] Null Tryal card during removal—swap aborted.");
-                // Try to roll back if needed (edge case), but we only removed if not null
-                if (aCard != null) playerA.AddTryalCardAndNotify(aCard);
-                if (bCard != null) playerB.AddTryalCardAndNotify(bCard);
-                return;
-            }
-
-            // Swap
-            playerA.AddTryalCardAndNotify(bCard);
-            playerB.AddTryalCardAndNotify(aCard);
-
-            Debug.Log($"[Conspiracy] Swapped unrevealed Tryals between {playerA.PlayerNameText} and {playerB.PlayerNameText}.");
         }
 
         private void UpdateCurrentPlayer()

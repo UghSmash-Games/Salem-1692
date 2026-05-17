@@ -7,6 +7,7 @@
 */
 
 using System;
+using Salem.Systems;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -16,7 +17,7 @@ namespace Salem.Managers
     {
         public void SinglePlayer()
         {
-            SceneManager.LoadScene("Sandbox_Testing");
+            SceneLoader.Instance.LoadScene("Sandbox_Testing");
         }
 
         public void Multiplayer()

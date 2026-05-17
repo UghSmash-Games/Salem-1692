@@ -93,21 +93,6 @@ namespace Salem.Players
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
             }
-
-            /* Posible Delete 4/28/26
-            //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if (PlayerNameText == "George Burroughs")
-            {
-                baseAccusationLimit++;
-            }
-            else if (PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
-            {
-                townHallAbilityCharges = 1;
-            }
-            else if (PlayerNameText == "Samuel Parris")
-            {
-                townHallAbilityCharges = 2;
-            }*/
         }
         #endregion
 
@@ -255,7 +240,8 @@ namespace Salem.Players
                 TryalCardRevealed?.Invoke(this, card);
             }
             //TODO:arent we going to need a check if they try to reveal an already revealed card?
-            CheckElimination();
+            
+            GameManager.Instance?.EvaluateEndGame();
         }
 
         public void InvokeOnTryalCardsChanged()
@@ -263,6 +249,7 @@ namespace Salem.Players
             OnTryalCardsChanged?.Invoke();
         }
 
+/*
         public void AddTryalCard(TryalCard card)
         {
             TryalCards.Add(card);
@@ -282,6 +269,7 @@ namespace Salem.Players
             TryalCards.Clear();
             OnTryalCardsChanged?.Invoke();
         }
+*/
 
         public void AddStatusCard(Card card)
         {
@@ -484,12 +472,9 @@ namespace Salem.Players
             target.AddStatusCard(statusCard);
             target.RecomputeStatusFromStatusCards();
         }
-        public void AddStatusCardAndRecompute(Card status)
-        {
-            AddStatusCard(status);        // existing method
-            RecomputeStatusFromStatusCards();
-        }
+
         public bool HasStatus(string name) => StatusCards.Any(c => c.Name == name);
+        
         public void ClearStatusCardsAndRecompute()
         {
             ClearStatusCards();           // existing method
@@ -517,12 +502,6 @@ namespace Salem.Players
             {
                 recipient.AssignBlackCat(transferredBlackCat);
             }
-        }
-        public void RemoveStatusByNameAndRecompute(string name)
-        {
-            var idx = StatusCards.FindIndex(c => c.Name == name);
-            if (idx >= 0) StatusCards.RemoveAt(idx);
-            RecomputeStatusFromStatusCards();
         }
 
         // Derivations from statuses (call whenever statuses change)
@@ -648,11 +627,6 @@ namespace Salem.Players
             }
 
             return card;
-        }
-
-        public void ClearBlackCat()
-        {
-            RemoveBlackCat();
         }
 
         //For Conspiracy
@@ -786,33 +760,8 @@ namespace Salem.Players
             townhallCard = null;
             townHallCardIcon = null;
         }
-        
-        // After any reveal, if eliminated → cascade to Matchmaker partner (only if both statuses exist)
-        private void CheckElimination()
-        {
-            /*
-            if (IsEliminated)
-            {
-                Debug.Log($"{PlayerNameText} is ELIMINATED!");
-                GameTurnManager.Instance?.OnPlayerEliminated(this);
 
-                if (MatchedPlayer != null &&
-                    HasStatus("Matchmaker") &&
-                    MatchedPlayer.HasStatus("Matchmaker") &&
-                    !MatchedPlayer.IsEliminated)
-                {
-                    // prevent ping-pong; clear link then eliminate partner
-                    var partner = MatchedPlayer;
-                    ClearMatch();
-                    partner.ClearMatch();
-                    partner.EliminateNow();
-                }
-                GameManager.Instance.OnDayLynchResolved();
-            }
-            */
-        }
-
-         private void CheckAccusations(Player accuser = null)
+        private void CheckAccusations(Player accuser = null)
         {
             // Thomas Danforth: threshold reduced by 1 when he is the accuser
             int effectiveLimit = currentAccusationLimit;
@@ -878,29 +827,6 @@ namespace Salem.Players
             AccusationCountChanged?.Invoke(this, currentAccusationCount, currentAccusationLimit);
         }
         #endregion
-
-         [Header("Status Effects")]
-        [SerializeField] private bool hasBlackCat;
-
-        // Property to check if the player holds the Black Cat
-        public bool HasBlackCat
-        {
-            get => hasBlackCat;
-            private set => hasBlackCat = value;
-        }
-
-         // Method called by GamePhaseManager to assign the cat
-        public void ReceiveBlackCat()
-        {
-            // VERIFY: Ensure 'PlayerNameText' is the correct property for the name
-            Debug.Log($"{PlayerNameText} has received the Black Cat.");
-            HasBlackCat = true;
-        }
-
-        public void RemoveBlackCat()
-        {
-            HasBlackCat = false;
-        }
     }
     
 }
