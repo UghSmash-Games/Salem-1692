@@ -46,9 +46,17 @@ server dispatch layer, not the UI layer.
 
 ## Socket Event Names (source of truth)
 
-Server → clients:    game_state_update | private_state | secret_phase_prompt
-action_request | phase_resolve | elimination_result | game_over
-Client → server:     player_action | secret_phase_submit | confess
+Room management:         create_room | join_room | join_mirror
+                         room_created | joined | player_joined | room_closed
+
+Server → clients:        game_state_update | private_state | secret_phase_prompt
+                         action_request | phase_resolve | elimination_result | game_over
+
+Client → server:         player_action | secret_phase_submit | confess
+
+NOTE: game_state_update is passed through by the server without inspection.
+Unity is solely responsible for ensuring it never contains private player data
+(tryal cards, role, acting flag).
 
 `phase_resolve` carries a UTC timestamp — both Unity and mirror screens animate
 reveals at the same wall-clock moment. Do not trigger reveal animations on
