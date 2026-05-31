@@ -21,14 +21,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Unity.VisualStudio.Editor;
 using Salem.Cards;
 using Salem.Data;
 using Salem.GameFlow;
-using Salem.Managers.GameState;
 using Salem.Managers.Hands;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace Salem.Players
@@ -48,6 +45,8 @@ namespace Salem.Players
         public static event Action<Player, byte, byte> AccusationCountChanged;
         public static event Action<Player, byte, byte> AccusationThresholdReached;
         public static event Action<Player, TryalCard> TryalCardRevealed;
+        // Fired when accusation limit is reached: (accused, accuser). Listener should reveal a Tryal on accused.
+        public static event Action<Player, Player> OnAccusationRevealNeeded;
 
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
@@ -94,20 +93,6 @@ namespace Salem.Players
             {
                 Debug.LogError($"Player {PlayerNameText} is missing a HandManager component!");
             }
-
-            //george burroughs ability boosts the number of accusations needed to reveal a tryal card by 1
-            if (PlayerNameText == "George Burroughs")
-            {
-                baseAccusationLimit++;
-            }
-            else if (PlayerNameText == "William Phipps" || PlayerNameText == "Tituba")
-            {
-                townHallAbilityCharges = 1;
-            }
-            else if (PlayerNameText == "Samuel Parris")
-            {
-                townHallAbilityCharges = 2;
-            }
         }
         #endregion
 
@@ -124,7 +109,108 @@ namespace Salem.Players
         {
             if(card == null) { return; }
             townhallCard = card;
-            //set art?
+            ApplyTownHallAbility();
+        }
+
+        private void ApplyTownHallAbility()
+        {
+            if (townhallCard == null) return;
+
+            switch (townhallCard.CardName)
+            {
+                case TownhallName.GeorgeBurroughs:
+                    baseAccusationLimit++;
+                    currentAccusationLimit = baseAccusationLimit;
+                    break;
+                case TownhallName.WilliamsPhipps:
+                case TownhallName.Tituba:
+                    townHallAbilityCharges = 1;
+                    break;
+                case TownhallName.SamuelParris:
+                    townHallAbilityCharges = 2;
+                    break;
+            }
+        }
+
+         /// <summary>
+        /// Checks if this player has the given Town Hall ability, accounting for Martha Corey's copy ability.
+        /// </summary>
+        public bool HasTownHall(TownhallName name)
+        {
+            if (townhallCard == null) return false;
+            if (townhallCard.CardName == name) return true;
+            if (townhallCard.CardName == TownhallName.MarthaCorey)
+                return GetEffectiveTownHallName() == name;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the effective Town Hall identity. For Martha Corey, returns the ability of the
+        /// first living player to her right. For all others, returns their own CardName.
+        /// </summary>
+        public TownhallName? GetEffectiveTownHallName()
+        {
+            if (townhallCard == null) return null;
+            if (townhallCard.CardName != TownhallName.MarthaCorey) return townhallCard.CardName;
+
+            // Find first living player to the right (next in turn order)
+            var allPlayers = PlayerService.All;
+            int myIndex = -1;
+            for (int i = 0; i < allPlayers.Count; i++)
+            {
+                if (allPlayers[i] == this)
+                {
+                    myIndex = i;
+                    break;
+                }
+            }
+
+            if (myIndex < 0) return null;
+
+            for (int i = 1; i < allPlayers.Count; i++)
+            {
+                var candidate = allPlayers[(myIndex + i) % allPlayers.Count];
+                if (!candidate.IsEliminated && candidate != this && candidate.townhallCard != null)
+                    return candidate.townhallCard.CardName;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Applies passive effects for Martha Corey based on the copied ability.
+        /// Must be called after all players have their Town Hall cards assigned.
+        /// </summary>
+        public void ApplyMarthaCoreyCopy()
+        {
+            var effective = GetEffectiveTownHallName();
+            if (effective == null) return;
+
+            switch (effective.Value)
+            {
+                case TownhallName.GeorgeBurroughs:
+                    baseAccusationLimit++;
+                    currentAccusationLimit = baseAccusationLimit;
+                    break;
+                case TownhallName.WilliamsPhipps:
+                case TownhallName.Tituba:
+                    townHallAbilityCharges = 1;
+                    break;
+                case TownhallName.SamuelParris:
+                    townHallAbilityCharges = 2;
+                    break;
+            }
+            Debug.Log($"[Player] Martha Corey ({PlayerNameText}) copies ability of {effective.Value}.");
+        }
+
+        public void ConsumeTownHallCharge()
+        {
+            if (townHallAbilityCharges > 0) townHallAbilityCharges--;
+        }
+
+        public void ResetAccusationCount()
+        {
+            DiscardRedStatusCards();
+            NotifyAccusationChanged();
         }
 
         public void DetermineRole()
@@ -139,7 +225,7 @@ namespace Salem.Players
             }
         }
 
-        public void RevealTryalCard(int index)
+        public void RevealTryalCard(int index, bool fromAccusation = false)
         {
             Debug.Log("REVEAL");
             if (index < 0 || index >= TryalCards.Count) return;
@@ -149,15 +235,13 @@ namespace Salem.Players
             {
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
-                /*if (card.TryalCardType == TryalCardType.Witch)
-                {
-                    EliminateNow();
-                }*/
+
                 TrialService.OnTrialCardRevealed(this, card);
                 TryalCardRevealed?.Invoke(this, card);
             }
             //TODO:arent we going to need a check if they try to reveal an already revealed card?
-            CheckElimination();
+            
+            GameManager.Instance?.EvaluateEndGame();
         }
 
         public void InvokeOnTryalCardsChanged()
@@ -165,6 +249,7 @@ namespace Salem.Players
             OnTryalCardsChanged?.Invoke();
         }
 
+/*
         public void AddTryalCard(TryalCard card)
         {
             TryalCards.Add(card);
@@ -184,6 +269,7 @@ namespace Salem.Players
             TryalCards.Clear();
             OnTryalCardsChanged?.Invoke();
         }
+*/
 
         public void AddStatusCard(Card card)
         {
@@ -201,12 +287,6 @@ namespace Salem.Players
         {
             StatusCards.Clear();
             OnStatusCardsChanged?.Invoke();
-        }
-
-        public void shiftBaseAccusations(bool shiftUp)
-        {
-            if (shiftUp) { baseAccusationLimit++; } // if Thomas Danforth dies.... I think their ability ends, so use this on everyone to bring them back to normal
-            else { baseAccusationLimit--; } //use in the case of Thomas Danforth, his ability will drop everyones limit by 1
         }
         #endregion
 
@@ -322,20 +402,52 @@ namespace Salem.Players
 
         //Called in CardEffectManager
         // Accusations & turn effects
-        public void ApplyAccusation(int amount)
+         public void ApplyAccusation(int bonusAmount, Player accuser = null)
         {
-            Debug.Log("Acc limit:"+currentAccusationLimit);
-            Debug.Log("Before Acc:"+currentAccusationCount);
-            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount + amount);
-            Debug.Log("After Acc:" + currentAccusationCount);
-            CheckAccusations(); // you already have this
+            RecomputeStatusFromStatusCards();
+            // bonusAmount adds accusations beyond what's tracked by physical cards
+            // (e.g., Will Griggs offensive Alibi). Normal card ops pass 0.
+            if (bonusAmount > 0)
+                currentAccusationCount = (byte)Math.Min(255, currentAccusationCount + bonusAmount);
+            Debug.Log($"Acc limit:{currentAccusationLimit} Acc count:{currentAccusationCount}");
+            CheckAccusations(accuser);
         }
-        public void ApplyAlibi(int reduceBy)
+        public void ApplyAlibi(int removeCount)
         {
-            currentAccusationCount = (byte)Mathf.Max(0, currentAccusationCount - reduceBy);
+            // Remove up to N Accusation cards from in front of this player
+            int removed = 0;
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            for (int i = StatusCards.Count - 1; i >= 0 && removed < removeCount; i--)
+            {
+                if (StatusCards[i] is ActionCardSO ac && ac.Op == ActionOp.Accusation)
+                {
+                    dm?.AddToDiscardPile(StatusCards[i]);
+                    StatusCards.RemoveAt(i);
+                    removed++;
+                }
+            }
+            if (removed > 0)
+                OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
             NotifyAccusationChanged();
-        }        
-        public void ApplyStocks(int turns = 1) => skipTurn = true; // extend later if you track duration
+        }     
+        public void ApplyStocks(int turns = 1) => RecomputeStatusFromStatusCards();
+        
+        /// <summary>
+        /// Removes one Stocks card from in front of this player and discards it.
+        /// Called when the player's turn is skipped due to Stocks.
+        /// </summary>
+        public void ConsumeOneStocks()
+        {
+            int idx = StatusCards.FindIndex(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
+            if (idx < 0) return;
+            var card = StatusCards[idx];
+            StatusCards.RemoveAt(idx);
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            dm?.AddToDiscardPile(card);
+            OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
+        }
 
         // Hand
         public void ClearHand()
@@ -352,19 +464,17 @@ namespace Salem.Players
         // Status (Blue) cards
         public void PlayStatusCardOnTarget(ActionCardSO statusCard, Player target)
         {
-            // Remove from my hand (fires OnHandChanged for UI)
-            HandManager.RemoveCard(statusCard);
+            // Take from my hand WITHOUT discarding — the card is being transferred
+            // to the target's status cards, not sent to the discard pile.
+            HandManager.TakeCard(statusCard);
 
             // Add to target's statuses and recompute (fires OnStatusCardsChanged + updates derived flags)
             target.AddStatusCard(statusCard);
             target.RecomputeStatusFromStatusCards();
         }
-        public void AddStatusCardAndRecompute(Card status)
-        {
-            AddStatusCard(status);        // existing method
-            RecomputeStatusFromStatusCards();
-        }
+
         public bool HasStatus(string name) => StatusCards.Any(c => c.Name == name);
+        
         public void ClearStatusCardsAndRecompute()
         {
             ClearStatusCards();           // existing method
@@ -393,12 +503,6 @@ namespace Salem.Players
                 recipient.AssignBlackCat(transferredBlackCat);
             }
         }
-        public void RemoveStatusByNameAndRecompute(string name)
-        {
-            var idx = StatusCards.FindIndex(c => c.Name == name);
-            if (idx >= 0) StatusCards.RemoveAt(idx);
-            RecomputeStatusFromStatusCards();
-        }
 
         // Derivations from statuses (call whenever statuses change)
         public void RecomputeStatusFromStatusCards()
@@ -406,11 +510,14 @@ namespace Salem.Players
             // Reset to base; then re-apply statuses each time
             currentAccusationLimit = baseAccusationLimit;
 
-
-            hasAsylum = StatusCards.Any(c => c.Name == "Asylum"); // protected at Night
-
             bool hasPiety = StatusCards.Any(c => c.Name == "Piety"); // doubles limit
             if (hasPiety) currentAccusationLimit = (byte)(baseAccusationLimit * 2);
+
+            // Asylum blocks Night targeting/elimination
+            hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
+
+            // Stocks: skip turn if any Stocks cards are in front of this player
+            skipTurn = StatusCards.Any(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
 
             // Curse makes accusations easier to trigger (limit -1, min 1)
             bool hasCurse = StatusCards.Any(c => c.Name == "Curse");
@@ -422,6 +529,20 @@ namespace Salem.Players
             // If Matchmaker status fell off, clear the bond
             if (!StatusCards.Any(c => c.Name == "Matchmaker") && MatchedPlayer != null)
                 ClearMatch();
+
+            // Derive accusation count from red cards in front of this player
+            byte accusationTotal = 0;
+            foreach (var c in StatusCards)
+            {
+                if (c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) continue;
+                switch (ac.Op)
+                {
+                    case ActionOp.Accusation: accusationTotal += 1; break;
+                    case ActionOp.Evidence: accusationTotal += (byte)(HasTownHall(TownhallName.CottonMather) ? 1 : 3); break;
+                    case ActionOp.Witness: accusationTotal += 7; break;
+                }
+            }
+            currentAccusationCount = accusationTotal;
         }
 
         // Matchmaker link (two-way)
@@ -457,11 +578,20 @@ namespace Salem.Players
         }
 
         //Black Cat
-        public void AssignBlackCat(Card card)
+         public void AssignBlackCat(Card card)
         {
             if (card == null)
             {
                 Debug.LogWarning("[Player] Attempted to assign a null Black Cat card.");
+                return;
+            }
+
+            // Mary Warren is immune to Black Cat
+            if (HasTownHall(TownhallName.MaryWarren))
+            {
+                Debug.Log($"[TownHall] Mary Warren ({PlayerNameText}) is immune to Black Cat. Discarding.");
+                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                dm?.AddToDiscardPile(card);
                 return;
             }
 
@@ -499,11 +629,6 @@ namespace Salem.Players
             return card;
         }
 
-        public void ClearBlackCat()
-        {
-            RemoveBlackCat();
-        }
-
         //For Conspiracy
         public int? GetRandomUnrevealedTryalIndex(Salem.Data.IRng rng)
         {
@@ -529,10 +654,18 @@ namespace Salem.Players
 
         public void AddTryalCardAndNotify(TryalCard card)
         {
+            bool wasWitch = IsWitch;
             TryalCards.Add(card);
             // If this player *gained* a Witch, allow DetermineRole to lock in witchhood
             DetermineRole();
             OnTryalCardsChanged?.Invoke();
+
+            // If this player just became a witch (e.g., via Conspiracy swap),
+            // re-evaluate endgame — witches win if all remaining players are now witches
+            if (!wasWitch && IsWitch)
+            {
+                GameManager.Instance?.EvaluateEndGame();
+            }
         }
 
         public bool TryRevealTryalOfType(TryalCardType type)
@@ -563,52 +696,130 @@ namespace Salem.Players
         }
         
         // Eliminate immediately (reveal all remaining Tryals safely)
+        // Elimination is triggered by TrialService.OnTrialCardRevealed() on first Witch
+        // reveal or when all Tryals are revealed, which calls PlayerService.Eliminate().
         public void EliminateNow()
         {
             if (IsEliminated) return;
             for (int i = 0; i < TryalCards.Count; i++)
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
-            
-            GameManager.Instance.OnDayLynchResolved();
         }
-        // After any reveal, if eliminated → cascade to Matchmaker partner (only if both statuses exist)
-        private void CheckElimination()
+
+        // Called after IsEliminated is set. Discards hand + status cards,
+        // or transfers them to John Proctor holder if one exists.
+        public void OnElimination()
         {
-            if (IsEliminated)
+            // Find alive player with John Proctor town hall card
+            var johnProctor = PlayerService.GetAlivePlayers()
+                .FirstOrDefault(p => p != this && p.townhallCard != null
+                    && p.townhallCard.CardName == TownhallName.JohnProctor);
+
+            if (johnProctor != null)
             {
-                Debug.Log($"{PlayerNameText} is ELIMINATED!");
-                GameTurnManager.Instance?.OnPlayerEliminated(this);
-
-                if (MatchedPlayer != null &&
-                    HasStatus("Matchmaker") &&
-                    MatchedPlayer.HasStatus("Matchmaker") &&
-                    !MatchedPlayer.IsEliminated)
+                Debug.Log($"[Elimination] {PlayerNameText}'s cards transferred to {johnProctor.PlayerNameText} (John Proctor).");
+                TransferEntireHandTo(johnProctor);
+                // Transfer status cards (excluding Black Cat which is handled separately)
+                var blackCat = RemoveBlackCat(false);
+                foreach (var s in StatusCards.ToList())
+                    johnProctor.AddStatusCard(s);
+                ClearStatusCards();
+                johnProctor.RecomputeStatusFromStatusCards();
+                // Black Cat goes to discard, not to John Proctor
+                if (blackCat != null)
                 {
-                    // prevent ping-pong; clear link then eliminate partner
-                    var partner = MatchedPlayer;
-                    ClearMatch();
-                    partner.ClearMatch();
-                    partner.EliminateNow();
+                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                    if (dm != null) dm.AddToDiscardPile(blackCat);
                 }
-                GameManager.Instance.OnDayLynchResolved();
             }
+            else
+            {
+                Debug.Log($"[Elimination] {PlayerNameText}'s cards discarded.");
+                // Discard all hand cards
+                var handCards = HandManager.GetCards();
+                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                foreach (var c in handCards)
+                {
+                    if (dm != null) dm.AddToDiscardPile(c);
+                }
+                HandManager.ClearHand();
+                // Remove Black Cat
+                var blackCat = RemoveBlackCat(false);
+                if (blackCat != null && dm != null)
+                    dm.AddToDiscardPile(blackCat);
+                // Discard status cards (red, blue, Stocks) to discard pile
+                foreach (var sc in StatusCards)
+                {
+                    if (dm != null) dm.AddToDiscardPile(sc);
+                }
+                ClearStatusCardsAndRecompute();
+            }
+
+            RecomputeStatusFromStatusCards();
+
+            // Town Hall card is visible to all until elimination — clear it now
+            townhallCard = null;
+            townHallCardIcon = null;
         }
 
-        private void CheckAccusations()
+        private void CheckAccusations(Player accuser = null)
         {
-            if (currentAccusationCount >= currentAccusationLimit)
+            // Thomas Danforth: threshold reduced by 1 when he is the accuser
+            int effectiveLimit = currentAccusationLimit;
+            if (accuser != null && accuser.HasTownHall(TownhallName.ThomasDanforth))
+                effectiveLimit = Math.Max(1, effectiveLimit - 1);
+
+            if (currentAccusationCount >= effectiveLimit)
             {
                 AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
-                //setting it as random first to get the main systems hooked together and working
-                int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
-                if (tryalToReveal.HasValue)
+
+                // Ann Putnam: draw 2 cards before reveal when she places the final accusation
+                if (accuser != null && accuser.HasTownHall(TownhallName.AnnePutnam))
                 {
-                    RevealTryalCard(tryalToReveal.Value);
+                    var dm2 = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                    dm2?.DrawMultipleCards(accuser.HandManager, 2);
+                    Debug.Log($"[TownHall] Ann Putnam ({accuser.PlayerNameText}) draws 2 cards before tryal reveal.");
                 }
-                //reveal tryal
-                currentAccusationCount = 0;
+
+                // Discard all red cards in front of this player
+                DiscardRedStatusCards();
                 NotifyAccusationChanged();
+
+                // If there's a listener (CardEffectManager), let the accuser choose which Tryal to reveal.
+                // Otherwise fall back to random reveal.
+                if (OnAccusationRevealNeeded != null && accuser != null)
+                {
+                    OnAccusationRevealNeeded.Invoke(this, accuser);
+                }
+                else
+                {
+                    int? tryalToReveal = GetRandomUnrevealedTryalIndex(Rng);
+                    if (tryalToReveal.HasValue)
+                    {
+                        RevealTryalCard(tryalToReveal.Value, fromAccusation: true);
+                    }
+                }
+
+                // Abigail Williams: clear her own accusations when she triggers a tryal reveal
+                if (accuser != null && accuser.HasTownHall(TownhallName.AbigailWilliams))
+                {
+                    accuser.ResetAccusationCount();
+                    Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations.");
+                }
             }
+        }
+        private void DiscardRedStatusCards()
+        {
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            for (int i = StatusCards.Count - 1; i >= 0; i--)
+            {
+                if (StatusCards[i].Type == Card.CardColor.Red)
+                {
+                    dm?.AddToDiscardPile(StatusCards[i]);
+                    StatusCards.RemoveAt(i);
+                }
+            }
+            OnStatusCardsChanged?.Invoke();
+            RecomputeStatusFromStatusCards();
         }
 
         private void NotifyAccusationChanged()
@@ -617,4 +828,5 @@ namespace Salem.Players
         }
         #endregion
     }
+    
 }

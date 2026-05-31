@@ -14,8 +14,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Project/Scenes/Debug/Sandbox_Testing.unity
     guid: 022e492f4be881d4e8a278828695968c
-  - enabled: 1
-    path: Assets/Project/Scenes/Title & Menus/Winner_Screen.unity
+  - enabled: 0
+    path: Assets/Project/Scenes/Title & Menus/_Archive/Winner_Screen.unity
     guid: 19d953d7717be6f42b1f4c741dcd3640
   - enabled: 0
     path: Assets/Project/Scenes/Debug/Archieve/SampleScene.unity

@@ -147,7 +147,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Thomas Danforth_0: -2340475472156105306
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

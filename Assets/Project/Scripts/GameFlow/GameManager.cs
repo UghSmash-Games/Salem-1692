@@ -19,15 +19,12 @@
  * FIXME: [Known bugs or issues]
 */
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using Salem.GameFlow;
-using Salem.Players;
-using Salem.Deck;
-using Salem.UI;
+using Salem.Cards;
 using Salem.Data;
+using Salem.Players;
+using Salem.UI;
+using UnityEngine;
 
 namespace Salem.GameFlow
 {
@@ -40,7 +37,6 @@ namespace Salem.GameFlow
         [SerializeField] private ulong fixedSeed = 123456789UL;
         public IRng Rng { get; private set; }
         public ulong Seed{ get; private set; }
-        //[SerializeField] private EndGameUI EndGameUI;
 
         //Tracks GameManager
         public static GameManager Instance { get; private set; }
@@ -53,7 +49,6 @@ namespace Salem.GameFlow
 
 
         private bool isGameActive;
-        private bool endGameHandlersRegistered;
         private bool gameAlreadyEnded = false;
         #endregion
 
@@ -77,9 +72,15 @@ namespace Salem.GameFlow
                 Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
             }
             */
-
-            UIManager.BindAllPlayerStatusUI();
             UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+
+            /*AIR CONSOLE DISABLED 4/28/26
+            // In AirConsole mode, there is no single local player — input comes from phones
+            if (!PlayerService.IsAirConsoleMode)
+            {
+                UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+            }
+            */
         }
         #endregion
 
@@ -89,6 +90,21 @@ namespace Salem.GameFlow
             var alive = PlayerService.GetAlivePlayers();
             if (alive == null || alive.Count == 0) return;
 
+             // Townspeople win when ALL Witch Tryal cards in the game have been revealed.
+            // Check across all players (alive and eliminated) for any unrevealed Witch cards.
+            bool anyUnrevealedWitch = PlayerService.All.Any(p =>
+                p.TryalCards != null && p.TryalCards.Any(c =>
+                    c.TryalCardType == TryalCardType.Witch && !c.IsRevealed));
+
+            if (!anyUnrevealedWitch)
+            {
+                var winners = alive.Where(p => !p.IsWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Villagers, winners, "All Witch Tryal cards revealed"));
+                return;
+            }
+
+            // Witches win when all remaining alive players are witches
+            // (covers both: all townspeople eliminated, OR final townsperson became a witch)
             int witches = alive.Count(p => p.IsWitch && !p.IsEliminated);
             int nonWitches = alive.Count - witches;
 
@@ -100,6 +116,7 @@ namespace Salem.GameFlow
                 return;
             }
 
+            // Witches also win at parity (witches >= townspeople)
             if (witches >= nonWitches)
             {
                 var winners = alive.Where(p => p.IsWitch).ToList();
@@ -107,65 +124,17 @@ namespace Salem.GameFlow
                 return;
             }
         }
-        /*public void CheckEndgameConditions()
-        {
-            if (!isGameActive)
-            {
-                return;
-            }
-
-            var aliveVillagers = PlayerService.GetAliveVillagers();
-            var aliveWitches = PlayerService.GetAliveWitches();
-
-            if (aliveWitches.Count == 0)
-            {
-                EndGame(FormatVictoryMessage("Villagers", aliveVillagers));
-            }
-            else if (aliveVillagers.Count == 0 || aliveWitches.Count >= aliveVillagers.Count)
-            {
-                EndGame(FormatVictoryMessage("Witches", aliveWitches));
-            }
-        }*/
 
         // Call EvaluateEndGame() at key points:
         public void OnDayLynchResolved() => EvaluateEndGame();
         public void OnNightResolved() => EvaluateEndGame();
         public void OnPlayerLeftGame() => EvaluateEndGame();
 
-        /*public void EndGame(string result)
-        {
-            if (!isGameActive)
-            {
-                return;
-            }
-
-            Debug.Log(result);
-            isGameActive = false;
-
-            // Display the endgame UI
-            if (EndGameUI != null)
-            {
-                EndGameUI.Show(result);
-            }
-            else
-            {
-                Debug.LogWarning("[GameManager] EndGameUI reference missing. Unable to display endgame screen.");
-            }
-
-            // Provide options to restart or quit
-            if (!endGameHandlersRegistered)
-            {
-                EndGameUI.OnRestart += RestartGame;
-                EndGameUI.OnQuit += QuitGame;
-                endGameHandlersRegistered = true;
-            }
-        }*/
-
         public void InitRng(ulong? seed = null)
         {
             Seed = seed ?? (useFixedSeed ? fixedSeed : (ulong)System.DateTime.UtcNow.Ticks);
             Rng  = new XorShiftRng(Seed);
-            Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
+            //Debug.Log($"[GameManager] RNG initialized Seed={Seed}");
         }
 
         // Optional for replays/debug:
@@ -204,41 +173,6 @@ namespace Salem.GameFlow
             }
         }
 
-        /*private void RestartGame()
-        {
-            Debug.Log("Restarting Game...");
-            if (endGameHandlersRegistered)
-            {
-                EndGameUI.OnRestart -= RestartGame; // Unsubscribe to prevent memory leaks
-                EndGameUI.OnQuit -= QuitGame;
-                endGameHandlersRegistered = false;
-            }
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // Reload scene
-        }
-
-        private void QuitGame()
-        {
-            Debug.Log("Quitting Game...");
-            if (endGameHandlersRegistered)
-            {
-                EndGameUI.OnRestart -= RestartGame;
-                EndGameUI.OnQuit -= QuitGame;
-                endGameHandlersRegistered = false;
-            }
-            Application.Quit();
-        }
-
-        private static string FormatVictoryMessage(string faction, IReadOnlyCollection<Player> winners)
-        {
-            if (winners == null || winners.Count == 0)
-            {
-                return $"{faction} Win!";
-            }
-
-            string survivorList = string.Join(", ", winners.Select(p => p.PlayerNameText));
-            return $"{faction} Win!\nSurvivors: {survivorList}";
-        }*/
-
         private void RaiseGameEnded(EndGameResult result)
         {
             if (gameAlreadyEnded) return;
@@ -260,5 +194,20 @@ namespace Salem.GameFlow
             EvaluateEndGame();
         }
         #endregion
+
+        //TEMP FOR TESTING 5/16/26
+        [ContextMenu("TEST End Game - Villagers Win")]
+        private void TestVillagersWin()
+        {
+            var winners = PlayerService.GetAlivePlayers()
+                .Where(p => !p.IsWitch)
+                .ToList();
+
+            RaiseGameEnded(new EndGameResult(
+                Team.Villagers,
+                winners,
+                "Test villagers win"
+            ));
+        }
     }
 }

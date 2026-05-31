@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
@@ -32,11 +31,10 @@ namespace Salem.GameFlow
     {
         public static CardEffectManager Instance { get; private set; }
         public static event Action<string> OnCardPlayed;
-        [SerializeField] private TargetPickerUI TargetPicker;
-        [SerializeField] private TryalPickerUI TryalPicker;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private GamePhaseManager GamePhaseManager;
         [SerializeField] private DeckManager DeckManager;
+        [SerializeField] private TableLayoutController tableLayoutController;
 
         private Player CurrentPlayer;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -66,28 +64,68 @@ namespace Salem.GameFlow
 
             _ops = new()
                 {
-                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(1) },
-                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(t.PlayerNameText=="Cotton Mather" ? 1 : 3) },
-                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(7) },
-                    { ActionOp.Alibi,      (s,_,_,_,_) => s.ApplyAlibi(3) },
-                    { ActionOp.Stocks,     (s,t,_,_,_) => t.ApplyStocks(1) },
-                    { ActionOp.Arson,      (s,t,_,_,_) => { if (t.PlayerNameText!="Sarah Good") t.ClearHand(); } },
-                    { ActionOp.Robbery,    (s,t,u,_,_) => t.TransferEntireHandTo(u) },
+                    { ActionOp.Accusation, (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(0, s) },
+                    { ActionOp.Alibi,      (s,t,_,_,_) => {
+                        // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
+                        if (t != null && s.HasTownHall(TownhallName.WillGrigs))
+                            t.ApplyAccusation(7, s);
+                        else if (t != null)
+                            t.ApplyAlibi(3);
+                        else
+                            Debug.LogWarning("[Alibi] No target provided.");
+                    }},
+                    { ActionOp.Stocks,     (s,t,_,_,c) => {
+                        // Stocks stays in front of the target until their turn is skipped.
+                        // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+                        // being transferred to the target's status cards, not discarded.
+                        s.HandManager.TakeCard(c);
+                        t.AddStatusCard(c);
+                        t.RecomputeStatusFromStatusCards();
+                    }},
+                    { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
+                    { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
                     { ActionOp.Curse,      (s,t,_,_,c) =>
                         {
-                            var removed = t.RemoveBlackCat(false);
-                            if (removed != null)
+                            // Discard one Blue status card from the target
+                            if (t.IsBlackCatHolder)
                             {
-                                DeckManager?.AddToDiscardPile(removed);
+                                var removed = t.RemoveBlackCat(true);
+                                if (removed != null)
+                                    DeckManager?.AddToDiscardPile(removed);
                             }
-                            t.AddStatusCardAndRecompute(c);
+                            else
+                            {
+                                var blueStatus = t.StatusCards.Find(sc => sc.Type == Card.CardColor.Blue);
+                                if (blueStatus != null)
+                                {
+                                    t.RemoveStatusCard(blueStatus);
+                                    t.RecomputeStatusFromStatusCards();
+                                    DeckManager?.AddToDiscardPile(blueStatus);
+                                    Debug.Log($"[Curse] Removed {blueStatus.Name} from {t.PlayerNameText}.");
+                                }
+                                else
+                                {
+                                    Debug.Log($"[Curse] {t.PlayerNameText} has no Blue cards to discard.");
+                                }
+                            }
                         }
                     },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
-                    { ActionOp.Matchmaker, (s,t,_,_,c) => { s.PlayStatusCardOnTarget(c, t); Player.TryFormMatchmakerLink(); } },
-                    { ActionOp.Conspiracy, (s,_,_,rng,_) => ExecuteConspiracy(rng) },
+                    { ActionOp.Matchmaker, (s,t,_,_,c) => {
+                        // Mary Warren is immune to Matchmaker
+                        if (t.HasTownHall(TownhallName.MaryWarren))
+                        {
+                            Debug.Log($"[TownHall] Mary Warren ({t.PlayerNameText}) is immune to Matchmaker.");
+                            return;
+                        }
+                        s.PlayStatusCardOnTarget(c, t);
+                        Player.TryFormMatchmakerLink();
+                    }},
+                    { ActionOp.Conspiracy, (s,_,_,_,_) => Debug.LogWarning("[Conspiracy] Triggered on draw, not played.") },
                     { ActionOp.BlackCat,   (s,_,_,_,_) => Debug.LogWarning("[Black Cat] Assigned at Dawn, not played.") },
                 };
         }
@@ -103,21 +141,58 @@ namespace Salem.GameFlow
             if (card.Name == "Night")
             {
                 Debug.Log($"[Effect] Night card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
-                GamePhaseManager?.HandleNightCardDrawn();
+                GamePhaseManager?.HandleNightCardDrawn(card);
                 return true;
             }
 
             if (card.Name == "Black Cat")
             {
-                if (drawer != null)
-                {
-                    drawer.AssignBlackCat(card);
-                }
-                else
+                if (drawer == null)
                 {
                     Debug.LogWarning("[Effect] Black Cat drawn but no player was provided. Card will be discarded.");
                     DeckManager?.AddToDiscardPile(card);
+                    return true;
                 }
+
+                if (drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
+                {
+                    tableLayoutController.BeginTargetSelection(
+                        drawer,
+                        "Choose a player to receive Black Cat.",
+                        target =>
+                            target != null &&
+                            !target.IsEliminated &&
+                            target != drawer &&
+                            !target.HasTownHall(TownhallName.MaryWarren),
+                        target =>
+                        {
+                            target.AssignBlackCat(card);
+                            Debug.Log($"[Black Cat] {drawer.PlayerNameText} assigned Black Cat to {target.PlayerNameText}.");
+                        }
+                    );
+                }
+                else
+                {
+                    Player target = AITargetingHelper.SelectRandomTarget(drawer);
+
+                    if (target != null)
+                    {
+                        target.AssignBlackCat(card);
+                    }
+                    else
+                    {
+                        DeckManager?.AddToDiscardPile(card);
+                    }
+                }
+
+                return true;
+            }
+
+            if (card.Name == "Conspiracy")
+            {
+                Debug.Log($"[Effect] Conspiracy card drawn by {drawer?.PlayerNameText ?? "Unknown"}.");
+                DeckManager?.AddToDiscardPile(card);
+                GamePhaseManager?.HandleConspiracyCardDrawn(drawer);
                 return true;
             }
 
@@ -134,7 +209,7 @@ namespace Salem.GameFlow
             }
 
             UpdateCurrentPlayer();
-            Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
+            //Debug.Log($"[Effect] Executing {card.Name} on {target?.PlayerNameText ?? "N/A"}");
 
             if (card is ActionCardSO ac)
             {
@@ -160,6 +235,16 @@ namespace Salem.GameFlow
                 }
             }
 
+            // Red cards: place in front of target BEFORE executing effect
+            // (so they're tracked when threshold check runs)
+            // Use TakeCard (not RemoveCard) to avoid discarding — the card is
+            // being transferred to the target's status cards, not discarded.
+            if (card.Type == Card.CardColor.Red && target != null)
+            {
+                CurrentPlayer.HandManager.TakeCard(card);
+                target.AddStatusCard(card);
+            }
+
             if (card is ActionCardSO action)
             {
                 ExecuteActionOp(action, target);
@@ -169,8 +254,9 @@ namespace Salem.GameFlow
                 Debug.LogWarning($"[Effect] Non-action card played via effect path: {card.Name}");
             }
 
-            // Remove from hand if appropriate
-            if (card.Type == Card.CardColor.Green || card.Type == Card.CardColor.Red)
+            // Green cards: remove from hand after effect (goes to discard)
+            // Exception: Stocks stays in front of target (already handled in its op)
+            if (card.Type == Card.CardColor.Green && card is ActionCardSO greenAc && greenAc.Op != ActionOp.Stocks)
                 CurrentPlayer.HandManager.RemoveCard(card);
 
             // Raise event for CardLogManager to listen to
@@ -181,7 +267,7 @@ namespace Salem.GameFlow
 
         private void ExecuteActionOp(ActionCardSO action, Player target)
         {          
-            Debug.Log(action.Op.ToString() );
+            //Debug.Log(action.Op.ToString() );
             var secondary = action.RequiresSecondTarget ? action.target : null;
             if (_ops.TryGetValue(action.Op, out var op))
                 op(CurrentPlayer, target, secondary, Rng, action);
@@ -189,83 +275,36 @@ namespace Salem.GameFlow
                 Debug.LogWarning($"[Effect] Unhandled op {action.Op}");
         }
 
-        private void ExecuteConspiracy(IRng rng)
+         private void HandleAccusationRevealChoice(Player accused, Player accuser)
         {
-            var alive = PlayerService.GetAlivePlayers();
-            var blackCat = alive.Find(p => p.IsBlackCatHolder);
+            if (accused == null) return;
 
-            void AfterReveal()
+            // If the accuser is a local human, let them choose which Tryal to reveal
+            if (accuser != null && accuser.IsHuman && accuser.IsLocalPlayer && tableLayoutController != null)
             {
-                ExecuteConspiracySwap(rng); // your existing swap code
-            }
-
-            if (blackCat != null && CurrentPlayer.IsLocalPlayer && TryalPicker != null)
-            {
-                // local drawer chooses which Tryal the Black Cat reveals
-                TryalPicker.Open(blackCat, idx => { blackCat.RevealTryalCard(idx); AfterReveal(); });
+                tableLayoutController.BeginTryalSelection(accused, idx =>
+                {
+                    accused.RevealTryalCard(idx, fromAccusation: true);
+                });
             }
             else
             {
-                // fallback: RNG choice
-                var choices = new List<int>();
-                for (int i = 0; i < blackCat?.TryalCards.Count; i++)
-                    if (!blackCat.TryalCards[i].IsRevealed) choices.Add(i);
-                if (blackCat != null && choices.Count > 0)
-                    blackCat.RevealTryalCard(choices[rng.NextInt(0, choices.Count)]);
-                AfterReveal();
+                // AI or fallback: reveal a random unrevealed Tryal
+                var rng = accuser?.Rng ?? Rng;
+                int? idx = accused.GetRandomUnrevealedTryalIndex(rng);
+                if (idx.HasValue)
+                    accused.RevealTryalCard(idx.Value, fromAccusation: true);
             }
         }
-        private void ExecuteConspiracySwap(IRng rng)
+
+        private void OnEnable()
         {
-            // Candidates: alive players who have at least one unrevealed Tryal
-            var candidates = PlayerService.GetAlivePlayers()
-                .Where(p => p.TryalCards != null && p.TryalCards.Any(tc => !tc.IsRevealed))
-                .ToList();
+            Player.OnAccusationRevealNeeded += HandleAccusationRevealChoice;
+        }
 
-            if (candidates.Count < 2)
-            {
-                Debug.LogWarning("[Conspiracy] Not enough candidates to swap Tryal cards.");
-                return;
-            }
-
-            // Pick two distinct players deterministically
-            int aIndex = rng.NextInt(0, candidates.Count);
-            int bIndex = aIndex;
-            // Ensure bIndex != aIndex
-            if (candidates.Count > 1)
-                while (bIndex == aIndex) bIndex = rng.NextInt(0, candidates.Count);
-
-            var playerA = candidates[aIndex];
-            var playerB = candidates[bIndex];
-
-            // Pick one unrevealed Tryal index for each
-            var aTryalIndex = playerA.GetRandomUnrevealedTryalIndex(rng);
-            var bTryalIndex = playerB.GetRandomUnrevealedTryalIndex(rng);
-
-            if (aTryalIndex == null || bTryalIndex == null)
-            {
-                Debug.LogWarning("[Conspiracy] Could not find unrevealed Tryal indices for both players.");
-                return;
-            }
-
-            // Remove selected cards
-            var aCard = playerA.RemoveTryalAt(aTryalIndex.Value);
-            var bCard = playerB.RemoveTryalAt(bTryalIndex.Value);
-
-            if (aCard == null || bCard == null)
-            {
-                Debug.LogWarning("[Conspiracy] Null Tryal card during removal—swap aborted.");
-                // Try to roll back if needed (edge case), but we only removed if not null
-                if (aCard != null) playerA.AddTryalCardAndNotify(aCard);
-                if (bCard != null) playerB.AddTryalCardAndNotify(bCard);
-                return;
-            }
-
-            // Swap
-            playerA.AddTryalCardAndNotify(bCard);
-            playerB.AddTryalCardAndNotify(aCard);
-
-            Debug.Log($"[Conspiracy] Swapped unrevealed Tryals between {playerA.PlayerNameText} and {playerB.PlayerNameText}.");
+        private void OnDisable()
+        {
+            Player.OnAccusationRevealNeeded -= HandleAccusationRevealChoice;
         }
 
         private void UpdateCurrentPlayer()

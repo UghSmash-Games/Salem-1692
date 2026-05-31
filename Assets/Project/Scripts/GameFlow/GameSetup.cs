@@ -21,13 +21,15 @@
 *    • Ensure null safety on DeckManager reference in Awake.
 *    • Make Witch ratio configurable through game settings.
 */
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
 using Salem.GameFlow;
 using Salem.Players;
-using System.Collections.Generic;
-using System.Linq;
+using Salem.UI;
 using UnityEngine;
 
 namespace Salem.Gameplay.Setup
@@ -36,10 +38,24 @@ namespace Salem.Gameplay.Setup
     {
         #region Vars
         [SerializeField] private GameManager GameManager;
+        [SerializeField] private TableLayoutController tableLayoutController;
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
-        [SerializeField, Range(0f, 1f), Tooltip("Proportion of players assigned the Witch role")]
-        private float witchRatio = 1f / 3f;
+        [SerializeField] private TownHallChoiceUI townHallChoiceUI;
+        
+        // Exact Tryal card counts per player count: (NotAWitch, Witch, Constable)
+        private static readonly Dictionary<int, (int notAWitch, int witch, int constable)> TryalDistribution = new()
+        {
+            { 4,  (18, 1, 1) },
+            { 5,  (23, 1, 1) },
+            { 6,  (27, 2, 1) },
+            { 7,  (32, 2, 1) },
+            { 8,  (29, 2, 1) },
+            { 9,  (33, 2, 1) },
+            { 10, (27, 2, 1) },
+            { 11, (30, 2, 1) },
+            { 12, (33, 2, 1) },
+        };
         private List<TryalCard> TryalDeck = new List<TryalCard>();
         private DeckManager DeckManager;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -66,119 +82,166 @@ namespace Salem.Gameplay.Setup
         #endregion
 
         #region Accessor Functions
-        //Called In GamePhaseManager durning Setup
-        public void SetupNewGame(IReadOnlyList<Player> players, int count)
+        //Called in GamePhaseManager during Setup (now a coroutine to support Town Hall UI choice)
+        public IEnumerator SetupNewGame(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupNewGame");
             SetupTryalCards(players);
-            AssignBlackCatAtStart(players);
-            SetupInitalHand(players, count);
-            SetupTownhallCard(players);
+            tableLayoutController.BuildTable(players);
+            
+            yield return SetupTownhallCards(players);
+            SetupPlayDeck(players);
         }
         #endregion
 
         #region Helper Functions
         private void SetupTryalCards(IReadOnlyList<Player> players)
         {
-            int numberOfWitches = Mathf.Max(1, Mathf.RoundToInt(players.Count * witchRatio));
-            //Debug.Log($"There are {numberOfWitches} Witches.");
+            //Debug.Log($"[GameSetup] Running SetupTryalCards");
+             if (!TryalDistribution.TryGetValue(players.Count, out var dist))
+            {
+                Debug.LogError($"[GameSetup] No Tryal distribution defined for {players.Count} players.");
+                return;
+            }
 
-            int numberOfTryalCardsNeeded = players.Count * 5;
+            int totalCards = dist.notAWitch + dist.witch + dist.constable;
+            int cardsPerPlayer = totalCards / players.Count;
 
-            // Add cards to the deck, Start with the Constable
-            TryalCard constableCard = (TryalCard)Instantiate(TryalCards[0]);
-            constableCard.TryalCardType = TryalCardType.Constable;
-            TryalDeck.Add(constableCard);
+             // Add Constable card(s)
+            for (int i = 0; i < dist.constable; i++)
+            {
+                TryalCard card = (TryalCard)Instantiate(TryalCards[0]);
+                card.TryalCardType = TryalCardType.Constable;
+                TryalDeck.Add(card);
+            }
 
-            //Create our Witch Cards
-            for (int i = 0; i < numberOfWitches; i++)
+            // Create Witch cards
+            for (int i = 0; i < dist.witch; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[1]);
                 card.TryalCardType = TryalCardType.Witch;
                 TryalDeck.Add(card);
             }
 
-            //Finish the deck with NotAWitch Cards
-            for (int i = TryalDeck.Count; i < numberOfTryalCardsNeeded; i++)
+            // Fill remaining slots with NotAWitch cards
+            for (int i = 0; i < dist.notAWitch; i++)
             {
                 TryalCard card = (TryalCard)Instantiate(TryalCards[2]);
                 card.TryalCardType = TryalCardType.NotAWitch;
                 TryalDeck.Add(card);
             }
 
-            //Debug.Log($"There are {TryalDeck.Count} total Tryal Cards.");
-
             // Shuffle and distribute
             ShuffleTryalDeck(TryalDeck);
 
             foreach (var player in players)
             {
-                player.TryalCards = DrawTryalCards(5, TryalDeck);
+                player.TryalCards = DrawTryalCards(cardsPerPlayer, TryalDeck);
                 player.InvokeOnTryalCardsChanged();
                 player.DetermineRole();
                 //give each player a reference to the RNG to be able to randomly decide tryal card. This will likely be replaced later, but I want to just get the systems connected for now
                 player.setRng(GameManager.Rng);
             }
         }
-        
-        private void AssignBlackCatAtStart(IReadOnlyList<Player> players)
+
+         private IEnumerator SetupTownhallCards(IReadOnlyList<Player> players)
         {
+            //Debug.Log($"[GameSetup] Running SetupTownhallCards");
+            if (players.Count <= 7)
+            {
+                // Each player gets 2 cards and chooses 1
+                foreach (var player in players)
+                {
+                    var options = DeckManager.DrawTownhallCards(2);
+                    if (options.Count < 2)
+                    {
+                        // Fallback: assign whatever we got
+                        player.setTownhall(options.FirstOrDefault());
+                        continue;
+                    }
+
+                    if (player.IsHuman && player.IsLocalPlayer) //&& !PlayerService.IsAirConsoleMode) //AIRCONSOLE TEMP DISABLE 4/28/26
+                    {
+                        // Human player: show UI choice
+                        bool chosen = false;
+                        if (townHallChoiceUI != null)
+                        {
+                            townHallChoiceUI.Open(options[0], options[1], (selected, discarded) =>
+                            {
+                                player.setTownhall(selected);
+                                DeckManager.DiscardTownhallCard(discarded);
+                                chosen = true;
+                            });
+                            yield return new WaitUntil(() => chosen);
+                        }
+                        else
+                        {
+                            Debug.LogWarning("[GameSetup] TownHallChoiceUI not assigned; defaulting to random pick.");
+                            int pick = Rng.NextInt(0, 2);
+                            player.setTownhall(options[pick]);
+                            DeckManager.DiscardTownhallCard(options[1 - pick]);
+                        }
+                    }
+                    else
+                    {
+                        // AI or remote player: pick randomly
+                        int pick = Rng.NextInt(0, 2);
+                        player.setTownhall(options[pick]);
+                        DeckManager.DiscardTownhallCard(options[1 - pick]);
+                    }
+                }
+            }
+            else
+            {
+                // >7 players: 1 card each, no choice
+                foreach (var player in players)
+                    DeckManager.drawTownhallCard(player);
+            }
+
+            // Martha Corey: apply copied passive abilities after all town hall cards are assigned
+            foreach (var player in players)
+            {
+                if (player.townhallCard != null && player.townhallCard.CardName == TownhallName.MarthaCorey)
+                    player.ApplyMarthaCoreyCopy();
+            }
+        }
+
+        private void SetupPlayDeck(IReadOnlyList<Player> players)
+        {
+            //Debug.Log($"[GameSetup] Running SetupPlayDeck");
             if (DeckManager == null)
             {
-                Debug.LogWarning("[GameSetup] Cannot assign Black Cat without a DeckManager reference.");
+                Debug.LogError("[GameSetup] DeckManager is null; cannot set up play deck.");
                 return;
             }
 
-            var card = DeckManager.ExtractCardFromDeck("Black Cat");
-            if (card == null)
-            {
-                Debug.LogWarning("[GameSetup] No Black Cat card found in the deck during setup.");
-                return;
-            }
+            // Remove Night and Black Cat from the deck before dealing
+            Card nightCard = DeckManager.ExtractCardFromDeck("Night");
+            Card blackCatCard = DeckManager.ExtractCardFromDeck("Black Cat");
 
-            if (players == null || players.Count == 0)
-            {
-                Debug.LogWarning("[GameSetup] No players available to receive the Black Cat. Sending card to discard.");
-                DeckManager.AddToDiscardPile(card);
-                return;
-            }
+            // Hold Black Cat for Dawn phase witch vote
+            if (blackCatCard != null)
+                DeckManager.HoldBlackCatForDawn(blackCatCard);
+            else
+                Debug.LogWarning("[GameSetup] No Black Cat card found in the deck.");
 
-            int index = Rng.NextInt(0, players.Count);
-            var chosenPlayer = players[index];
-            chosenPlayer.AssignBlackCat(card);
-        }
+            // Shuffle the remaining deck
+            DeckManager.ShuffleDeck();
 
-        //Give the players their starting hand
-        private void SetupInitalHand(IReadOnlyList<Player> players, int count)
-        {
+            // Deal 3 cards to each player; if Conspiracy is drawn it stays in the deck
             foreach (var player in players)
             {
                 if (player.HandManager == null)
                 {
-                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
+                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager.");
                     continue;
                 }
-                DeckManager.DrawMultipleCards(player.HandManager, count, ShouldRejectInitialHandCard);
+                DeckManager.DrawMultipleCards(player.HandManager, 3, c => c.Name == "Conspiracy");
             }
-        }
 
-         private bool ShouldRejectInitialHandCard(Card card)
-        {
-            return card != null && InitialHandRestrictedCards.Contains(card.Name);
-        }
-
-        //Give the players their townhall Card
-        private void SetupTownhallCard(IReadOnlyList<Player> players)
-        {
-            foreach (var player in players)
-            {
-                if (player.HandManager == null)
-                {
-                    Debug.LogError($"[GameSetup] {player.PlayerNameText} has NULL HandManager. Add HandManager to the SAME GameObject as Player.");
-                    continue;
-                }
-                //draw and set card
-                DeckManager.drawTownhallCard(player);
-            }
+            // Cut remaining deck in half and shuffle Night card into the bottom half
+            if (nightCard != null)
+                DeckManager.ReshuffleAndPlaceNightCard(nightCard);
         }
 
         //Have players draw their Tryal Cards
@@ -196,12 +259,6 @@ namespace Salem.Gameplay.Setup
                 int randomIndex = RNGService.Rng.NextInt(i, deck.Count);
                 (deck[i], deck[randomIndex]) = (deck[randomIndex], deck[i]);
             }
-            
-            //Debug.Log("Shuffled Tryal Deck:");
-            /*for (int i = 0; i < TryalDeck.Count; i++)
-            {
-                Debug.Log($"[{i}] {TryalDeck[i].TryalCardType}");
-            }*/
         }
         #endregion
     }

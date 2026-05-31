@@ -21,15 +21,59 @@ using Salem.Players;
 using Salem.GameFlow;
 using Salem.Data;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 namespace Salem.UI
 {
     public class UIManager : MonoBehaviour
     {
-        [SerializeField] private List<PlayerStatusUI> statusPanels;
+        //[SerializeField] private List<PlayerStatusUI> statusPanels; disabled for new UI possible delete 5/15/26
         [SerializeField] private PlayerInputUI localPlayerInputUI;
-        private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new();
 
+        [Header("Phase Indicator")]
+        [SerializeField] private Image phaseIconImage;
+        [SerializeField] private Sprite placeholderPhaseSprite;
+        [SerializeField] private Sprite dawnPhaseSprite;
+        [SerializeField] private Sprite dayPhaseSprite;
+        [SerializeField] private Sprite nightPhaseSprite;
+
+        private GamePhaseManager GamePhaseManager;
+        //private Dictionary<Player, PlayerStatusUI> playerToStatusUI = new(); disabled for new UI possible delete 5/15/26
+
+        private void Awake()
+        {
+            if (phaseIconImage == null)
+            {
+                var indicatorObject = GameObject.Find("Day_NightIndicator");
+                if (indicatorObject != null)
+                {
+                    phaseIconImage = indicatorObject.GetComponent<Image>();
+                }
+            }
+        }
+
+        private void OnEnable()
+        {
+            GamePhaseManager = FindFirstObjectByType<GamePhaseManager>();
+            if (GamePhaseManager != null)
+            {
+                GamePhaseManager.OnPhaseChange += HandlePhaseIconChanged;
+                HandlePhaseIconChanged(GamePhaseManager.CurrentPhase);
+            }
+            else
+            {
+                ApplyPhaseSprite(placeholderPhaseSprite);
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (GamePhaseManager != null)
+            {
+                GamePhaseManager.OnPhaseChange -= HandlePhaseIconChanged;
+            }
+        }
+        /* Temp Disable for Testing purpose of new UI Layout 2/16/26
         public void BindAllPlayerStatusUI()
         {
             var players = PlayerService.All;
@@ -47,6 +91,9 @@ namespace Salem.UI
                 }
             }
         }
+        */
+
+        /* disabled for new UI possible delete 5/15/26
         private void BindStatusUI(Player player, PlayerStatusUI statusUI)
         {
             // Link the UI to this player's updates
@@ -64,6 +111,7 @@ namespace Salem.UI
             playerToStatusUI[player] = statusUI;
             SetPlayerName(player, statusUI);
         }
+        */
 
         public void SetupLocalPlayerUI(Player localPlayer)
         {
@@ -72,11 +120,12 @@ namespace Salem.UI
                 Debug.LogWarning("UIManager: No local player assigned.");
                 return;
             }
-
-            localPlayerInputUI.Initialize(localPlayer);
+            //Temp Disable for Testing purpose of new UI Layout 2/16/26
+            //localPlayerInputUI.Initialize(localPlayer);
 
         }
 
+        /* disabled for new UI possible delete 5/15/26
         public void SetPlayerTurnActive()
         {
             foreach (var ui in playerToStatusUI.Values)
@@ -102,10 +151,52 @@ namespace Salem.UI
                 Debug.LogWarning("UIManager: No StatusUI found for current player.");
             }
         }
+        */
 
+        /* disabled for new UI possible delete 5/15/26
         private void SetPlayerName(Player player, PlayerStatusUI statusUI)
         {
             statusUI.PlayerName.text = player.PlayerNameText;
+        }
+        */
+
+        private void HandlePhaseIconChanged(GamePhase phase)
+        {
+            switch (phase)
+            {
+                case GamePhase.Dawn:
+                    ApplyPhaseSprite(dawnPhaseSprite);
+                    break;
+
+                case GamePhase.Day:
+                    ApplyPhaseSprite(dayPhaseSprite);
+                    break;
+
+                case GamePhase.Night:
+                    ApplyPhaseSprite(nightPhaseSprite);
+                    break;
+
+                default:
+                    ApplyPhaseSprite(placeholderPhaseSprite);
+                    break;
+            }
+        }
+
+        private void ApplyPhaseSprite(Sprite sprite)
+        {
+            if (phaseIconImage == null)
+            {
+                return;
+            }
+
+            var resolvedSprite = sprite != null ? sprite : placeholderPhaseSprite;
+            if (resolvedSprite == null)
+            {
+                return;
+            }
+
+            phaseIconImage.enabled = true;
+            phaseIconImage.sprite = resolvedSprite;
         }
     }
 }
