@@ -147,7 +147,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      John Proctor_0: 1284216619983507826
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

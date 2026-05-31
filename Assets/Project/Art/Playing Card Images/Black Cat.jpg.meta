@@ -147,7 +147,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Black Cat_0: 1198703447431812753
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

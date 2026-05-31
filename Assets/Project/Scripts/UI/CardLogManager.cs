@@ -6,13 +6,13 @@
 * FIXME: [Known bugs or issues]
 */
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 using Salem.Cards;
 using Salem.Data;
 using Salem.GameFlow;
 using Salem.Players;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 
 namespace Salem.UI
@@ -49,6 +49,7 @@ namespace Salem.UI
             Player.AccusationThresholdReached += HandleAccusationThreshold;
             Player.TryalCardRevealed += HandleTryalRevealed;
             PlayerService.OnPlayerEliminated += HandlePlayerEliminated;
+            TrialService.OnDoubleWitchRevealed += HandleDoubleWitchRevealed;
         }
 
 
@@ -59,6 +60,7 @@ namespace Salem.UI
             Player.AccusationThresholdReached -= HandleAccusationThreshold;
             Player.TryalCardRevealed -= HandleTryalRevealed;
             PlayerService.OnPlayerEliminated -= HandlePlayerEliminated;
+            TrialService.OnDoubleWitchRevealed -= HandleDoubleWitchRevealed;
         }
 
         private void HandleCardPlayed(string message) => AddLogEntry(message);
@@ -104,6 +106,12 @@ namespace Salem.UI
             AddLogEntry($"{player.PlayerNameText} was eliminated ({cause}).");
         }
 
+        private void HandleDoubleWitchRevealed(Player player)
+        {
+            if (player == null) return;
+            AddLogEntry($"WARNING: {player.PlayerNameText} revealed a Witch card but has a SECOND Witch card! They survive.");
+        }
+
         public static void Log(string message)
         {
             if (Instance == null)
@@ -124,16 +132,13 @@ namespace Salem.UI
             if (entryText != null)
                 entryText.text = message;
 
-
             logEntries.Enqueue(newEntry);
-
 
             if (logEntries.Count > maxEntries)
             {
                 GameObject oldest = logEntries.Dequeue();
                 Destroy(oldest);
             }
-
 
             // Auto-scroll to bottom
             Canvas.ForceUpdateCanvases();

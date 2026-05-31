@@ -1,3 +1,4 @@
+using Salem.Systems;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -14,7 +15,7 @@ public class TitleGoToMenu : MonoBehaviour
     {
         if (Input.anyKeyDown)
         {
-            SceneManager.LoadScene("Main_Menu");
+            SceneLoader.Instance.LoadScene("Main_Menu");
         }        
     }
 }

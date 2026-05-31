@@ -112,6 +112,7 @@ namespace Salem.UI
 
         void ShowTip(Vector2 screenPos)
         {
+            card = cardUI ? cardUI.Card : null;
             if (card == null || CardTooltipUI.Instance == null) return;
             string body = ExtractRulesText(card);
             if (string.IsNullOrWhiteSpace(body)) return;
