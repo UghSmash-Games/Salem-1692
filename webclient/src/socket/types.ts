@@ -1,0 +1,108 @@
+/**
+ * TypeScript payload contracts for every Socket.io message the phone client
+ * sends or receives. Mirrors docs/protocol.md.
+ *
+ * NOTE on the `acting` flag (SecretPhasePrompt): it is part of the payload so
+ * the client can hold it, but it MUST NEVER influence rendering or timing.
+ * See src/screens/SecretPhaseScreen.tsx and CLAUDE.md.
+ */
+
+// ─── Roles ────────────────────────────────────────────────────────
+
+export type PlayerRole = 'witch' | 'townsperson' | 'constable';
+
+// ─── Secret phase variants ────────────────────────────────────────
+
+export type SecretPhaseType = 'black_cat' | 'night_vote' | 'constable_save';
+
+// ─── Server → Client payloads ─────────────────────────────────────
+
+export interface JoinedPayload {
+  playerId: string;
+  roomCode: string;
+}
+
+/** A single player's public-facing entry on the board. */
+export interface PublicPlayer {
+  playerId: string;
+  displayName: string;
+  accusations: number;
+  eliminated: boolean;
+  /** Public blue cards in front of them (names only), e.g. ["Asylum"]. */
+  statusCards?: string[];
+}
+
+export interface GameStateUpdatePayload {
+  phase?: string;
+  whoseTurn?: string | null;
+  players: PublicPlayer[];
+}
+
+/** A tryal card as shown to its owner. faceUp cards have been revealed publicly. */
+export interface TryalCardView {
+  /** Display label, e.g. "Witch", "Not a Witch", "Constable". */
+  label: string;
+  faceUp: boolean;
+}
+
+export interface PrivateStatePayload {
+  playerId: string;
+  tryals: TryalCardView[];
+  hand: string[];
+  role: PlayerRole;
+}
+
+/** Delivered to each player individually; server strips the playerId. */
+export interface SecretPhasePromptPayload {
+  prompt: SecretPhaseType;
+  targets: string[];
+  acting: boolean;
+}
+
+export interface ActionRequestPayload {
+  playerId: string;
+  /** Available top-level actions, e.g. ["draw", "play", "confess"]. */
+  actions: string[];
+}
+
+export interface PhaseResolvePayload {
+  /** UTC epoch ms at which all screens should trigger the reveal. */
+  revealAt: number;
+}
+
+export interface EliminationResultPayload {
+  playerId: string;
+  eliminated: boolean;
+  /** Empty string / null when no one saved the target. */
+  savedBy: string | null;
+}
+
+export interface GameOverPayload {
+  winner: 'witches' | 'townspeople';
+  /** All players' tryals, revealed at game end. */
+  tryals: Record<string, TryalCardView[]>;
+}
+
+export interface ErrorMsgPayload {
+  message: string;
+}
+
+// ─── Client → Server payloads ─────────────────────────────────────
+
+export interface JoinRoomPayload {
+  code: string;
+  displayName: string;
+}
+
+export interface PlayerActionPayload {
+  card: string;
+  targetPlayerId: string;
+}
+
+export interface SecretPhaseSubmitPayload {
+  selection: string;
+}
+
+export interface ConfessPayload {
+  tryalIndex: number;
+}

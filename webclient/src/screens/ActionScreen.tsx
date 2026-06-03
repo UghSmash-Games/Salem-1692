@@ -1,0 +1,166 @@
+/**
+ * Action screen — shown when the host sends an action_request for this player.
+ *
+ * Flow: choose to draw or play. If playing, pick a card from hand, then pick a
+ * target (self excluded), then emit player_action. The confess path emits confess.
+ */
+
+import { useMemo, useState } from 'react';
+import { useGameStore } from '../store/gameStore';
+import { sendPlayerAction, sendConfess } from '../socket/socketClient';
+import { HandList } from '../components/HandList';
+import { PlayerTargetList } from '../components/PlayerTargetList';
+import { ConfessPrompt } from '../components/ConfessPrompt';
+
+type Step = 'choose' | 'select_card' | 'select_target' | 'confess';
+
+export function ActionScreen() {
+  const actions = useGameStore((s) => s.actionRequest?.actions ?? []);
+  const { hand, tryals } = useGameStore((s) => s.privateState);
+  const { players } = useGameStore((s) => s.publicBoard);
+  const myPlayerId = useGameStore((s) => s.session.playerId);
+
+  const [step, setStep] = useState<Step>('choose');
+  const [cardIndex, setCardIndex] = useState<number | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+
+  // Valid targets exclude self and eliminated players.
+  const targets = useMemo(
+    () =>
+      players
+        .filter((p) => p.playerId !== myPlayerId && !p.eliminated)
+        .map((p) => p.displayName),
+    [players, myPlayerId],
+  );
+
+  const canDraw = actions.includes('draw');
+  const canPlay = actions.includes('play');
+  const canConfess = actions.includes('confess');
+
+  const submitPlay = () => {
+    if (cardIndex === null || target === null) return;
+    sendPlayerAction({ card: hand[cardIndex], targetPlayerId: target });
+    resetLocal();
+  };
+
+  const submitDraw = () => {
+    // "Draw 2 cards" is communicated as a player_action with no target.
+    sendPlayerAction({ card: 'draw', targetPlayerId: '' });
+    resetLocal();
+  };
+
+  const resetLocal = () => {
+    setStep('choose');
+    setCardIndex(null);
+    setTarget(null);
+  };
+
+  return (
+    <div className="flex min-h-dvh flex-col gap-5 bg-ink px-5 py-6">
+      <h2 className="text-xl font-semibold text-parchment">Your Turn</h2>
+
+      {step === 'choose' && (
+        <div className="flex flex-col gap-3">
+          {canDraw && (
+            <button
+              type="button"
+              onClick={submitDraw}
+              className="rounded-md bg-moss px-4 py-3 text-lg font-semibold text-parchment"
+            >
+              Draw 2 Cards
+            </button>
+          )}
+          {canPlay && (
+            <button
+              type="button"
+              onClick={() => setStep('select_card')}
+              className="rounded-md bg-candle px-4 py-3 text-lg font-semibold text-ink"
+            >
+              Play a Card
+            </button>
+          )}
+          {canConfess && (
+            <button
+              type="button"
+              onClick={() => setStep('confess')}
+              className="rounded-md border border-ember px-4 py-3 text-lg font-semibold text-ember"
+            >
+              Confess
+            </button>
+          )}
+        </div>
+      )}
+
+      {step === 'select_card' && (
+        <div className="flex flex-col gap-4">
+          <h3 className="text-sm uppercase tracking-wider text-parchment/60">
+            Choose a card
+          </h3>
+          <HandList
+            hand={hand}
+            selectable
+            selectedIndex={cardIndex}
+            onSelect={setCardIndex}
+          />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={resetLocal}
+              className="flex-1 rounded-md border border-parchment/40 px-4 py-3 text-parchment"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={cardIndex === null}
+              onClick={() => setStep('select_target')}
+              className="flex-1 rounded-md bg-candle px-4 py-3 font-semibold text-ink disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'select_target' && (
+        <div className="flex flex-col gap-4">
+          <h3 className="text-sm uppercase tracking-wider text-parchment/60">
+            Choose a target
+          </h3>
+          <PlayerTargetList
+            targets={targets}
+            selected={target}
+            onSelect={setTarget}
+          />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setStep('select_card')}
+              className="flex-1 rounded-md border border-parchment/40 px-4 py-3 text-parchment"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={target === null}
+              onClick={submitPlay}
+              className="flex-1 rounded-md bg-ember px-4 py-3 font-semibold text-parchment disabled:opacity-40"
+            >
+              Play
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'confess' && (
+        <ConfessPrompt
+          tryals={tryals}
+          onConfess={(tryalIndex) => {
+            sendConfess({ tryalIndex });
+            resetLocal();
+          }}
+        />
+      )}
+    </div>
+  );
+}
