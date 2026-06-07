@@ -71,3 +71,12 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Node.js
+server/node_modules/
+webclient/node_modules/
+server/.env
+webclient/.env
+
+# Unity generated folder (project is at repo root)
+unity/
