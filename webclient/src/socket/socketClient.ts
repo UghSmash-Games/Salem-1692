@@ -13,6 +13,7 @@ import { io, type Socket } from 'socket.io-client';
 import { CLIENT_TO_SERVER } from './events';
 import type {
   JoinRoomPayload,
+  JoinMirrorPayload,
   PlayerActionPayload,
   SecretPhaseSubmitPayload,
   ConfessPayload,
@@ -44,6 +45,11 @@ export function disconnect(): void {
 
 export function joinRoom(payload: JoinRoomPayload): void {
   socket.emit(CLIENT_TO_SERVER.JOIN_ROOM, payload);
+}
+
+/** Join a room as a passive mirror display (public state only). */
+export function joinMirror(payload: JoinMirrorPayload): void {
+  socket.emit(CLIENT_TO_SERVER.JOIN_MIRROR, payload);
 }
 
 export function sendPlayerAction(payload: PlayerActionPayload): void {

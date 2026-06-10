@@ -36,6 +36,9 @@ export interface GameStateUpdatePayload {
   phase?: string;
   whoseTurn?: string | null;
   players: PublicPlayer[];
+  /** Public deck/discard counts (Unity-defined, optional). */
+  deckCount?: number;
+  discardCount?: number;
 }
 
 /** A tryal card as shown to its owner. faceUp cards have been revealed publicly. */
@@ -92,6 +95,10 @@ export interface ErrorMsgPayload {
 export interface JoinRoomPayload {
   code: string;
   displayName: string;
+}
+
+export interface JoinMirrorPayload {
+  code: string;
 }
 
 export interface PlayerActionPayload {

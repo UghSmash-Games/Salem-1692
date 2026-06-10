@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
+import MirrorApp from './MirrorApp';
 import './styles/index.css';
 
 /**
@@ -9,7 +10,8 @@ import './styles/index.css';
  * machine, which shows the JoinScreen until the player has joined a room and
  * then derives the in-game screen from server events.
  *
- * "/display" (the passive mirror screen) is reserved for Phase 3.
+ * "/display" renders the passive mirror screen (public state only), a fully
+ * separate component tree that never attaches listeners for private events.
  */
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -17,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/join" element={<App />} />
+        <Route path="/display" element={<MirrorApp />} />
         <Route path="*" element={<Navigate to="/join" replace />} />
       </Routes>
     </BrowserRouter>

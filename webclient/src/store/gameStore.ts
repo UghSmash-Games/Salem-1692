@@ -44,6 +44,8 @@ export interface PublicBoardSlice {
   phase: string | null;
   whoseTurn: string | null;
   players: PublicPlayer[];
+  deckCount: number | null;
+  discardCount: number | null;
 }
 
 export interface PromptSlice {
@@ -72,12 +74,15 @@ interface GameStore {
   prompt: PromptSlice | null;
   actionRequest: ActionRequestSlice | null;
   reveal: { revealAt: number } | null;
+  /** The most recent elimination_result, for the synchronized reveal overlay. */
+  lastElimination: EliminationResultPayload | null;
   gameOver: GameOverSlice | null;
 
   // ── Connection / session ──
   setConnected: (connected: boolean) => void;
   beginJoin: (displayName: string) => void;
   onJoined: (playerId: string, roomCode: string) => void;
+  onMirrorJoined: (roomCode: string) => void;
   setJoinError: (message: string) => void;
   reset: () => void;
 
@@ -87,6 +92,7 @@ interface GameStore {
   applySecretPhasePrompt: (data: SecretPhasePromptPayload) => void;
   applyActionRequest: (data: ActionRequestPayload) => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
+  clearReveal: () => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
   applyGameOver: (data: GameOverPayload) => void;
 
@@ -112,6 +118,8 @@ const initialPublicBoard: PublicBoardSlice = {
   phase: null,
   whoseTurn: null,
   players: [],
+  deckCount: null,
+  discardCount: null,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -121,6 +129,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   prompt: null,
   actionRequest: null,
   reveal: null,
+  lastElimination: null,
   gameOver: null,
 
   setConnected: (connected) =>
@@ -134,6 +143,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       session: { ...s.session, playerId, roomCode, joinError: null },
     })),
 
+  // Mirror clients have a room but no player slot (playerId stays null).
+  onMirrorJoined: (roomCode) =>
+    set((s) => ({
+      session: { ...s.session, roomCode, playerId: null, joinError: null },
+    })),
+
   setJoinError: (message) =>
     set((s) => ({ session: { ...s.session, joinError: message } })),
 
@@ -145,6 +160,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prompt: null,
       actionRequest: null,
       reveal: null,
+      lastElimination: null,
       gameOver: null,
     }),
 
@@ -154,6 +170,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         phase: data.phase ?? null,
         whoseTurn: data.whoseTurn ?? null,
         players: data.players ?? [],
+        deckCount: data.deckCount ?? null,
+        discardCount: data.discardCount ?? null,
       },
       // Advancing public state ends any active secret phase / action request.
       prompt: null,
@@ -188,6 +206,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 
+  clearReveal: () => set({ reveal: null }),
+
   applyEliminationResult: (data) => {
     const { playerId } = get().session;
     set((s) => ({
@@ -199,6 +219,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : p,
         ),
       },
+      lastElimination: data,
       // If this elimination targets me, drop any pending prompt/action.
       prompt: data.playerId === playerId ? null : s.prompt,
       actionRequest: data.playerId === playerId ? null : s.actionRequest,
