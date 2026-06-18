@@ -61,6 +61,11 @@ namespace Salem.Networking
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // Keep Update() (and thus the socket message pump) running when the
+            // Editor/standalone window loses focus, so Engine.io pings are answered
+            // and the server doesn't idle-close the connection.
+            Application.runInBackground = true;
         }
 
         private void Update()

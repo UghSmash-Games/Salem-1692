@@ -52,8 +52,32 @@ namespace Salem.GameFlow
         private DeckManager deckManager;
         private Player currentPlayer;
         private float turnTimer;
+        private int turnId;   // increments each StartTurn; lets async inputs detect their turn ended
         private bool isTurnActive = false;
         private bool waitingForHuman;
+
+        /// <summary>
+        /// True while a local-UI human turn is blocked waiting for input. The UI
+        /// button handlers (TryDrawTwoCards, RequestEndTurn, etc.) set this false
+        /// to unblock the turn. Exposed so LocalUIInput can drive the same wait.
+        /// </summary>
+        public bool WaitingForHuman
+        {
+            get => waitingForHuman;
+            set => waitingForHuman = value;
+        }
+
+        /// <summary>
+        /// Monotonic id, bumped at each turn start. Async inputs (e.g. NetworkInput)
+        /// capture it and bail out if it changes — i.e. the turn was force-ended.
+        /// </summary>
+        public int TurnId => turnId;
+
+        /// <summary>
+        /// Reset the inactivity window. Call on each player action so an
+        /// actively-playing player never times out on cumulative turn time.
+        /// </summary>
+        public void ResetIdleTimer() => turnTimer = turnDuration;
         private bool turnsStarted;
         private int forcedStartingIndex = 0;
 
@@ -93,7 +117,28 @@ namespace Salem.GameFlow
             turnTimer -= Time.deltaTime;
             if (turnTimer <= 0f)
             {
-                Debug.Log($"[IdleTimer] {currentPlayer?.PlayerNameText} idle for {turnDuration}s — forcing draw two cards.");
+                HandleIdleTimeout();
+            }
+        }
+
+        /// <summary>
+        /// Fired only after genuine inactivity (the timer resets on each action).
+        /// If the player already committed to the play path, just end their turn —
+        /// do NOT force a draw. Otherwise Draw 2 is the correct default.
+        /// </summary>
+        private void HandleIdleTimeout()
+        {
+            if (!isTurnActive || currentPlayer == null) return;
+
+            if (currentTurnAction == TurnActionChoice.PlayCards)
+            {
+                Debug.Log($"[IdleTimer] {currentPlayer.PlayerNameText} inactive {turnDuration}s mid-play — ending turn.");
+                waitingForHuman = false;
+                EndTurn();
+            }
+            else
+            {
+                Debug.Log($"[IdleTimer] {currentPlayer.PlayerNameText} inactive {turnDuration}s — forcing draw two cards.");
                 ForceDrawAndEndTurn();
             }
         }
@@ -118,6 +163,7 @@ namespace Salem.GameFlow
             if (players.Count == 0) return;
 
             turnTimer = turnDuration;
+            turnId++;
 
             if (playerIndex >= players.Count) playerIndex = 0;
 
@@ -345,6 +391,8 @@ namespace Salem.GameFlow
                 return;
             }
 
+            ResetIdleTimer(); // a play is activity — refresh the inactivity window
+
             if (currentTurnAction == TurnActionChoice.None)
             {
                 currentTurnAction = TurnActionChoice.PlayCards;
@@ -418,22 +466,20 @@ namespace Salem.GameFlow
             }
             else if  then code below*/
 
-            if (current.IsHuman && current.IsLocalPlayer)
+            // AI runs its own sequencer; every other seat (local-UI or network)
+            // routes through its IPlayerInput. Both drive the same turn API.
+            if (current is AIPlayer ai)
             {
-                waitingForHuman = true;
-
-                // Wait until a card is played or End Turn is pressed
-                yield return new WaitUntil(() => waitingForHuman == false);
-                yield break;
+                yield return StartCoroutine(ai.TakeTurnOnce());
+            }
+            else if (current.Input != null)
+            {
+                yield return StartCoroutine(current.Input.RunTurn(current));
             }
             else
             {
-                // AI path
-                if (current.TryGetComponent<AIPlayer>(out var ai))
-                {
-                    yield return StartCoroutine(ai.TakeTurnOnce());
-                }
-                else GameTurnManager.Instance.EndTurn();
+                // No input source (degenerate config) — don't hang the loop.
+                GameTurnManager.Instance.EndTurn();
             }
         }
 

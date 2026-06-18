@@ -36,10 +36,25 @@ export function ActionScreen() {
   const canDraw = actions.includes('draw');
   const canPlay = actions.includes('play');
   const canConfess = actions.includes('confess');
+  const canEnd = actions.includes('end');
 
   const submitPlay = () => {
     if (cardIndex === null || target === null) return;
-    sendPlayerAction({ card: hand[cardIndex], targetPlayerId: target });
+    // `target` is a display name (what PlayerTargetList shows); the host expects
+    // the public playerId. Map it back before sending.
+    const targetPlayer = players.find(
+      (p) => p.displayName === target && p.playerId !== myPlayerId && !p.eliminated,
+    );
+    sendPlayerAction({
+      card: hand[cardIndex],
+      targetPlayerId: targetPlayer?.playerId ?? '',
+    });
+    resetLocal();
+  };
+
+  const submitEnd = () => {
+    // Signal the host the player is done playing cards this turn.
+    sendPlayerAction({ card: 'end', targetPlayerId: '' });
     resetLocal();
   };
 
@@ -86,6 +101,15 @@ export function ActionScreen() {
               className="rounded-md border border-ember px-4 py-3 text-lg font-semibold text-ember"
             >
               Confess
+            </button>
+          )}
+          {canEnd && (
+            <button
+              type="button"
+              onClick={submitEnd}
+              className="rounded-md border border-parchment/40 px-4 py-3 text-lg font-semibold text-parchment"
+            >
+              End Turn
             </button>
           )}
         </div>

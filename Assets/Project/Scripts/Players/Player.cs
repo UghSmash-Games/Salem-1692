@@ -51,7 +51,26 @@ namespace Salem.Players
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
-        
+
+        // Network playerId (e.g. "p0") for networked-mode seats; empty for local/AI.
+        public string NetworkId;
+
+        // Public DISPLAY identity for game_state_update. For human seats this is
+        // the NetworkId; for AI seats it's a synthetic id (e.g. "ai0") so boards
+        // stay unique on the client. AI keep NetworkId empty (no private_state).
+        public string PublicId;
+
+        // Where this player's decisions come from. Lazily defaults to LocalUIInput
+        // so the local/AI game works with no coordinator; the network coordinator
+        // assigns a NetworkInput for remote seats. AI players never use this
+        // (GameTurnManager runs AIPlayer via AITurnSequencer).
+        private IPlayerInput _input;
+        public IPlayerInput Input
+        {
+            get => _input ??= new LocalUIInput();
+            set => _input = value;
+        }
+
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
         public Sprite townHallCardIcon { get; private set; }

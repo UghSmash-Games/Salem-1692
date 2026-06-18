@@ -57,21 +57,45 @@ namespace Salem.Networking
 
     // ΓöÇΓöÇΓöÇ Sent by Host (and PhaseResolveMsg echoed back) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
+    // Public, per-player board entry. PUBLIC DATA ONLY — never tryals/role/hand.
+    [Serializable]
+    public class PublicPlayerMsg
+    {
+        public string playerId;
+        public string displayName;
+        public int accusations;
+        public bool eliminated;
+        public string[] statusCards; // public blue cards in front of the player
+    }
+
+    // Broadcast to all players + mirrors. Shape matches webclient
+    // src/socket/types.ts GameStateUpdatePayload. Contains NO private data.
     [Serializable]
     public class GameStateUpdateMsg
     {
-        // Start minimal ΓÇö expand as board state is defined.
-        // Unity serializes whatever fields are here; server passes through without inspection.
-        public string turn;
         public string phase;
+        public string whoseTurn;       // network playerId of the active player
+        public PublicPlayerMsg[] players;
+        public int deckCount;
+        public int discardCount;
     }
 
+    // One tryal card as shown to its OWNER. Matches webclient TryalCardView.
+    [Serializable]
+    public class TryalViewMsg
+    {
+        public string label;  // "Witch" | "Not a Witch" | "Constable"
+        public bool faceUp;   // true once revealed publicly
+    }
+
+    // Sent to ONE player only (routed by playerId at the server). Private data.
     [Serializable]
     public class PrivateStateMsg
     {
         public string playerId;
-        public string[] tryals;
+        public TryalViewMsg[] tryals;
         public string[] hand;
+        public string role;   // "witch" | "townsperson" | "constable"
     }
 
     [Serializable]

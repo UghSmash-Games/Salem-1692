@@ -24,11 +24,29 @@ namespace Salem.Data
         Disconnect,
         Other
     }
-    
+
+    /// <summary>
+    /// Local: single local human + AI (legacy/testing). Networked: every human
+    /// is a remote phone client; no player is "local". Default is Local so the
+    /// existing local/AI game keeps working unchanged.
+    /// </summary>
+    public enum GameMode
+    {
+        Local,
+        Networked
+    }
+
     public static class PlayerService
     {
         private static readonly List<Player> allPlayers = new();
         public static IReadOnlyList<Player> All => allPlayers;
+
+        /// <summary>Current input/player-creation mode. Reset to Local on Clear().</summary>
+        public static GameMode Mode { get; set; } = GameMode.Local;
+
+        // Maps network playerIds (e.g. "p0", "p1") to Player objects in networked
+        // mode. Replaces the old PlayerNameText-as-id stand-in.
+        private static readonly Dictionary<string, Player> byNetworkId = new();
 
         /// <summary>
         /// When true, player input comes from AirConsole phone controllers
@@ -52,8 +70,9 @@ namespace Salem.Data
                 }
                 */
 
-                // Set first non-AI as local player automatically
-                if (!player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
+                // Set first non-AI as local player automatically — LOCAL mode only.
+                // In networked mode every human is remote; no player is local.
+                if (Mode == GameMode.Local && !player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
                 {
                     player.IsLocalPlayer = true;
                 }
@@ -64,7 +83,23 @@ namespace Salem.Data
         public static void Clear()
         {
             allPlayers.Clear();
+            byNetworkId.Clear();
+            Mode = GameMode.Local;
             //IsAirConsoleMode = false; AIRCONSOLE TEMP DISABLED 4/28/26
+        }
+
+        /// <summary>Associate a network playerId with a Player (networked mode).</summary>
+        public static void RegisterNetworkId(string playerId, Player player)
+        {
+            if (string.IsNullOrEmpty(playerId) || player == null) return;
+            byNetworkId[playerId] = player;
+        }
+
+        /// <summary>Resolve a Player from its network playerId, or null.</summary>
+        public static Player GetByNetworkId(string playerId)
+        {
+            if (string.IsNullOrEmpty(playerId)) return null;
+            return byNetworkId.TryGetValue(playerId, out var p) ? p : null;
         }
 
         public static Player GetLocalPlayer()

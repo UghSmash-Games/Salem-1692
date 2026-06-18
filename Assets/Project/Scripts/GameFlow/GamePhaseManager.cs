@@ -86,6 +86,28 @@ namespace Salem.GameFlow
 
         void Start()
         {
+            // Local mode auto-starts. Networked mode waits for the host to press
+            // Start (NetworkGameCoordinator calls BeginGame() after the lobby).
+            if (PlayerService.Mode == GameMode.Networked)
+            {
+                Debug.Log("[GamePhaseManager] Networked mode — waiting for host to start the game.");
+                return;
+            }
+            StartGameInternal();
+        }
+
+        /// <summary>Begin the game (run Setup → Dawn → Day). Called by the host
+        /// in networked mode after players have joined; safe to call once.</summary>
+        public void BeginGame()
+        {
+            StartGameInternal();
+        }
+
+        private bool gameStarted;
+        private void StartGameInternal()
+        {
+            if (gameStarted) return;
+            gameStarted = true;
             StartCoroutine(ChangePhase(GamePhase.Setup, PhaseChangeDelay));
         }
         #endregion

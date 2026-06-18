@@ -77,12 +77,56 @@ Unity is solely responsible for ensuring it never contains private player data
 - Matchmaker elimination chain fires even if the second player confessed or was saved
 - Multiple witch cards: player is not eliminated until their LAST witch card is revealed
 
-## Known Bugs in Unity Alpha (fix in Phase 4)
+## Known Bugs in Unity Alpha
 
-- Asylum is only checked at targeting, not at resolution
-- Matchmaker cascade does not fire from night kills (only from RevealTryalCard)
-- No confess window exists in the night phase
-- Dawn phase skips straight to Day — witch reveal and Black Cat placement are TODOs
+Verified against active code 2026-06-13. The original alpha bug list was mostly
+stale — only the dawn witch-reveal remains. Still broken:
+
+- Dawn does NOT reveal witches to each other — `//TODO` stub in
+  `GamePhaseManager.StartDawnPhase` (GamePhaseManager.cs:175). (Black Cat
+  placement IS implemented; dawn does NOT skip to Day.)
+- Tituba's deck rearrange is stubbed to a plain shuffle (GameTurnManager.cs).
+
+Already fixed (do NOT re-budget in Phase 4): asylum is checked at resolution
+(NightResolver.cs:50); the matchmaker cascade is central and fires from night
+kills (PlayerService.Eliminate, PlayerService.cs:104-114 ← NightResolver.cs:91);
+a confession round exists (GamePhaseManager.ExecuteConfessionRound).
+
+## What Phase 4 Actually Needs (networked night & dawn)
+
+The real Phase 4 work is an architecture conversion, not bug-fixing. The active
+flow (GamePhaseManager → GameTurnManager → AIPlayer; everything in `_Archive/`
+is dead) assumes a SINGLE local human and drives all secret-phase input through
+local-UI callbacks (`WaitUntil(flag)`). To networked multiplayer:
+
+- Drop the single-local-player model (PlayerService.cs:56-59); add a
+  playerId ↔ Player registry.
+- Add an input abstraction over the local-UI callback seams
+  (`TableLayoutController.BeginTargetSelection`/`BeginTryalSelection`,
+  `ConfessionChoiceUI.Open`, `GameTurnManager.waitingForHuman`) with a network
+  impl that emits `action_request`/`secret_phase_prompt` and resolves from
+  `NetworkManager` events. `NetworkManager` exists but is an unconnected bridge.
+- Implement the `acting`-flag masking: prompt ALL players, discard non-acting
+  submits. Today only the local witch/constable is prompted; other witches get
+  RANDOM targets (NightResolver.cs:64-70) — collect all witch votes into
+  `plan.WitchVotes` instead.
+- Make witch vote + constable save resolve in parallel; rework confession into a
+  masked, simultaneous, timed window.
+- Emit `phase_resolve` for synchronized reveals (Unity reveals immediately now)
+  and add per-phase timeouts (only a Day idle timer exists).
+
+## Phase 4 Implementation Notes
+
+- Idle timer = INACTIVITY window (not cumulative turn time): `GameTurnManager`
+  re-arms `turnTimer` on each action (`NotifyCardPlayed`, `ResetIdleTimer`, and
+  `NetworkInput` on each `player_action`). On timeout it ends the turn if the
+  player already played a card, else forces Draw 2 (`HandleIdleTimeout`).
+- Turn cancellation: `GameTurnManager.TurnId` bumps each `StartTurn`. Async inputs
+  capture it and exit when it changes. This RESOLVES the earlier orphan-seat /
+  parked-`WaitUntil` risk — a `NetworkInput` coroutine whose turn is force-ended
+  (idle timeout, etc.) now wakes on `TurnId != myTurnId`, breaks, and unsubscribes
+  instead of blocking forever. (Still wire real per-seat disconnect handling
+  post-4a, but the coroutine no longer leaks.)
 
 ## Testing
 

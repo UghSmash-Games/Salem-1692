@@ -34,6 +34,11 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
         private readonly List<Card> DiscardPile = new List<Card>();
+
+        /// <summary>Public card counts for networked board state (no card data leaked).</summary>
+        public int DeckCount => Deck?.Count ?? 0;
+        public int DiscardCount => DiscardPile?.Count ?? 0;
+
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         private Card heldBlackCat;

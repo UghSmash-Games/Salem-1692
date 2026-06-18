@@ -60,7 +60,12 @@ namespace Salem.GameFlow
         void Awake()
         {
             HandleInstance();
-            PopulatePlayers();
+            // Local mode discovers pre-placed tagged players. In networked mode the
+            // NetworkGameCoordinator instantiates and registers players on join.
+            if (PlayerService.Mode == GameMode.Local)
+            {
+                PopulatePlayers();
+            }
             isGameActive = true;
         }
 
@@ -72,7 +77,12 @@ namespace Salem.GameFlow
                 Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
             }
             */
-            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+            // Networked mode has no single local player (every human is remote).
+            var localPlayer = PlayerService.GetLocalPlayer();
+            if (localPlayer != null)
+            {
+                UIManager.SetupLocalPlayerUI(localPlayer);
+            }
 
             /*AIR CONSOLE DISABLED 4/28/26
             // In AirConsole mode, there is no single local player — input comes from phones
