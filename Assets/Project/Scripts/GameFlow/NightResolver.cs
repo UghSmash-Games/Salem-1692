@@ -64,6 +64,10 @@ namespace Salem.GameFlow
                 if (plan.WitchVotes.TryGetValue(w, out var planned) && planned != null && eligible.Contains(planned))
                     target = planned;
 
+                // Safety net only. As of Phase 4b every witch's vote is collected over
+                // the network (GamePhaseManager.NightPhaseRoutine round 1), so WitchVotes
+                // is fully populated and this random fallback is not hit in normal play —
+                // it remains for an un-recorded/ineligible vote (e.g. pre-timeout edge).
                 if (target == null)
                     target = eligible[RNGService.Rng.NextInt(0, eligible.Count)];
 

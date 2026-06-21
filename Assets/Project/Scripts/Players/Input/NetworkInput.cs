@@ -193,5 +193,51 @@ namespace Salem.Players
             onChosen?.Invoke(-1);
             yield break;
         }
+
+        // Secret phase (dawn/night). Symmetric with RunTurn's action flow: send this
+        // player's prompt (acting flag included) and await this player's submits. Sent
+        // for acting AND non-acting players so phones look identical. Two-stage: report
+        // every submit (tentative or confirmed) via onSubmit; complete only when a
+        // CONFIRMED submit arrives. The host decides whether to record or discard.
+        public IEnumerator RequestSecretPhase(Player p, string promptType, string[] targetNames,
+                                              bool acting, System.Action<Player, string, bool> onSubmit)
+        {
+            var nm = NetworkManager.Instance;
+            if (nm == null || string.IsNullOrEmpty(p.NetworkId))
+            {
+                onSubmit?.Invoke(p, null, true); // nothing to await — treat as a confirm
+                yield break;
+            }
+
+            bool confirmed = false;
+
+            void Handler(SecretPhaseSubmitMsg msg)
+            {
+                if (confirmed) return;                          // already finalized
+                if (msg == null || msg.playerId != p.NetworkId) return;
+                onSubmit?.Invoke(p, msg.selection, msg.confirmed);
+                if (msg.confirmed) confirmed = true;
+            }
+
+            nm.OnSecretPhaseSubmit += Handler;
+
+            nm.SendSecretPhasePrompt(new SecretPhasePromptMsg
+            {
+                prompts = new[]
+                {
+                    new SecretPhasePromptEntry
+                    {
+                        playerId = p.NetworkId,
+                        prompt = promptType,
+                        targets = targetNames,
+                        acting = acting,
+                    },
+                },
+            });
+
+            yield return new WaitUntil(() => confirmed);
+
+            nm.OnSecretPhaseSubmit -= Handler;
+        }
     }
 }

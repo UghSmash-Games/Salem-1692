@@ -13,6 +13,7 @@ import type {
   PublicPlayer,
   TryalCardView,
   PlayerRole,
+  WitchVote,
   SecretPhaseType,
   GameStateUpdatePayload,
   PrivateStatePayload,
@@ -38,6 +39,13 @@ export interface PrivateSlice {
   tryals: TryalCardView[];
   hand: string[];
   role: PlayerRole | null;
+  /** Independent role truths — a player can be BOTH (evil constable). */
+  isWitch: boolean;
+  isConstable: boolean;
+  /** Other witches' names — non-empty (for a witch) only after the dawn reveal. */
+  fellowWitches: string[];
+  /** Other witches' live tentative picks — non-empty (for a witch) only during a witch round. */
+  witchVotes: WitchVote[];
 }
 
 export interface PublicBoardSlice {
@@ -100,6 +108,11 @@ interface GameStore {
   markPromptSubmitted: () => void;
 }
 
+// Phases during which a secret_phase_prompt can be active. A game_state_update
+// whose phase is one of these is a board refresh DURING a secret phase and must
+// NOT clear the prompt; any other phase means the secret phase has ended.
+const SECRET_PHASE_NAMES = new Set(['dawn', 'night']);
+
 const initialSession: SessionSlice = {
   connected: false,
   roomCode: null,
@@ -112,6 +125,10 @@ const initialPrivate: PrivateSlice = {
   tryals: [],
   hand: [],
   role: null,
+  isWitch: false,
+  isConstable: false,
+  fellowWitches: [],
+  witchVotes: [],
 };
 
 const initialPublicBoard: PublicBoardSlice = {
@@ -165,17 +182,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
 
   applyGameStateUpdate: (data) =>
-    set({
-      publicBoard: {
-        phase: data.phase ?? null,
-        whoseTurn: data.whoseTurn ?? null,
-        players: data.players ?? [],
-        deckCount: data.deckCount ?? null,
-        discardCount: data.discardCount ?? null,
-      },
-      // Advancing public state ends any active secret phase / action request.
-      prompt: null,
-      actionRequest: null,
+    set((s) => {
+      const newPhase = data.phase ?? null;
+      // Clear an active secret-phase prompt ONLY when the phase has moved out of a
+      // secret phase (the phase genuinely ended). A routine board refresh during a
+      // secret phase — including the phase-entry update — must NOT wipe a freshly
+      // set prompt. That race was dropping every phone off the SecretPhaseScreen.
+      const secretPhaseEnded =
+        !!s.prompt &&
+        newPhase != null &&
+        !SECRET_PHASE_NAMES.has(newPhase.toLowerCase());
+
+      return {
+        publicBoard: {
+          phase: newPhase,
+          whoseTurn: data.whoseTurn ?? null,
+          players: data.players ?? [],
+          deckCount: data.deckCount ?? null,
+          discardCount: data.discardCount ?? null,
+        },
+        // Prompt cleared only when the secret phase ended (above). actionRequest
+        // is Day-only and is always re-sent after a board tick if the turn
+        // continues, so clearing it on every update remains safe (4a behavior).
+        ...(secretPhaseEnded ? { prompt: null } : {}),
+        actionRequest: null,
+      };
     }),
 
   applyPrivateState: (data) =>
@@ -184,6 +215,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         tryals: data.tryals ?? [],
         hand: data.hand ?? [],
         role: data.role ?? null,
+        isWitch: data.isWitch ?? false,
+        isConstable: data.isConstable ?? false,
+        fellowWitches: data.fellowWitches ?? [],
+        witchVotes: data.witchVotes ?? [],
       },
     }),
 

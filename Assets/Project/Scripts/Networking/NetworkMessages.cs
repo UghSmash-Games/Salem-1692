@@ -46,6 +46,15 @@ namespace Salem.Networking
     {
         public string playerId;
         public string selection;
+        public bool confirmed; // false = tentative pick, true = final
+    }
+
+    // One witch's live tentative pick, relayed to fellow witches only.
+    [Serializable]
+    public class WitchVoteMsg
+    {
+        public string witch;   // witch display name
+        public string target;  // tentative target name; "" = not yet picked
     }
 
     [Serializable]
@@ -95,7 +104,15 @@ namespace Salem.Networking
         public string playerId;
         public TryalViewMsg[] tryals;
         public string[] hand;
-        public string role;   // "witch" | "townsperson" | "constable"
+        public string role;          // "witch" | "townsperson" | "constable" (primary)
+        // Independent role truths — a player can be BOTH (evil constable). The phone
+        // shows both; `role` alone can't represent the combination.
+        public bool isWitch;
+        public bool isConstable;
+        public string[] fellowWitches; // names of the OTHER witches; populated only
+                                       // for witches once revealed at dawn, else empty.
+        public WitchVoteMsg[] witchVotes; // live tentative tally of the OTHER witches
+                                          // during a witch round; empty otherwise.
     }
 
     [Serializable]

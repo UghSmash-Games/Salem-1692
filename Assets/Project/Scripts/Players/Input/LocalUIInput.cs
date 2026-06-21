@@ -65,5 +65,33 @@ namespace Salem.Players
             });
             yield return new WaitUntil(() => done);
         }
+
+        public IEnumerator RequestSecretPhase(Player player, string promptType, string[] targetNames,
+                                              bool acting, Action<Player, string, bool> onSubmit)
+        {
+            // Non-acting local players have no local prompt to render (masking only
+            // matters for phones). Acting local human picks via the table UI. Local
+            // play is single-human, so the pick is reported as an immediate confirm
+            // (no tentative stage — there are no fellow witches to relay to locally).
+            if (!acting || Table == null)
+            {
+                onSubmit?.Invoke(player, null, true);
+                yield break;
+            }
+
+            bool done = false;
+            string chosenName = null;
+            Table.BeginTargetSelection(
+                player,
+                promptType,
+                target => target != null && !target.IsEliminated,
+                target =>
+                {
+                    chosenName = target != null ? target.PlayerNameText : null;
+                    done = true;
+                });
+            yield return new WaitUntil(() => done);
+            onSubmit?.Invoke(player, chosenName, true);
+        }
     }
 }

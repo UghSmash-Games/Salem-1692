@@ -91,6 +91,20 @@ namespace Salem.Networking
             nm.SendGameStateUpdate(BuildGameStateUpdate());
 
             // 2) Private state → each remote player individually (by NetworkId).
+            SendPrivateStates();
+        }
+
+        /// <summary>
+        /// Send each remote player their own private_state (tryals/hand/role and, once
+        /// revealed at dawn, fellow witches). One addressed message per player — never
+        /// a broadcast. Called by the dawn witch-reveal as well as the normal tick.
+        /// </summary>
+        public void SendPrivateStates()
+        {
+            if (PlayerService.Mode != GameMode.Networked) return;
+            var nm = NetworkManager.Instance;
+            if (nm == null || !nm.IsConnected) return;
+
             foreach (var p in PlayerService.All)
             {
                 if (p == null || string.IsNullOrEmpty(p.NetworkId)) continue; // AI/local: no phone
@@ -159,12 +173,33 @@ namespace Salem.Networking
                 ? p.HandManager.Hand.Where(c => c != null).Select(c => c.Name).ToArray()
                 : new string[0];
 
+            // Fellow witches: only for a witch, and only after the dawn reveal. Private
+            // channel (routed to this player's socket) — never appears in public state.
+            string[] fellowWitches = new string[0];
+            if (p.IsWitch && gamePhaseManager != null && gamePhaseManager.WitchesRevealed)
+            {
+                fellowWitches = PlayerService.GetAliveWitches()
+                    .Where(w => w != null && w != p)
+                    .Select(w => w.PlayerNameText)
+                    .ToArray();
+            }
+
+            // Live witch-vote tally (other witches' tentative picks) — witch-only,
+            // populated only during a witch round. Private channel; never broadcast.
+            WitchVoteMsg[] witchVotes = (p.IsWitch && gamePhaseManager != null)
+                ? gamePhaseManager.BuildWitchTallyFor(p)
+                : new WitchVoteMsg[0];
+
             return new PrivateStateMsg
             {
                 playerId = p.NetworkId,
                 tryals = tryals,
                 hand = hand,
                 role = RoleFor(p),
+                isWitch = p.IsWitch,         // independent truths — both can be set
+                isConstable = p.IsConstable, // (evil constable holds both tryals)
+                fellowWitches = fellowWitches,
+                witchVotes = witchVotes,
             };
         }
 

@@ -34,5 +34,18 @@ namespace Salem.Players
         /// TableLayoutController.BeginTryalSelection.
         /// </summary>
         IEnumerator RequestTryal(Player chooser, Player target, Action<int> onChosen);
+
+        /// <summary>
+        /// Deliver a masked secret-phase prompt (dawn/night) and await this player's
+        /// selection. Sent to EVERY player — acting and non-acting alike — so phones
+        /// look identical; the host records only acting submissions and discards the
+        /// rest. Two-stage: `onSubmit` fires on EVERY submit with `confirmed=false`
+        /// (tentative) or `confirmed=true` (final). The coroutine completes only on a
+        /// confirmed submit. `targetNames` are display names; the callback reports the
+        /// chosen name. Network: emits secret_phase_prompt, resolves from
+        /// secret_phase_submit — the same channel RunTurn uses for action_request.
+        /// </summary>
+        IEnumerator RequestSecretPhase(Player player, string promptType, string[] targetNames,
+                                       bool acting, Action<Player, string, bool> onSubmit);
     }
 }

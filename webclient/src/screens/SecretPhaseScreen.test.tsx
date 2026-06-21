@@ -1,27 +1,31 @@
 /**
- * The masking guarantee, enforced as a test.
+ * The masking guarantee, enforced as a test (CLAUDE.md "Masking definition").
  *
- * The secret phase screen MUST render identically for an acting player
- * (witch/constable) and a non-acting player. We render the screen with the
- * same prompt but opposite `acting` values and assert the produced DOM is
- * byte-for-byte identical.
+ * Two axes:
+ *  1. The screen must NOT branch on prompt.acting — identical DOM for acting vs
+ *     non-acting given the same private state.
+ *  2. The CONTROL STRUCTURE (target buttons + Confirm + the ally-tally region)
+ *     must be identical for a witch vs a non-witch; only the PRIVATE ally content
+ *     (fellow-witch banner + fellow tentative lines) may differ. This test fails
+ *     if a witch's screen ever becomes structurally distinguishable.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { SecretPhaseScreen } from './SecretPhaseScreen';
 import { useGameStore } from '../store/gameStore';
-import type { SecretPhasePromptPayload } from '../socket/types';
+import type { SecretPhasePromptPayload, PrivateStatePayload } from '../socket/types';
 
-// Spy on the emit helper so we can assert both players submit identically.
 const submitSpy = vi.fn();
 vi.mock('../socket/socketClient', () => ({
-  sendSecretPhaseSubmit: (payload: { selection: string }) => submitSpy(payload),
+  sendSecretPhaseSubmit: (payload: { selection: string; confirmed: boolean }) =>
+    submitSpy(payload),
 }));
 
+const TARGETS = ['Alice', 'Bob', 'Carlos'];
 const PROMPT_BASE: Omit<SecretPhasePromptPayload, 'acting'> = {
   prompt: 'night_vote',
-  targets: ['Alice', 'Bob', 'Carlos'],
+  targets: TARGETS,
 };
 
 function renderWith(acting: boolean) {
@@ -30,36 +34,134 @@ function renderWith(acting: boolean) {
   return render(<SecretPhaseScreen />);
 }
 
+function renderAs(acting: boolean, priv: Partial<PrivateStatePayload>) {
+  useGameStore.getState().reset();
+  useGameStore.getState().applySecretPhasePrompt({ ...PROMPT_BASE, acting });
+  useGameStore.getState().applyPrivateState({
+    playerId: 'p0',
+    tryals: [],
+    hand: [],
+    role: 'townsperson',
+    ...priv,
+  });
+  return render(<SecretPhaseScreen />);
+}
+
+const buttonLabels = (container: HTMLElement) =>
+  within(container)
+    .getAllByRole('button')
+    .map((b) => b.textContent);
+
 describe('SecretPhaseScreen masking', () => {
   beforeEach(() => {
     submitSpy.mockClear();
+    useGameStore.getState().reset();
   });
 
-  it('renders identical DOM for acting and non-acting players', () => {
+  it('renders identical DOM for acting and non-acting players (same private state)', () => {
     const acting = renderWith(true);
     const actingHtml = acting.container.innerHTML;
     acting.unmount();
 
     const nonActing = renderWith(false);
-    const nonActingHtml = nonActing.container.innerHTML;
-
-    expect(actingHtml).toBe(nonActingHtml);
+    expect(nonActing.container.innerHTML).toBe(actingHtml);
   });
 
-  it('emits secret_phase_submit on selection regardless of acting flag', () => {
-    renderWith(false); // non-acting player
+  it('control structure is identical for a witch vs a non-witch — only private ally data differs', () => {
+    const witch = renderAs(true, {
+      role: 'witch',
+      fellowWitches: ['Carole'],
+      witchVotes: [{ witch: 'Carole', target: 'Bob' }],
+    });
+    const witchButtons = buttonLabels(witch.container);
+    expect(witch.getByTestId('fellow-witches')).toBeInTheDocument();
+    expect(witch.getByTestId('ally-tally')).toHaveTextContent('Carole → Bob');
+    witch.unmount();
+
+    const town = renderAs(false, { role: 'townsperson', fellowWitches: [], witchVotes: [] });
+    const townButtons = buttonLabels(town.container);
+    expect(town.queryByTestId('fellow-witches')).not.toBeInTheDocument();
+    expect(town.getByTestId('ally-tally')).not.toHaveTextContent('Carole');
+
+    // The control structure (target buttons + Confirm) must match exactly.
+    // Both have an ally-tally region; only its private content differs.
+    expect(witchButtons).toEqual(townButtons);
+    expect(witchButtons).toContain('Confirm');
+  });
+
+  it('a tap sends a TENTATIVE submit; Confirm sends the final', () => {
+    renderWith(false);
     fireEvent.click(screen.getByRole('button', { name: 'Bob' }));
-    expect(submitSpy).toHaveBeenCalledWith({ selection: 'Bob' });
+    expect(submitSpy).toHaveBeenCalledWith({ selection: 'Bob', confirmed: false });
+
+    submitSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(submitSpy).toHaveBeenCalledWith({ selection: 'Bob', confirmed: true });
   });
 
-  it('shows the identical waiting state after submit for any player', () => {
+  it('stays on the prompt after a tentative tap; waiting appears only after Confirm', () => {
     renderWith(true);
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
+    expect(screen.queryByTestId('waiting-for-others')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(screen.getByTestId('waiting-for-others')).toBeInTheDocument();
   });
 
-  it('never branches header text on acting — header reflects prompt type only', () => {
+  it('header reflects prompt type only, never the acting flag', () => {
     renderWith(true);
     expect(screen.getByText('Choose a player')).toBeInTheDocument();
+  });
+
+  it('blocks a constable from confirming a self-protect (own device only)', () => {
+    useGameStore.getState().reset();
+    useGameStore.getState().beginJoin('Alice');
+    useGameStore.getState().applySecretPhasePrompt({
+      prompt: 'constable_save',
+      targets: ['Alice', 'Bob'],
+      acting: true,
+    });
+    useGameStore.getState().applyPrivateState({
+      playerId: 'p0',
+      tryals: [],
+      hand: [],
+      role: 'constable',
+      isConstable: true,
+    });
+    render(<SecretPhaseScreen />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alice' })); // self
+    expect(screen.getByRole('alert')).toHaveTextContent("protect yourself");
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+
+    submitSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(submitSpy).not.toHaveBeenCalled(); // confirm is blocked
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bob' })); // another player
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).not.toBeDisabled();
+  });
+
+  it('does NOT block a non-constable picking themselves (no self-protect rule for them)', () => {
+    useGameStore.getState().reset();
+    useGameStore.getState().beginJoin('Alice');
+    useGameStore.getState().applySecretPhasePrompt({
+      prompt: 'constable_save',
+      targets: ['Alice', 'Bob'],
+      acting: false,
+    });
+    useGameStore.getState().applyPrivateState({
+      playerId: 'p0',
+      tryals: [],
+      hand: [],
+      role: 'townsperson',
+      isConstable: false,
+    });
+    render(<SecretPhaseScreen />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).not.toBeDisabled();
   });
 });

@@ -68,14 +68,34 @@ describe('useCurrentScreen', () => {
     expect(result.current).toBe('game_over');
   });
 
-  it('a new game_state_update clears an active secret phase prompt', () => {
+  it('a board refresh DURING a secret phase does NOT clear the prompt', () => {
+    // Regression guard for the dawn race: a game_state_update whose phase is a
+    // secret phase (or has no phase) must keep an active prompt on screen.
     joinAs('p0');
     useGameStore.getState().applySecretPhasePrompt({
       prompt: 'black_cat',
       targets: ['Alice'],
       acting: true,
     });
+    useGameStore.getState().applyGameStateUpdate({ phase: 'dawn', players: [] });
+    let screen = renderHook(() => useCurrentScreen());
+    expect(screen.result.current).toBe('secret_phase');
+    screen.unmount();
+
+    // A no-phase board tick also keeps it (conservative).
     useGameStore.getState().applyGameStateUpdate({ players: [] });
+    screen = renderHook(() => useCurrentScreen());
+    expect(screen.result.current).toBe('secret_phase');
+  });
+
+  it('a phase change OUT of a secret phase clears the prompt', () => {
+    joinAs('p0');
+    useGameStore.getState().applySecretPhasePrompt({
+      prompt: 'black_cat',
+      targets: ['Alice'],
+      acting: true,
+    });
+    useGameStore.getState().applyGameStateUpdate({ phase: 'day', players: [] });
     const { result } = renderHook(() => useCurrentScreen());
     expect(result.current).toBe('idle');
   });

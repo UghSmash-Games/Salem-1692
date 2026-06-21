@@ -48,11 +48,25 @@ export interface TryalCardView {
   faceUp: boolean;
 }
 
+/** One other witch's live tentative pick during a witch round. */
+export interface WitchVote {
+  witch: string;
+  /** tentative target name; "" = not yet picked. */
+  target: string;
+}
+
 export interface PrivateStatePayload {
   playerId: string;
   tryals: TryalCardView[];
   hand: string[];
   role: PlayerRole;
+  /** Independent role truths — a player can be BOTH (evil constable). */
+  isWitch?: boolean;
+  isConstable?: boolean;
+  /** Names of the OTHER witches — present (for a witch) only after the dawn reveal. */
+  fellowWitches?: string[];
+  /** Live tentative picks of the OTHER witches — present (for a witch) only during a witch round. */
+  witchVotes?: WitchVote[];
 }
 
 /** Delivered to each player individually; server strips the playerId. */
@@ -108,6 +122,8 @@ export interface PlayerActionPayload {
 
 export interface SecretPhaseSubmitPayload {
   selection: string;
+  /** false = tentative pick (may change); true = final. */
+  confirmed: boolean;
 }
 
 export interface ConfessPayload {

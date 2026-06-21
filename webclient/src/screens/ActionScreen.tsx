@@ -11,6 +11,8 @@ import { sendPlayerAction, sendConfess } from '../socket/socketClient';
 import { HandList } from '../components/HandList';
 import { PlayerTargetList } from '../components/PlayerTargetList';
 import { ConfessPrompt } from '../components/ConfessPrompt';
+import { FellowWitchBanner } from '../components/FellowWitchBanner';
+import { RoleIndicator } from '../components/RoleIndicator';
 
 type Step = 'choose' | 'select_card' | 'select_target' | 'confess';
 
@@ -72,7 +74,11 @@ export function ActionScreen() {
 
   return (
     <div className="flex min-h-dvh flex-col gap-5 bg-ink px-5 py-6">
-      <h2 className="text-xl font-semibold text-parchment">Your Turn</h2>
+      <FellowWitchBanner />
+      <header className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-parchment">Your Turn</h2>
+        <RoleIndicator />
+      </header>
 
       {step === 'choose' && (
         <div className="flex flex-col gap-3">

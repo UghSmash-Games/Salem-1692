@@ -21,6 +21,7 @@ using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
 using Salem.Gameplay.Setup;
+using Salem.Networking;
 using Salem.Players;
 using Salem.UI;
 using Unity.VisualScripting;
@@ -55,6 +56,29 @@ namespace Salem.GameFlow
         [SerializeField] private ConfessionChoiceUI confessionChoiceUI;
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
+        /// <summary>True once witches have been revealed to each other at dawn.
+        /// The broadcaster includes fellow-witch names in private_state only after this.</summary>
+        public bool WitchesRevealed { get; private set; }
+
+        // Live tentative tally for the current witch round (acting player → tentative
+        // target). Relayed to fellow witches via private_state. Empty outside a round.
+        private readonly Dictionary<Player, Player> currentSecretTally = new();
+        public bool IsWitchVoteRoundActive { get; private set; }
+
+        /// <summary>The other witches' tentative picks for `recipient` (excludes self),
+        /// for the witch-only live tally. Empty outside a witch round.</summary>
+        public WitchVoteMsg[] BuildWitchTallyFor(Player recipient)
+        {
+            if (!IsWitchVoteRoundActive) return new WitchVoteMsg[0];
+            return currentSecretTally
+                .Where(kv => kv.Key != null && kv.Key != recipient)
+                .Select(kv => new WitchVoteMsg
+                {
+                    witch = kv.Key.PlayerNameText,
+                    target = kv.Value != null ? kv.Value.PlayerNameText : "",
+                })
+                .ToArray();
+        }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
         public event PhaseChangeHandler OnPhaseChange;
         public KeyCode DebugAdvancePhaseKey = KeyCode.P;
@@ -194,17 +218,21 @@ namespace Salem.GameFlow
 
         private void StartDawnPhase()
         {
-            //TODO: Reveal Witches to each other
             StartCoroutine(DawnPhaseRoutine());
         }
 
         private IEnumerator DawnPhaseRoutine()
         {
-            //Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
+            //Debug.Log("Dawn Phase Started: reveal witches, then witches vote on the Black Cat.");
 
             var witches = PlayerService.GetAliveWitches();
             var allPlayers = PlayerService.GetAlivePlayers();
             var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+
+            // Reveal witches to each other: flag on, then push private_state so each
+            // witch's phone receives their fellow-witch list (the //TODO at dawn).
+            WitchesRevealed = true;
+            FindFirstObjectByType<NetworkStateBroadcaster>()?.SendPrivateStates();
 
             // Retrieve the Black Cat card held during setup
             var blackCatCard = DeckManager != null ? DeckManager.GetHeldBlackCat() : null;
@@ -221,45 +249,24 @@ namespace Salem.GameFlow
                 yield break;
             }
 
-            // Collect a vote from each witch
+            // Masked black-cat placement: every player is prompted "Place the black
+            // cat"; only witches are acting. Collect all witch votes over the network.
             var votes = new Dictionary<Player, Player>();
+            yield return RunNetworkedSecretPhase(
+                "black_cat",
+                allPlayers,
+                p => p.IsWitch,
+                (witch, name) =>
+                {
+                    var target = ResolveByName(name);
+                    if (target != null) votes[witch] = target;
+                },
+                shareTally: true);
 
-            foreach (var witch in witches)
+            if (votes.Count == 0)
             {
-                if (witch.IsLocalPlayer && witch.IsHuman) // && !PlayerService.IsAirConsoleMode) AIRCONSOLE TEMP DISABLED 4/28/26
-                {
-                    // Human witch: show UI
-                    if (tableLayoutController != null)
-                    {
-                        bool done = false;
-
-                        tableLayoutController.BeginTargetSelection(
-                            witch,
-                            "Vote: Who receives the Black Cat?",
-                            target =>
-                                target != null &&
-                                !target.IsEliminated,
-                            target =>
-                            {
-                                votes[witch] = target;
-                                done = true;
-                            }
-                        );
-
-                        yield return new WaitUntil(() => done);
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[GamePhaseManager] Missing TableLayoutController. Black Cat vote defaulting to random.");
-                        votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
-                    }
-                }
-                else
-                {
-                    // AI witch: pick randomly
-                    yield return new WaitForSeconds(aiDecisionDelay);
-                    votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
-                }
+                // No usable votes — fall back to a random placement so dawn still resolves.
+                votes[witches[0]] = allPlayers[rng.NextInt(0, allPlayers.Count)];
             }
 
             // Tally votes — majority wins, random tiebreak
@@ -465,13 +472,149 @@ namespace Salem.GameFlow
             var alivePlayers = PlayerService.GetAlivePlayers();
             var localPlayer = PlayerService.GetLocalPlayer();
 
-            // Rules order: witches vote, then constable protects, then confession round
-            yield return ExecuteLocalWitchChoice(alivePlayers, localPlayer, plan, rng);
-            yield return ExecuteConstableChoice(alivePlayers, localPlayer, plan, rng);
+            // Two masked rounds into ONE plan. Every player sees and taps through both;
+            // only the acting role is recorded each round (host-side discard). No
+            // intermediate broadcast → witches never learn the constable's pick and the
+            // constable never sees the kill tally. A dual-role evil constable is acting
+            // in BOTH rounds and gets both actions.
+
+            // Round 1 — witch kill vote. Collects ALL witch votes over the network.
+            yield return RunNetworkedSecretPhase(
+                "night_vote",
+                alivePlayers,
+                p => p.IsWitch,
+                (witch, name) =>
+                {
+                    var target = ResolveByName(name);
+                    if (target != null) plan.SetWitchVote(witch, target);
+                },
+                shareTally: true);
+
+            // Round 2 — constable save.
+            yield return RunNetworkedSecretPhase(
+                "constable_save",
+                alivePlayers,
+                p => p.IsConstable,
+                (constable, name) =>
+                {
+                    var target = ResolveByName(name);
+                    // The constable may not give the gavel to themselves (rulebook p7).
+                    // The full target list is kept identical for all (masking); a
+                    // self-pick is simply void here as the authoritative backstop.
+                    // NOTE: the 2-3 player ghost variant DOES allow self-protect
+                    // (rulebook p17) — re-enable for that mode in Phase 6.
+                    if (target != null && target != constable) plan.ConstableTarget = target;
+                },
+                shareTally: false);
+
+            // Confession round — unchanged for 4b (masked/timed rework is 4c).
             yield return ExecuteConfessionRound(alivePlayers, localPlayer, plan, rng);
 
             NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
             GameManager.Instance.EvaluateEndGame();
+        }
+
+        /// <summary>
+        /// Run one masked secret-phase round (the host = the skill's "server").
+        /// Prompts EVERY non-AI player identically (acting flag per role); records a
+        /// submission into the round ONLY if the submitter is acting — non-acting
+        /// submissions are received and silently discarded. Acting AI choose directly.
+        /// Resolves once every acting player has submitted. Per-player prompts flow
+        /// through IPlayerInput.RequestSecretPhase (NetworkInput for phones).
+        /// </summary>
+        private IEnumerator RunNetworkedSecretPhase(string promptType, List<Player> alivePlayers,
+                                                    System.Func<Player, bool> isActing,
+                                                    System.Action<Player, string> recordActing,
+                                                    bool shareTally)
+        {
+            var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+            var targetNames = alivePlayers.Where(p => p != null).Select(p => p.PlayerNameText).ToArray();
+            var actingPlayers = alivePlayers.Where(p => p != null && isActing(p)).ToList();
+            var confirmed = new HashSet<Player>();
+            var broadcaster = FindFirstObjectByType<NetworkStateBroadcaster>();
+
+            // Seed the live tally (witch rounds) so fellows see "Mary → —" up front.
+            if (shareTally)
+            {
+                currentSecretTally.Clear();
+                foreach (var a in actingPlayers) currentSecretTally[a] = null;
+                IsWitchVoteRoundActive = true;
+                broadcaster?.SendPrivateStates();
+            }
+
+            void OnSubmit(Player p, string name, bool isConfirm)
+            {
+                if (p == null || !isActing(p)) return;   // silent discard for non-acting
+                if (confirmed.Contains(p)) return;         // already finalized this player
+
+                if (shareTally)
+                {
+                    currentSecretTally[p] = ResolveByName(name); // tentative or confirm → update
+                    broadcaster?.SendPrivateStates();             // relay live to fellow witches
+                }
+
+                if (isConfirm)
+                {
+                    confirmed.Add(p);
+                    recordActing?.Invoke(p, name);
+                }
+            }
+
+            foreach (var p in alivePlayers)
+            {
+                if (p == null) continue;
+                bool acting = isActing(p);
+
+                if (p is AIPlayer)
+                {
+                    if (acting)
+                    {
+                        // AI picks a random other player and confirms immediately;
+                        // NightResolver validates eligibility.
+                        var candidates = alivePlayers.Where(x => x != null && x != p).ToList();
+                        if (candidates.Count > 0)
+                            OnSubmit(p, candidates[rng.NextInt(0, candidates.Count)].PlayerNameText, true);
+                    }
+                    // non-acting AI has no phone — nothing to mask
+                }
+                else if (p.Input != null)
+                {
+                    // Human (network or local) — prompted regardless of acting (masking).
+                    var who = p;
+                    StartCoroutine(who.Input.RequestSecretPhase(who, promptType, targetNames, acting,
+                        (submitter, name, isConfirm) => OnSubmit(submitter, name, isConfirm)));
+                }
+            }
+
+            // Resolve when all acting players have CONFIRMED (tentatives don't count).
+            // Periodic "still waiting on […]" diagnostic (4b has no timeout — that's 4c).
+            float nextLog = Time.realtimeSinceStartup + 5f;
+            while (confirmed.Count < actingPlayers.Count)
+            {
+                if (Time.realtimeSinceStartup >= nextLog)
+                {
+                    var pending = actingPlayers.Where(a => !confirmed.Contains(a)).Select(a => a.PlayerNameText);
+                    Debug.Log($"[SecretPhase] {promptType}: still waiting on confirm from [{string.Join(", ", pending)}]");
+                    nextLog += 5f;
+                }
+                yield return null;
+            }
+
+            if (shareTally)
+            {
+                IsWitchVoteRoundActive = false;
+                currentSecretTally.Clear();
+                broadcaster?.SendPrivateStates(); // clear witchVotes on phones
+            }
+
+            Debug.Log($"[SecretPhase] {promptType}: all {actingPlayers.Count} acting player(s) confirmed.");
+        }
+
+        /// <summary>Resolve a submitted display name back to an alive Player (humans and AI).</summary>
+        private Player ResolveByName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            return PlayerService.GetAlivePlayers().FirstOrDefault(p => p != null && p.PlayerNameText == name);
         }
 
         private IEnumerator ExecuteConfessionRound(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
@@ -556,115 +699,6 @@ namespace Salem.GameFlow
             }
 
             Debug.Log("[GamePhaseManager] Confession round ends.");
-        }
-
-        private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
-        {
-            var constable = alivePlayers.FirstOrDefault(p => p.IsConstable);
-            if (constable == null)
-                yield break;
-
-            var candidates = alivePlayers
-                .Where(p => constableCanSelfProtect || p != constable)
-                .ToList();
-
-            if (candidates.Count == 0)
-                yield break;
-
-            if (constable == localPlayer && constable.IsHuman && tableLayoutController != null)
-            {
-                bool done = false;
-                Player chosen = null;
-
-                tableLayoutController.BeginTargetSelection(
-                    constable,
-                    constablePrompt,
-                    target =>
-                        target != null &&
-                        !target.IsEliminated &&
-                        (constableCanSelfProtect || target != constable),
-                    target =>
-                    {
-                        chosen = target;
-                        done = true;
-                    }
-                );
-
-                yield return new WaitUntil(() => done);
-
-                if (done && chosen != null)
-                {
-                    plan.ConstableTarget = chosen;
-                }
-                else if (candidates.Count > 0)
-                {
-                    Debug.LogWarning("[GamePhaseManager] Constable selection cancelled; defaulting to random.");
-                    plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
-                }
-            }
-            else
-            {
-                if (constable == localPlayer && tableLayoutController == null)
-                    Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; constable protection defaulting to random.");
-
-                yield return new WaitForSeconds(aiDecisionDelay);
-                plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
-            }
-        }
-
-        private IEnumerator ExecuteLocalWitchChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
-        {
-            if (localPlayer == null || !localPlayer.IsWitch || localPlayer.IsEliminated)
-                yield break;
-
-            var eligible = alivePlayers
-                .Where(p => !p.hasAsylum)
-                .ToList();
-
-            if (!witchesCanTargetWitches)
-                eligible = eligible.Where(p => !p.IsWitch).ToList();
-
-            eligible = eligible.Distinct().ToList();
-
-            if (eligible.Count == 0)
-                yield break;
-
-            if (tableLayoutController != null)
-            {
-                bool done = false;
-                Player voteTarget = null;
-
-                tableLayoutController.BeginTargetSelection(
-                    localPlayer,
-                    witchPrompt,
-                    target =>
-                        target != null &&
-                        eligible.Contains(target),
-                    target =>
-                    {
-                        voteTarget = target;
-                        done = true;
-                    }
-                );
-
-                yield return new WaitUntil(() => done);
-
-                if (done && voteTarget != null)
-                {
-                    plan.SetWitchVote(localPlayer, voteTarget);
-                }
-                else if (eligible.Count > 0)
-                {
-                    Debug.LogWarning("[GamePhaseManager] Witch vote selection cancelled; defaulting to random.");
-                    plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
-                }
-            }
-            else
-            {
-                Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; witch vote defaulting to random.");
-                yield return new WaitForSeconds(aiDecisionDelay);
-                plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
-            }
         }
         #endregion
     }

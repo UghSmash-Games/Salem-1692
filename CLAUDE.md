@@ -46,9 +46,18 @@ Never rely on the client to self-police.
 
 **The `acting` flag** — during secret phases (dawn/night), every player receives an
 identical `secret_phase_prompt`. Witches/constable get `acting: true`; all others get
-`acting: false`. The server processes submissions only from `acting: true` players.
-The phone client renders the same UI regardless. This is the identity masking system
-— do not break this pattern under any circumstances.
+`acting: false`. The host processes submissions only from `acting: true` players.
+
+**Masking definition (canonical).** Masking means the **prompt, the target controls,
+the two-stage tentative→Confirm flow, and the timing are identical for every player**.
+An observer cannot identify who is acting from screen structure, controls, or
+interaction timing. Witch-only coordination data — fellow-witch identities and the
+live tentative tally — is **private-channel information of the same class as tryal
+cards** (`private_state`, routed to one socket, never broadcast); it is shown only on
+a witch's own device and legitimately differs per phone, exactly like a player's
+tryals/role/hand. Do not break this pattern: never let a phone become structurally
+distinguishable by role (layout, controls, flow, or timing), and never put witch
+coordination data on any broadcast/public channel.
 
 **Private state isolation** — tryal cards and role (witch/constable) are NEVER sent
 to the host screen, mirror screens, or other players' phone clients. Enforced at the
@@ -127,6 +136,22 @@ local-UI callbacks (`WaitUntil(flag)`). To networked multiplayer:
   (idle timeout, etc.) now wakes on `TurnId != myTurnId`, breaks, and unsubscribes
   instead of blocking forever. (Still wire real per-seat disconnect handling
   post-4a, but the coroutine no longer leaks.)
+- MASKING LEAK (4b → must fix in 4c): `RunNetworkedSecretPhase` advances a secret
+  round on "all ACTING players submitted", not "all players submitted". So at the
+  R1→R2 transition every witch is already in "waiting", letting an observer EXCLUDE
+  the tardiest players from being witches (partial leak, not full identification).
+  This is a masking-correctness issue, not just UX. Fix in 4c: wait-for-all + a
+  uniform per-phase timeout so tardiness reveals nothing.
+
+## Phase 5 — Deferred Matchmaker Work
+
+The night-kill matchmaker cascade works (`PlayerService.Eliminate` → partner dies
+even if saved/confessed). Two character-specific exceptions are NOT yet built and
+belong to Phase 5 (Town Hall characters), per dev guide Step 5.4:
+- Mary Warren is immune to the matchmaker chain — if matched with her when she is
+  eliminated, the partner still dies but Mary is unaffected.
+- If the cascade would make BOTH teams lose simultaneously, only the intended
+  target is eliminated, not the matched partner.
 
 ## Testing
 

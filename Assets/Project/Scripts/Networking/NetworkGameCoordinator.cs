@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Salem.Data;
 using Salem.GameFlow;
 using Salem.Players;
@@ -100,7 +101,7 @@ namespace Salem.Networking
             var p = Instantiate(playerPrefab, spawnParent);
             // playerPrefab is the human Player prefab (isHuman = true in the prefab).
             p.NetworkId = playerId;
-            p.PlayerNameText = displayName;
+            p.PlayerNameText = UniqueName(displayName); // names are used to resolve targets
             p.Input = new NetworkInput(p);
 
             PlayerService.Register(p);
@@ -171,12 +172,26 @@ namespace Salem.Networking
             int idx = aiSeatCounter++;
             var ai = Instantiate(aiPlayerPrefab, spawnParent);
             ai.PublicId = $"ai{idx}";           // public display identity only
-            ai.PlayerNameText = $"AI {idx + 1}";
+            ai.PlayerNameText = UniqueName($"AI {idx + 1}");
             // No NetworkId, no NetworkInput — AI runs via AITurnSequencer and is
             // skipped for private_state (routing keys on NetworkId).
             PlayerService.Register(ai);
             seats.Add(ai);
             OnRosterChanged?.Invoke();
+        }
+
+        // Targets resolve by PlayerNameText, so names must be unique across ALL seats
+        // (humans + AI). Append " (2)", " (3)", … on collision.
+        private string UniqueName(string desired)
+        {
+            if (string.IsNullOrWhiteSpace(desired)) desired = "Player";
+            bool Taken(string n) => PlayerService.All.Any(pl => pl != null && pl.PlayerNameText == n);
+            if (!Taken(desired)) return desired;
+            for (int i = 2; ; i++)
+            {
+                var candidate = $"{desired} ({i})";
+                if (!Taken(candidate)) return candidate;
+            }
         }
     }
 }
