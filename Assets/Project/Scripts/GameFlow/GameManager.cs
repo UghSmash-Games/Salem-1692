@@ -183,10 +183,17 @@ namespace Salem.GameFlow
             }
         }
 
+        // Last raised end result + a simple query, so the synchronized-reveal helper
+        // can decide whether to emit game_over AFTER the reveal animation (the win
+        // check itself runs BEFORE the reveal, per the reveal-tryal sequence).
+        public EndGameResult LastEndResult { get; private set; }
+        public bool IsGameOver => gameAlreadyEnded;
+
         private void RaiseGameEnded(EndGameResult result)
         {
             if (gameAlreadyEnded) return;
             gameAlreadyEnded = true;
+            LastEndResult = result;
             if (pauseOnGameEnd) Time.timeScale = 0f;
             OnGameEnded?.Invoke(result);
         }

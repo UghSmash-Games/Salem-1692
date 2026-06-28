@@ -81,6 +81,13 @@ namespace Salem.Networking
 
         // ─── Broadcast ────────────────────────────────────────────
 
+        /// <summary>
+        /// Push current public + private state to everyone immediately. Used at a
+        /// synchronized revealAt so model changes that don't fire an elimination event
+        /// (e.g. a confession-only night, or a save) still propagate at the reveal moment.
+        /// </summary>
+        public void BroadcastNow() => BroadcastAll();
+
         private void BroadcastAll()
         {
             if (PlayerService.Mode != GameMode.Networked) return;

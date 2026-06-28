@@ -13,7 +13,7 @@ export type PlayerRole = 'witch' | 'townsperson' | 'constable';
 
 // ─── Secret phase variants ────────────────────────────────────────
 
-export type SecretPhaseType = 'black_cat' | 'night_vote' | 'constable_save';
+export type SecretPhaseType = 'black_cat' | 'night_vote' | 'constable_save' | 'confess';
 
 // ─── Server → Client payloads ─────────────────────────────────────
 

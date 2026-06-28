@@ -42,6 +42,14 @@ namespace Salem.Players
         public IRng Rng { get; private set; }
         public bool IsHuman => isHuman;
 
+        // Network connection state. Defaults true; flipped false when the server
+        // reports this seat's socket dropped (NetworkManager.OnPlayerLeft, consumed
+        // mid-game by NetworkGameCoordinator.HandlePlayerLeft). Read live by the
+        // secret-phase wait set so a dropped human can't stall a phase to its
+        // timeout. NOTE (4c scope): this is ONLY the wait-set signal — seat
+        // cleanup / reconnect / turn-order removal remain post-4a.
+        public bool IsConnected = true;
+
         public static event Action<Player, byte, byte> AccusationCountChanged;
         public static event Action<Player, byte, byte> AccusationThresholdReached;
         public static event Action<Player, TryalCard> TryalCardRevealed;

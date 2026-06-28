@@ -24,13 +24,18 @@ import { PlayerTargetList } from '../components/PlayerTargetList';
 import { WaitingForOthers } from '../components/WaitingForOthers';
 import { FellowWitchBanner } from '../components/FellowWitchBanner';
 import { AllyTallyPanel } from '../components/AllyTallyPanel';
+import { RoleIndicator } from '../components/RoleIndicator';
 import type { SecretPhaseType } from '../socket/types';
 
 const HEADERS: Record<SecretPhaseType, string> = {
   black_cat: 'Place the black cat',
   night_vote: 'Choose a player',
   constable_save: 'Protect a player',
+  confess: 'Confess?',
 };
+
+// Selection sentinel for "don't confess" (matches the host's ConfessSkip).
+const CONFESS_SKIP = 'skip';
 
 export function SecretPhaseScreen() {
   const prompt = useGameStore((s) => s.prompt);
@@ -39,6 +44,10 @@ export function SecretPhaseScreen() {
   // player's own device. The shared target list stays full + identical for all.
   const isConstable = useGameStore((s) => s.privateState.isConstable);
   const myName = useGameStore((s) => s.session.displayName);
+  // Own tryals (private) — used only for the confess window, where each player
+  // confesses one of their OWN face-down cards. Same class of private data as the
+  // witch tally; differs per phone legitimately and is never broadcast.
+  const myTryals = useGameStore((s) => s.privateState.tryals);
 
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -49,6 +58,8 @@ export function SecretPhaseScreen() {
   if (prompt.submitted) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-ink px-6">
+        {/* Private role overlay — own device only, never part of the masked region. */}
+        <RoleIndicator />
         <FellowWitchBanner />
         <WaitingForOthers />
       </div>
@@ -76,23 +87,81 @@ export function SecretPhaseScreen() {
     markSubmitted();
   };
 
+  const isConfess = prompt.type === 'confess';
+
+  // Confess options: each of the player's OWN face-down tryals (selection = its index)
+  // plus a "don't confess" choice (selection = CONFESS_SKIP). Confessing is a public
+  // act, so there is no role to hide here — every phone shows this same structure; only
+  // the private card labels differ (same class as tryals).
+  const faceDownTryals = myTryals
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => !card.faceUp);
+
   return (
     <div className="flex min-h-dvh flex-col gap-6 bg-ink px-6 py-10">
+      {/* Private role overlay (own device only) — sits ABOVE the masked prompt region
+          so it never alters the prompt header / controls structure that must stay
+          identical for every player. Same private class as FellowWitchBanner. */}
+      <header className="flex items-center justify-end">
+        <RoleIndicator />
+      </header>
       <FellowWitchBanner />
       <h2 className="text-center text-2xl font-semibold text-parchment">
         {HEADERS[prompt.type]}
       </h2>
-      <PlayerTargetList
-        targets={prompt.targets}
-        selected={selected}
-        onSelect={handleTentative}
-      />
-      <AllyTallyPanel ownPick={selected} />
-      {selfProtectViolation && (
-        <p className="text-center text-sm text-ember" role="alert">
-          You can&apos;t protect yourself — choose another player.
-        </p>
+
+      {isConfess ? (
+        <ul className="flex flex-col gap-2" data-testid="confess-options">
+          {faceDownTryals.map(({ card, index }) => {
+            const value = String(index);
+            return (
+              <li key={index}>
+                <button
+                  type="button"
+                  onClick={() => handleTentative(value)}
+                  className={[
+                    'w-full rounded-md border px-4 py-3 text-center transition-colors',
+                    selected === value
+                      ? 'border-ember bg-ember/30 text-parchment'
+                      : 'border-parchment/40 bg-ink/40 text-parchment hover:border-ember/60',
+                  ].join(' ')}
+                >
+                  {card.label}
+                </button>
+              </li>
+            );
+          })}
+          <li>
+            <button
+              type="button"
+              onClick={() => handleTentative(CONFESS_SKIP)}
+              className={[
+                'w-full rounded-md border px-4 py-3 text-center transition-colors',
+                selected === CONFESS_SKIP
+                  ? 'border-ember bg-ember/30 text-parchment'
+                  : 'border-parchment/40 bg-ink/40 text-parchment hover:border-ember/60',
+              ].join(' ')}
+            >
+              Don&apos;t confess
+            </button>
+          </li>
+        </ul>
+      ) : (
+        <>
+          <PlayerTargetList
+            targets={prompt.targets}
+            selected={selected}
+            onSelect={handleTentative}
+          />
+          <AllyTallyPanel ownPick={selected} />
+          {selfProtectViolation && (
+            <p className="text-center text-sm text-ember" role="alert">
+              You can&apos;t protect yourself — choose another player.
+            </p>
+          )}
+        </>
       )}
+
       <button
         type="button"
         disabled={selected === null || selfProtectViolation}

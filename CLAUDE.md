@@ -99,30 +99,26 @@ stale — only the dawn witch-reveal remains. Still broken:
 Already fixed (do NOT re-budget in Phase 4): asylum is checked at resolution
 (NightResolver.cs:50); the matchmaker cascade is central and fires from night
 kills (PlayerService.Eliminate, PlayerService.cs:104-114 ← NightResolver.cs:91);
-a confession round exists (GamePhaseManager.ExecuteConfessionRound).
+a masked/timed confess window exists (GamePhaseManager.RunConfessWindow — 4c
+replaced the legacy local ExecuteConfessionRound).
 
-## What Phase 4 Actually Needs (networked night & dawn)
+## Phase 4 — Networked Night & Dawn (COMPLETE: 4a / 4b / 4c)
 
-The real Phase 4 work is an architecture conversion, not bug-fixing. The active
-flow (GamePhaseManager → GameTurnManager → AIPlayer; everything in `_Archive/`
-is dead) assumes a SINGLE local human and drives all secret-phase input through
-local-UI callbacks (`WaitUntil(flag)`). To networked multiplayer:
+Phase 4 was an architecture conversion (not bug-fixing): the active flow
+(GamePhaseManager → GameTurnManager → AIPlayer; everything in `_Archive/` is dead)
+used to assume a SINGLE local human driving secret-phase input through local-UI
+callbacks. All of Phase 4 is now built and verified end to end:
 
-- Drop the single-local-player model (PlayerService.cs:56-59); add a
-  playerId ↔ Player registry.
-- Add an input abstraction over the local-UI callback seams
-  (`TableLayoutController.BeginTargetSelection`/`BeginTryalSelection`,
-  `ConfessionChoiceUI.Open`, `GameTurnManager.waitingForHuman`) with a network
-  impl that emits `action_request`/`secret_phase_prompt` and resolves from
-  `NetworkManager` events. `NetworkManager` exists but is an unconnected bridge.
-- Implement the `acting`-flag masking: prompt ALL players, discard non-acting
-  submits. Today only the local witch/constable is prompted; other witches get
-  RANDOM targets (NightResolver.cs:64-70) — collect all witch votes into
-  `plan.WitchVotes` instead.
-- Make witch vote + constable save resolve in parallel; rework confession into a
-  masked, simultaneous, timed window.
-- Emit `phase_resolve` for synchronized reveals (Unity reveals immediately now)
-  and add per-phase timeouts (only a Day idle timer exists).
+- **4a** — dropped the single-local-player model; added the `PlayerService.byNetworkId`
+  registry and the `IPlayerInput` abstraction (`LocalUIInput`/`NetworkInput`) over the
+  former local-UI callback seams. Networked Day turns + inactivity idle timer +
+  `GameTurnManager.TurnId` coroutine cancellation.
+- **4b** — `acting`-flag masking: prompt ALL players, discard non-acting submits; all
+  witch votes collected into `plan.WitchVotes` (NightResolver random-fill is a safety
+  net only); two-stage tentative→Confirm; witch coordination (fellow witches + live
+  tally) over `private_state`; two-round night (witch vote → constable save).
+- **4c** — closed the masking-timing leak, added per-phase timeouts, synchronized
+  reveals via `phase_resolve`, and the masked/timed confess window (see next section).
 
 ## Phase 4 Implementation Notes
 
@@ -136,12 +132,32 @@ local-UI callbacks (`WaitUntil(flag)`). To networked multiplayer:
   (idle timeout, etc.) now wakes on `TurnId != myTurnId`, breaks, and unsubscribes
   instead of blocking forever. (Still wire real per-seat disconnect handling
   post-4a, but the coroutine no longer leaks.)
-- MASKING LEAK (4b → must fix in 4c): `RunNetworkedSecretPhase` advances a secret
-  round on "all ACTING players submitted", not "all players submitted". So at the
-  R1→R2 transition every witch is already in "waiting", letting an observer EXCLUDE
-  the tardiest players from being witches (partial leak, not full identification).
-  This is a masking-correctness issue, not just UX. Fix in 4c: wait-for-all + a
-  uniform per-phase timeout so tardiness reveals nothing.
+- MASKING-TIMING LEAK — CLOSED in 4c. Secret-phase rounds used to advance on "all
+  ACTING players confirmed", letting an observer exclude the tardiest from being
+  witches. Now the shared `AwaitAllConfirmedOrTimeout` predicate (the ONE place the
+  wait/timeout lives) resolves only when EVERY connected human has Confirmed, or a
+  uniform per-phase timeout fires — so timing reveals nothing about who acted. A
+  mid-phase disconnect drops that seat from the wait set (`Player.IsConnected`,
+  set from `NetworkManager.OnPlayerLeft`) so a dropped human can't stall the phase.
+- Per-phase timeouts (4c): configurable `[SerializeField]` windows on GamePhaseManager
+  (`dawnTimeout` 30 / `witchVoteTimeout` 45 / `constableTimeout` 30 / `confessTimeout`
+  20). On timeout, resolve with whatever was recorded (existing safety nets: random-fill
+  un-voted witches; no gavel if the constable didn't act). The Day idle timer (60s) is
+  separate and only runs during Day (`isTurnActive`), so the two never overlap.
+- Synchronized reveal (4c): `EmitSynchronizedReveal` emits `phase_resolve { revealAt =
+  now + revealLeadSeconds }`, then DEFERS the whole reveal (model mutation included) to
+  revealAt so the host screen, mirrors, and phones all flip together. Win conditions are
+  checked at revealAt before the result is sent (reveal-then-`game_over` preserved); the
+  reveal uses REALTIME waits because `pauseOnGameEnd` sets `Time.timeScale = 0`. Night
+  elimination reveals route through `RevealTryalCard`→`TrialService` (multiple-witch-card
+  rule reused). `NightResolver.Resolve` now returns a `NightOutcome` instead of
+  eliminating inline.
+- Masked confess window (4c): `RunConfessWindow` — every phone shows the same confess
+  prompt; a confession reveals one of the player's OWN tryals for immunity, but the
+  reveal is DEFERRED to the synchronized revealAt (timing masked during the window; the
+  flip itself is PUBLIC, per the rulebook). Immunity via `plan.Confessors` is unchanged.
+  Phone confess UI is the `confess` variant of `SecretPhaseScreen` (renders own face-down
+  tryals + "don't confess"; selection = tryal index or `skip`).
 
 ## Phase 5 — Deferred Matchmaker Work
 
@@ -152,6 +168,21 @@ belong to Phase 5 (Town Hall characters), per dev guide Step 5.4:
   eliminated, the partner still dies but Mary is unaffected.
 - If the cascade would make BOTH teams lose simultaneously, only the intended
   target is eliminated, not the matched partner.
+
+Also deferred to Phase 5 (Town Hall): the **William Phipps human fake-confess UI**. The
+AI fake-confess branch IS preserved (`AiConfessSelection` → `ConfessFake`: immune without
+revealing a tryal), but a human William Phipps cannot fake-confess through the masked
+confess window yet — adding a fake-confess control only to that holder's phone is a
+masking-design question that belongs with the Town Hall character work.
+
+## Deferred — orphaned `[SerializeField]` cleanup
+
+A later serialization-safe sweep should remove these now-unused inspector fields on
+`GamePhaseManager` (left in place for now so removal doesn't disturb scene/prefab
+serialization): `constablePrompt`, `witchPrompt`, `dawnBlackCatPrompt`,
+`constableCanSelfProtect` (also the intended toggle for the Phase 6 ghost-variant
+self-protect exception), and `confessionChoiceUI` (orphaned in 4c when the local
+`ExecuteConfessionRound` was replaced by the networked `RunConfessWindow`).
 
 ## Testing
 

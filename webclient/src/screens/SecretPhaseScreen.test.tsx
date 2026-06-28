@@ -113,6 +113,15 @@ describe('SecretPhaseScreen masking', () => {
     expect(screen.getByText('Choose a player')).toBeInTheDocument();
   });
 
+  it('shows the player\'s own role indicator (private overlay) on the secret-phase screen', () => {
+    const witch = renderAs(true, { role: 'witch', isWitch: true });
+    expect(witch.getByTestId('role-indicator')).toHaveTextContent('Witch');
+    witch.unmount();
+
+    const town = renderAs(false, { role: 'townsperson' });
+    expect(town.getByTestId('role-indicator')).toHaveTextContent('Townsperson');
+  });
+
   it('blocks a constable from confirming a self-protect (own device only)', () => {
     useGameStore.getState().reset();
     useGameStore.getState().beginJoin('Alice');
@@ -163,5 +172,70 @@ describe('SecretPhaseScreen masking', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm' })).not.toBeDisabled();
+  });
+});
+
+describe('SecretPhaseScreen confess window', () => {
+  // Three tryals; the middle one is already face-up, so it must NOT be offered.
+  const TRYALS = [
+    { label: 'Not a Witch', faceUp: false }, // index 0
+    { label: 'Constable', faceUp: true }, // index 1 (revealed — not offered)
+    { label: 'Witch', faceUp: false }, // index 2
+  ];
+
+  function renderConfess(acting: boolean) {
+    useGameStore.getState().reset();
+    useGameStore.getState().beginJoin('Alice');
+    useGameStore.getState().applySecretPhasePrompt({ prompt: 'confess', targets: [], acting });
+    useGameStore.getState().applyPrivateState({
+      playerId: 'p0',
+      tryals: TRYALS,
+      hand: [],
+      role: 'townsperson',
+    });
+    return render(<SecretPhaseScreen />);
+  }
+
+  beforeEach(() => {
+    submitSpy.mockClear();
+    useGameStore.getState().reset();
+  });
+
+  it('offers only the player\'s own face-down tryals plus a Don\'t confess option', () => {
+    renderConfess(true);
+    const options = within(screen.getByTestId('confess-options'))
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    // Constable (index 1) is face-up, so excluded; order preserves original index.
+    expect(options).toEqual(['Not a Witch', 'Witch', "Don't confess"]);
+  });
+
+  it('tapping a tryal sends a TENTATIVE index; Confirm sends the final index', () => {
+    renderConfess(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Witch' })); // original index 2
+    expect(submitSpy).toHaveBeenCalledWith({ selection: '2', confirmed: false });
+
+    submitSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(submitSpy).toHaveBeenCalledWith({ selection: '2', confirmed: true });
+  });
+
+  it('Don\'t confess sends the skip sentinel (tentative, then final on Confirm)', () => {
+    renderConfess(true);
+    fireEvent.click(screen.getByRole('button', { name: "Don't confess" }));
+    expect(submitSpy).toHaveBeenCalledWith({ selection: 'skip', confirmed: false });
+
+    submitSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(submitSpy).toHaveBeenCalledWith({ selection: 'skip', confirmed: true });
+  });
+
+  it('renders identical DOM for acting and non-acting confessors (same private state)', () => {
+    const acting = renderConfess(true);
+    const html = acting.container.innerHTML;
+    acting.unmount();
+
+    const nonActing = renderConfess(false);
+    expect(nonActing.container.innerHTML).toBe(html);
   });
 });

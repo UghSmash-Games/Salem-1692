@@ -114,13 +114,20 @@ namespace Salem.Networking
 
         private void HandlePlayerLeft(string playerId)
         {
-            // Pre-game: free the seat. Mid-game disconnect handling is post-4a.
             var p = PlayerService.GetByNetworkId(playerId);
             if (p == null) return;
+
+            // Mark the seat disconnected so the secret-phase wait set drops it
+            // immediately (RunNetworkedSecretPhase reads Player.IsConnected live) —
+            // a dropped human no longer stalls a phase to its timeout.
+            p.IsConnected = false;
+
+            // Pre-game: also free the lobby seat.
             seats.Remove(p);
-            Debug.Log($"[Coordinator] {playerId} left the lobby.");
+            Debug.Log($"[Coordinator] {playerId} left (IsConnected=false).");
             OnRosterChanged?.Invoke();
-            // Note: leaving PlayerService.All cleanup + Destroy to mid-game handling (post-4a).
+            // Note: full seat cleanup (PlayerService.All removal + Destroy), reconnect,
+            // and turn-order removal remain post-4a (4c only stops the phase stall).
         }
 
         // ─── Start ────────────────────────────────────────────────
