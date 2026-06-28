@@ -64,6 +64,16 @@ namespace Salem.Networking
         public int tryalIndex;
     }
 
+    // Tituba's deck rearrange — phone → host. order = a permutation of the original
+    // deck indices (top→bottom). Two-stage like SecretPhaseSubmitMsg.
+    [Serializable]
+    public class DeckRearrangeSubmitMsg
+    {
+        public string playerId;
+        public int[] order;
+        public bool confirmed; // false = tentative in-progress order, true = final
+    }
+
     // ΓöÇΓöÇΓöÇ Sent by Host (and PhaseResolveMsg echoed back) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     // Public, per-player board entry. PUBLIC DATA ONLY — never tryals/role/hand.
@@ -135,6 +145,17 @@ namespace Salem.Networking
     {
         public string playerId;
         public string[] actions;
+    }
+
+    // Tituba's deck rearrange — host → ONE player only (private; never broadcast).
+    // cards = the full deck's labels top→bottom; seconds = the rules window (60) the
+    // phone shows as a countdown.
+    [Serializable]
+    public class DeckRearrangeRequestMsg
+    {
+        public string playerId;
+        public string[] cards;
+        public int seconds;
     }
 
     [Serializable]

@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using Salem.Cards;
 using Salem.GameFlow;
 using Salem.UI;
 using UnityEngine;
@@ -92,6 +94,16 @@ namespace Salem.Players
                 });
             yield return new WaitUntil(() => done);
             onSubmit?.Invoke(player, chosenName, true);
+        }
+
+        // Local play has no networked rearrange UI — no-op (keep the current deck order).
+        // The Tituba rearrange experience is phone-driven; building a local-host reorder UI
+        // is out of scope. Returning null leaves the deck unchanged.
+        public IEnumerator RequestDeckRearrange(Player chooser, IReadOnlyList<Card> deck,
+                                                float timeoutSeconds, Action<int[]> onOrder)
+        {
+            onOrder?.Invoke(null);
+            yield break;
         }
     }
 }

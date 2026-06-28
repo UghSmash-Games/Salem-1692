@@ -40,6 +40,9 @@ namespace Salem.GameFlow
         [SerializeField] private UIManager UIManager;
         [SerializeField] private TableLayoutController TableLayoutController;
         [SerializeField] private float turnDuration = 60f;
+        // Tituba's deck-rearrange window (rules value from the card: "rearrange for 60
+        // seconds"). The host owns this deadline; the phone shows the same as a countdown.
+        [SerializeField] private float titubaRearrangeTimeout = 60f;
         [SerializeField] private EndTurnButtonUI endTurnButtonUI;
         [SerializeField] private DrawFromDiscardButtonUI drawFromDiscardButtonUI;
         public Player CurrentPlayer => currentPlayer;
@@ -55,6 +58,7 @@ namespace Salem.GameFlow
         private int turnId;   // increments each StartTurn; lets async inputs detect their turn ended
         private bool isTurnActive = false;
         private bool waitingForHuman;
+        private bool suppressIdleTimer; // true during a Tituba rearrange (it has its own 60s deadline)
 
         /// <summary>
         /// True while a local-UI human turn is blocked waiting for input. The UI
@@ -113,7 +117,9 @@ namespace Salem.GameFlow
 
         private void Update()
         {
-            if (!isTurnActive) return;
+            // suppressIdleTimer: during a Tituba rearrange the inactivity timer is paused —
+            // that window has its own host-owned 60s deadline in RequestDeckRearrange.
+            if (!isTurnActive || suppressIdleTimer) return;
             turnTimer -= Time.deltaTime;
             if (turnTimer <= 0f)
             {
@@ -347,41 +353,53 @@ namespace Salem.GameFlow
             return true;
         }
 
-         /// <summary>
-        /// Tituba ability: once per game, on her turn before drawing, rearrange the deck.
-        /// Current implementation: shuffles the deck. TODO: Full 60-second deck rearrangement UI.
+        /// <summary>
+        /// Tituba ability (rulebook p14): once per game, on her turn BEFORE drawing, view and
+        /// rearrange the whole deck — then still take her normal turn (rearrange AND draw the
+        /// same turn). Driven over the network via IPlayerInput.RequestDeckRearrange. The
+        /// idle timer is paused for the rearrange window (it owns its own 60s deadline); on
+        /// completion the charge is spent and the idle window is refreshed for her draw/play.
+        /// Does NOT consume the turn action and does NOT end the turn — the caller's turn loop
+        /// continues. Offered only before any play (gated by the caller) and only with a charge.
         /// </summary>
-        public bool TryUseTitubaAbility(Player requestingPlayer)
+        public IEnumerator RunTitubaRearrange(Player requestingPlayer)
         {
-            if (!IsCurrentPlayersTurn(requestingPlayer))
-                return false;
-
-            if (currentTurnAction != TurnActionChoice.None)
+            if (!IsCurrentPlayersTurn(requestingPlayer)) yield break;
+            if (requestingPlayer == null ||
+                !requestingPlayer.HasTownHall(Salem.Cards.TownhallName.Tituba) ||
+                requestingPlayer.townHallAbilityCharges <= 0)
             {
-                Debug.LogWarning("[TurnManager] Turn action already chosen; cannot use Tituba ability.");
-                return false;
-            }
-
-            if (!requestingPlayer.HasTownHall(Salem.Cards.TownhallName.Tituba) || requestingPlayer.townHallAbilityCharges <= 0)
-            {
-                Debug.LogWarning("[TurnManager] Player does not have Tituba ability or no charges left.");
-                return false;
+                Debug.LogWarning("[TurnManager] Tituba rearrange requested without the ability or a charge — ignored.");
+                yield break;
             }
 
             EnsureDeckManager();
-            if (!deckManager) return false;
+            if (!deckManager) yield break;
 
-            // TODO: Replace with full 60-second deck rearrangement UI
-            deckManager.ShuffleDeck();
+            suppressIdleTimer = true; // pause inactivity timer; the rearrange has its own deadline
+            var deck = deckManager.GetDeckCards();
+            yield return requestingPlayer.Input.RequestDeckRearrange(
+                requestingPlayer, deck, titubaRearrangeTimeout,
+                order => { if (order != null) deckManager.SetDeckOrder(order); });
+            suppressIdleTimer = false;
+
             requestingPlayer.ConsumeTownHallCharge();
-            Debug.Log($"[TownHall] Tituba ({requestingPlayer.PlayerNameText}) rearranged the deck. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+            ResetIdleTimer(); // fresh inactivity window for her normal draw/play this same turn
+            Debug.Log($"[TownHall] Tituba ({requestingPlayer.PlayerNameText}) rearranged the deck. " +
+                      $"Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+        }
 
-            // Tituba's ability counts as the turn action — end turn
-            currentTurnAction = TurnActionChoice.DrawTwoCards; // Prevents further actions this turn
-            if (requestingPlayer.IsHuman)
-                waitingForHuman = false;
-            EndTurn();
-            return true;
+        /// <summary>
+        /// DEPRECATED — superseded by the networked <see cref="RunTitubaRearrange"/> flow.
+        /// Retained only because a dead `_Archive` UI button references this signature; it no
+        /// longer shuffles the deck or ends the turn (the old stub behavior was wrong: Tituba
+        /// rearranges AND still takes her turn).
+        /// </summary>
+        public bool TryUseTitubaAbility(Player requestingPlayer)
+        {
+            Debug.LogWarning("[TurnManager] TryUseTitubaAbility is deprecated — Tituba now uses " +
+                             "the networked turn action (RunTitubaRearrange).");
+            return false;
         }
 
         public void NotifyCardPlayed(Player actingPlayer)

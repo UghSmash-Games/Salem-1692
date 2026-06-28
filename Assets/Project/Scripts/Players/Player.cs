@@ -157,6 +157,10 @@ namespace Salem.Players
                     townHallAbilityCharges = 2;
                     break;
             }
+
+            // DIAGNOSTIC (Tituba option trace): confirm the charge was set at setup.
+            Debug.Log($"[Tituba?] ApplyTownHallAbility {PlayerNameText}: card={townhallCard.CardName}, " +
+                      $"charges={townHallAbilityCharges}");
         }
 
          /// <summary>

@@ -82,6 +82,14 @@ export interface ActionRequestPayload {
   actions: string[];
 }
 
+/** Tituba's deck-rearrange prompt (server → this one player only). */
+export interface DeckRearrangeRequestPayload {
+  /** Full deck labels, top→bottom (the cards she may reorder). */
+  cards: string[];
+  /** The rearrange window in seconds (rules value, 60) — shown as a countdown. */
+  seconds: number;
+}
+
 export interface PhaseResolvePayload {
   /** UTC epoch ms at which all screens should trigger the reveal. */
   revealAt: number;
@@ -128,4 +136,12 @@ export interface SecretPhaseSubmitPayload {
 
 export interface ConfessPayload {
   tryalIndex: number;
+}
+
+/** Tituba's reordered deck (this player → host). */
+export interface DeckRearrangeSubmitPayload {
+  /** A permutation of the original deck indices (top→bottom). */
+  order: number[];
+  /** false = tentative in-progress order; true = final (Confirm or countdown expiry). */
+  confirmed: boolean;
 }

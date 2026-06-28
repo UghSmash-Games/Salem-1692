@@ -39,6 +39,10 @@ export function ActionScreen() {
   const canPlay = actions.includes('play');
   const canConfess = actions.includes('confess');
   const canEnd = actions.includes('end');
+  // Tituba: once/game, before drawing, rearrange the deck. Sends player_action
+  // {card:'tituba'} → host runs RunTitubaRearrange → deck_rearrange_request → the
+  // DeckRearrangeScreen. She still draws/plays this same turn afterward.
+  const canTituba = actions.includes('tituba');
 
   const submitPlay = () => {
     if (cardIndex === null || target === null) return;
@@ -82,6 +86,15 @@ export function ActionScreen() {
 
       {step === 'choose' && (
         <div className="flex flex-col gap-3">
+          {canTituba && (
+            <button
+              type="button"
+              onClick={() => sendPlayerAction({ card: 'tituba', targetPlayerId: '' })}
+              className="rounded-md border border-candle bg-candle/20 px-4 py-3 text-lg font-semibold text-candle"
+            >
+              Rearrange the Deck
+            </button>
+          )}
           {canDraw && (
             <button
               type="button"

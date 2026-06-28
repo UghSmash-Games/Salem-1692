@@ -10,6 +10,7 @@ export type Screen =
   | 'idle'
   | 'action'
   | 'secret_phase'
+  | 'deck_rearrange'
   | 'spectator'
   | 'game_over';
 
@@ -32,6 +33,7 @@ export function useCurrentScreen(): Screen {
     if (me?.eliminated) return 'spectator';
 
     if (s.prompt) return 'secret_phase';
+    if (s.deckRearrange) return 'deck_rearrange';
     if (s.actionRequest) return 'action';
 
     return 'idle';

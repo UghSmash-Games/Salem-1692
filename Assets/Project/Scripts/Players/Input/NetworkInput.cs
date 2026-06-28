@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Salem.Cards;
 using Salem.Data;
@@ -61,8 +62,20 @@ namespace Salem.Players
                 pending = null;
 
                 // Draw-OR-play: only offer "draw" before anything has been played.
-                // After a play, the only options are play-more or end.
-                var actions = hasPlayed ? new[] { "play", "end" } : new[] { "draw", "play" };
+                // After a play, the only options are play-more or end. Tituba may rearrange
+                // the deck BEFORE drawing (once/game) — offered only on the first choice and
+                // only with a charge; AI seats are run by AITurnSequencer and never see this.
+                bool canTituba = !hasPlayed &&
+                    p.HasTownHall(Salem.Cards.TownhallName.Tituba) && p.townHallAbilityCharges > 0;
+                // DIAGNOSTIC (Tituba option trace): why is/ isn't "tituba" offered for this seat?
+                Debug.Log($"[Tituba?] {p.NetworkId} canTituba={canTituba} " +
+                          $"(hasPlayed={hasPlayed}, isHuman={p.IsHuman}, " +
+                          $"HasTownHall(Tituba)={p.HasTownHall(Salem.Cards.TownhallName.Tituba)}, " +
+                          $"effectiveTownHall={p.GetEffectiveTownHallName()}, " +
+                          $"charges={p.townHallAbilityCharges})");
+                var actions = hasPlayed
+                    ? new[] { "play", "end" }
+                    : (canTituba ? new[] { "tituba", "draw", "play" } : new[] { "draw", "play" });
                 nm.SendActionRequest(new ActionRequestMsg { playerId = p.NetworkId, actions = actions });
                 if (VerboseLogging)
                     Debug.Log($"[NetworkInput] {p.NetworkId} prompted with [{string.Join(",", actions)}].");
@@ -107,6 +120,21 @@ namespace Salem.Players
                     else
                     {
                         Debug.LogWarning($"[NetworkInput] {p.NetworkId} sent 'end' before acting — ignored (must draw or play). Re-prompting.");
+                    }
+                }
+                else if (card == "tituba")
+                {
+                    // Tituba rearrange — runs the deck-reorder input, then loops back so she
+                    // still draws/plays this same turn. Re-checked host-side (not just on the
+                    // phone). Does NOT end the turn.
+                    if (!hasPlayed && p.HasTownHall(Salem.Cards.TownhallName.Tituba) &&
+                        p.townHallAbilityCharges > 0)
+                    {
+                        yield return gtm.RunTitubaRearrange(p);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[NetworkInput] {p.NetworkId} sent 'tituba' when ineligible — ignored. Re-prompting.");
                     }
                 }
                 else if (string.IsNullOrEmpty(card))
@@ -238,6 +266,59 @@ namespace Salem.Players
             yield return new WaitUntil(() => confirmed);
 
             nm.OnSecretPhaseSubmit -= Handler;
+        }
+
+        // Tituba's deck rearrange. Send the full deck (top→bottom) to this player's phone and
+        // await a reordered permutation. Two-stage like RequestSecretPhase: record the LATEST
+        // order on every submit (tentative or confirmed); resolve on a CONFIRMED submit OR the
+        // host-owned timeout — then commit her latest in-progress order. The host owns the
+        // deadline (realtime); the phone shows the same `seconds` as a countdown. TurnId is
+        // captured so a force-ended turn unblocks the wait.
+        public IEnumerator RequestDeckRearrange(Player p, IReadOnlyList<Card> deck,
+                                                float timeoutSeconds, System.Action<int[]> onOrder)
+        {
+            var nm = NetworkManager.Instance;
+            if (nm == null || string.IsNullOrEmpty(p.NetworkId))
+            {
+                onOrder?.Invoke(null); // nothing to await — caller keeps the current order
+                yield break;
+            }
+
+            int[] latestOrder = null;
+            bool confirmed = false;
+
+            void Handler(DeckRearrangeSubmitMsg msg)
+            {
+                if (confirmed) return;
+                if (msg == null || msg.playerId != p.NetworkId) return;
+                latestOrder = msg.order;             // keep her latest in-progress arrangement
+                if (msg.confirmed) confirmed = true;
+            }
+
+            nm.OnDeckRearrangeSubmit += Handler;
+
+            nm.SendDeckRearrangeRequest(new DeckRearrangeRequestMsg
+            {
+                playerId = p.NetworkId,
+                cards = deck.Select(c => c != null ? c.Name : "").ToArray(),
+                seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
+            });
+
+            var gtm = GameTurnManager.Instance;
+            int myTurnId = gtm != null ? gtm.TurnId : 0;
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+
+            // Resolve on confirm, the host-owned deadline, or the turn being force-ended.
+            yield return new WaitUntil(() =>
+                confirmed ||
+                Time.realtimeSinceStartup >= deadline ||
+                (gtm != null && gtm.TurnId != myTurnId));
+
+            nm.OnDeckRearrangeSubmit -= Handler;
+
+            // Commit the latest order she sent (her in-progress work at the deadline);
+            // null if she never moved anything → caller keeps the current order.
+            onOrder?.Invoke(latestOrder);
         }
     }
 }

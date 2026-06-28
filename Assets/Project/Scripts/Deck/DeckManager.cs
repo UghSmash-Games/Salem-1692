@@ -184,6 +184,45 @@ namespace Salem.Deck
         public IReadOnlyList<Card> GetDiscardPileCards() => DiscardPile.AsReadOnly();
 
         /// <summary>
+        /// Read-only view of the draw deck, top (index 0 = next to draw) → bottom. Used by
+        /// Tituba's rearrange ability. The deck list stays private; this is the only reader.
+        /// </summary>
+        public IReadOnlyList<Card> GetDeckCards() => Deck.AsReadOnly();
+
+        /// <summary>
+        /// Reorder the deck from a permutation of the original indices (top→bottom):
+        /// newDeck[i] = oldDeck[permutation[i]]. Used by Tituba's rearrange. Validates that
+        /// the permutation has the right length and uses every index 0..N-1 exactly once; on
+        /// an invalid permutation the deck is left unchanged.
+        /// </summary>
+        public void SetDeckOrder(IReadOnlyList<int> permutation)
+        {
+            if (permutation == null || permutation.Count != Deck.Count)
+            {
+                Debug.LogWarning($"[DeckManager] SetDeckOrder ignored: bad length " +
+                                 $"({permutation?.Count ?? -1} vs deck {Deck.Count}).");
+                return;
+            }
+
+            var seen = new bool[Deck.Count];
+            foreach (int idx in permutation)
+            {
+                if (idx < 0 || idx >= Deck.Count || seen[idx])
+                {
+                    Debug.LogWarning("[DeckManager] SetDeckOrder ignored: not a valid permutation.");
+                    return;
+                }
+                seen[idx] = true;
+            }
+
+            var reordered = new List<Card>(Deck.Count);
+            foreach (int idx in permutation) reordered.Add(Deck[idx]);
+            Deck.Clear();
+            Deck.AddRange(reordered);
+            Debug.Log($"[DeckManager] Deck reordered (Tituba): {Deck.Count} cards.");
+        }
+
+        /// <summary>
         /// Draws up to 'count' cards from the discard pile, skipping cards that match the reject predicate.
         /// Used by Samuel Parris's ability (cannot draw Black cards).
         /// </summary>
@@ -287,9 +326,11 @@ namespace Salem.Deck
 
         public void DiscardTownhallCard(TownHallCard card)
         {
-            // Town Hall cards are one-time use; just discard (no reshuffle needed)
-            if (card != null) return;
-                //Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
+            // Town Hall cards are one-time use; just discard (no reshuffle needed).
+            // Guard was inverted (returned on a non-null card); the body should run
+            // when the card is non-null.
+            if (card == null) return;
+            //Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
         }
 
         public void ShuffleDeck()

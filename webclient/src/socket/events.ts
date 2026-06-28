@@ -13,6 +13,7 @@ export const CLIENT_TO_SERVER = {
   PLAYER_ACTION: 'player_action',
   SECRET_PHASE_SUBMIT: 'secret_phase_submit',
   CONFESS: 'confess',
+  DECK_REARRANGE_SUBMIT: 'deck_rearrange_submit',
 } as const;
 
 // Server → Client
@@ -25,6 +26,7 @@ export const SERVER_TO_CLIENT = {
   PRIVATE_STATE: 'private_state',
   SECRET_PHASE_PROMPT: 'secret_phase_prompt',
   ACTION_REQUEST: 'action_request',
+  DECK_REARRANGE_REQUEST: 'deck_rearrange_request',
   PHASE_RESOLVE: 'phase_resolve',
   ELIMINATION_RESULT: 'elimination_result',
   GAME_OVER: 'game_over',

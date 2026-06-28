@@ -10,6 +10,7 @@ import { JoinScreen } from './screens/JoinScreen';
 import { IdleScreen } from './screens/IdleScreen';
 import { ActionScreen } from './screens/ActionScreen';
 import { SecretPhaseScreen } from './screens/SecretPhaseScreen';
+import { DeckRearrangeScreen } from './screens/DeckRearrangeScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
 
@@ -26,6 +27,8 @@ export default function App() {
       return <ActionScreen />;
     case 'secret_phase':
       return <SecretPhaseScreen />;
+    case 'deck_rearrange':
+      return <DeckRearrangeScreen />;
     case 'spectator':
       return <SpectatorScreen />;
     case 'game_over':

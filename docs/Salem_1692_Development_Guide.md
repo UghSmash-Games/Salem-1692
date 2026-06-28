@@ -546,9 +546,9 @@ Before merging and moving to Phase 5, your reviewer should confirm:
 Implement one at a time and test before moving to the next. Priority order:
 
 1. **Tituba** — Can view and rearrange the deck; may draw and rearrange in same turn
-2. **Cotton Mather** — Evidence cards count as 3 accusations
-3. **Thomas Danforth** — Reduced accusation rate; special math vs George Burroughs
-4. **George Burroughs** — 14 accusations per tryal (7 vs Thomas); 16 with piety (12 vs Thomas)
+2. **Cotton Mather** — Evidence cards played against him count as 1 (normal evidence = 3)
+3. **Thomas Danforth** — −1 to the **base** reveal threshold, applied BEFORE piety doubling
+4. **George Burroughs** — base **8** to reveal a tryal (16 with piety = 8×2; 7 vs Danforth; 14 vs Danforth+piety). [CORRECTED 2026 — the rulebook's four numbers only reconcile at base 8; the earlier "14 per tryal" here was wrong. See docs/character-spec.md.]
 5. **John Proctor** — Gains cards from eliminated players; ability inheritance with Martha Corey
 6. **Martha Corey** — Inherits John's ability; Cotton Mather interaction on elimination
 7. **Mary Warren** — Unaffected by matchmaker elimination chain
@@ -763,7 +763,7 @@ Before merging and moving to Phase 10, your reviewer should confirm:
 - [ ] Player with 2 witch cards has one revealed — verify they announce and continue
 - [ ] Matchmaker: one linked player saved by constable, other eliminated — verify both eliminated
 - [ ] Piety removed when player has 7+ accusations — verify immediate tryal reveal
-- [ ] Thomas Danforth vs George Burroughs with piety — verify 12 vs 16 accusation counts
+- [ ] George Burroughs with piety — verify **16** to reveal (normal accuser) vs **14** when Thomas Danforth accuses (a generic piety holder is 14 normal / 12 vs Danforth). See docs/character-spec.md.
 - [ ] Scapegoat/Robbery with 2 players remaining — verify cards are disabled
 - [ ] Tituba rearranges deck with night card — verify night triggers correctly on draw
 - [ ] 2-3 player: ghost turn discards a conspiracy card — verify full resolution

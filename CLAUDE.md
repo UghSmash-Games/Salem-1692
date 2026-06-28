@@ -159,6 +159,28 @@ callbacks. All of Phase 4 is now built and verified end to end:
   Phone confess UI is the `confess` variant of `SecretPhaseScreen` (renders own face-down
   tryals + "don't confess"; selection = tryal index or `skip`).
 
+## Phase 5 — Town Hall Characters (TIER NOTE)
+
+All character abilities live in **Unity C# (authoritative game logic), NOT server JS** —
+the server is a pure relay. The `/add-character` skill describes a `server/src/characters/
+*.js` hook registry; that path is the WRONG TIER for this project. Use the skill only as
+CONCEPTUAL guidance (hook taxonomy, edge-case discipline, one-test-per-edge-case). Abilities
+hang off existing Unity events (`GameTurnManager.OnTurnStart`, `CardEffectManager.OnCardPlayed`,
+`PlayerService.OnPlayerEliminated`, `Player.TryalCardRevealed`, `Player.AccusationCountChanged`/
+`AccusationThresholdReached`) and reuse the Phase-4 `IPlayerInput` seam for abilities needing
+networked/phone input (Tituba rearrange, Samuel Parris discard-draw, John/Martha card-pick).
+Approach: implement in priority order (Tituba first), introduce a minimal `ICharacterAbility`
+convention to stop name-check sprawl, and promote to a full event-dispatcher when the first
+inheritance character (John Proctor / Martha Corey) demands it.
+
+**`docs/character-spec.md` is the Phase 5 source of truth** (the `protocol.md` equivalent for
+characters): the rulebook-locked ability/numbers/edge-cases for all 15 characters, the
+corrected accusation-threshold spec, current code status (done/partial/stub/bug), and which
+characters need networked `IPlayerInput`. Read it before implementing any character. Key
+locked facts: George Burroughs base = **8** (rulebook, not the dev guide's old "14"); Danforth
+is **−1 on the base BEFORE piety doubling** (current code applies it after — a bug to fix);
+Mary Warren uses the rulebook matchmaker model (linkable but immune to the elimination chain).
+
 ## Phase 5 — Deferred Matchmaker Work
 
 The night-kill matchmaker cascade works (`PlayerService.Eliminate` → partner dies
@@ -201,3 +223,4 @@ and the confirmation animation still plays.
 - Development guide: @docs/Salem_1692_Development_Guide.md
 - Rulebook: @docs/Salem_Rulebook.pdf
 - Socket protocol spec: @docs/protocol.md
+- Phase 5 character spec (source of truth): @docs/character-spec.md

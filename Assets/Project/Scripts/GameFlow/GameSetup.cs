@@ -42,7 +42,24 @@ namespace Salem.Gameplay.Setup
         [Tooltip("Must Be Ordered: Constable, Witch, Not A Witch")]
         [SerializeField] private ScriptableObject[] TryalCards;
         [SerializeField] private TownHallChoiceUI townHallChoiceUI;
-        
+
+        // ───────────────────────────────────────────────────────────────────────
+        // TEMP — Phase 5 debug only. Force specific seats to specific Town Hall
+        // characters at game start, so each character can be tested deterministically
+        // without restarting for the right random deal. Does NOTHING unless the list
+        // has entries; all unlisted seats keep their normal random deal.
+        // REMOVE this whole block (class + field + the override block in
+        // SetupTownhallCards) at the end of Phase 5.
+        [System.Serializable]
+        public class DebugForcedTownHall
+        {
+            public int seatIndex;     // index into the players list (0-based)
+            public TownHallCard card; // drag the specific Town Hall card asset here
+        }
+        [Header("TEMP — Phase 5 debug (leave empty for normal random deal)")]
+        [SerializeField] private List<DebugForcedTownHall> DEBUG_forcedTownHall = new();
+        // ───────────────────────────────────────────────────────────────────────
+
         // Exact Tryal card counts per player count: (NotAWitch, Witch, Constable)
         private static readonly Dictionary<int, (int notAWitch, int witch, int constable)> TryalDistribution = new()
         {
@@ -197,6 +214,30 @@ namespace Salem.Gameplay.Setup
                 foreach (var player in players)
                     DeckManager.drawTownhallCard(player);
             }
+
+            // ── TEMP (Phase 5 debug) — override only the listed seats with forced
+            // characters; unlisted seats keep their random deal. Runs AFTER the normal
+            // deal and BEFORE the Martha-copy loop so a forced Martha (or a forced
+            // neighbor) re-copies correctly and forced abilities apply first. setTownhall
+            // sets the card AND ApplyTownHallAbility (charges/limits). REMOVE at end of Phase 5.
+            if (DEBUG_forcedTownHall != null && DEBUG_forcedTownHall.Count > 0)
+            {
+                for (int i = 0; i < players.Count; i++)
+                    Debug.Log($"[GameSetup][DEBUG] seat {i} = {players[i].PlayerNameText} ({players[i].NetworkId})");
+                foreach (var f in DEBUG_forcedTownHall)
+                {
+                    if (f?.card == null) continue;
+                    if (f.seatIndex < 0 || f.seatIndex >= players.Count)
+                    {
+                        Debug.LogWarning($"[GameSetup][DEBUG] forced seat {f.seatIndex} out of range (0..{players.Count - 1}).");
+                        continue;
+                    }
+                    var seat = players[f.seatIndex];
+                    seat.setTownhall(f.card); // sets card + ApplyTownHallAbility (charges/limits)
+                    Debug.Log($"[GameSetup][DEBUG] FORCED seat {f.seatIndex} ({seat.PlayerNameText}) → {f.card.CardName}.");
+                }
+            }
+            // ── end TEMP ─────────────────────────────────────────────────────────
 
             // Martha Corey: apply copied passive abilities after all town hall cards are assigned
             foreach (var player in players)

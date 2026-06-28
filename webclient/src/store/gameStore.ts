@@ -19,6 +19,7 @@ import type {
   PrivateStatePayload,
   SecretPhasePromptPayload,
   ActionRequestPayload,
+  DeckRearrangeRequestPayload,
   PhaseResolvePayload,
   EliminationResultPayload,
   GameOverPayload,
@@ -68,6 +69,13 @@ export interface ActionRequestSlice {
   actions: string[];
 }
 
+export interface DeckRearrangeSlice {
+  /** Full deck labels, top→bottom (Tituba reorders these). */
+  cards: string[];
+  /** Rearrange window in seconds (rules value, 60) — shown as a countdown. */
+  seconds: number;
+}
+
 export interface GameOverSlice {
   winner: 'witches' | 'townspeople';
   tryals: Record<string, TryalCardView[]>;
@@ -81,6 +89,7 @@ interface GameStore {
   publicBoard: PublicBoardSlice;
   prompt: PromptSlice | null;
   actionRequest: ActionRequestSlice | null;
+  deckRearrange: DeckRearrangeSlice | null;
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
@@ -99,6 +108,8 @@ interface GameStore {
   applyPrivateState: (data: PrivateStatePayload) => void;
   applySecretPhasePrompt: (data: SecretPhasePromptPayload) => void;
   applyActionRequest: (data: ActionRequestPayload) => void;
+  applyDeckRearrangeRequest: (data: DeckRearrangeRequestPayload) => void;
+  clearDeckRearrange: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
@@ -145,6 +156,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   publicBoard: { ...initialPublicBoard },
   prompt: null,
   actionRequest: null,
+  deckRearrange: null,
   reveal: null,
   lastElimination: null,
   gameOver: null,
@@ -176,6 +188,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       publicBoard: { ...initialPublicBoard },
       prompt: null,
       actionRequest: null,
+      deckRearrange: null,
       reveal: null,
       lastElimination: null,
       gameOver: null,
@@ -231,13 +244,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
         submitted: false,
       },
       actionRequest: null,
+      deckRearrange: null,
     }),
 
   applyActionRequest: (data) =>
     set({
       actionRequest: { actions: data.actions ?? [] },
       prompt: null,
+      // After a rearrange, the host re-prompts the turn action — leave the
+      // rearrange screen for the action screen.
+      deckRearrange: null,
     }),
+
+  // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
+  applyDeckRearrangeRequest: (data) =>
+    set({
+      deckRearrange: { cards: data.cards ?? [], seconds: data.seconds ?? 60 },
+      prompt: null,
+      actionRequest: null,
+    }),
+
+  clearDeckRearrange: () => set({ deckRearrange: null }),
 
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 

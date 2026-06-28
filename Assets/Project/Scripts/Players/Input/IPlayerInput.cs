@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using Salem.Cards;
 
 namespace Salem.Players
 {
@@ -47,5 +49,17 @@ namespace Salem.Players
         /// </summary>
         IEnumerator RequestSecretPhase(Player player, string promptType, string[] targetNames,
                                        bool acting, Action<Player, string, bool> onSubmit);
+
+        /// <summary>
+        /// Tituba's deck rearrange: show the chooser the full deck (top→bottom) and await a
+        /// reordered permutation of the original indices. `timeoutSeconds` is the card's rules
+        /// window (60) — the host owns the deadline. Two-stage like RequestSecretPhase: the
+        /// phone sends tentative orders as it moves cards; the coroutine resolves on the
+        /// player's confirm OR the timeout, then invokes `onOrder` once with the latest order
+        /// (her in-progress arrangement), or null if nothing was submitted (caller keeps the
+        /// current order). Private channel — the deck list is sent only to this player.
+        /// </summary>
+        IEnumerator RequestDeckRearrange(Player chooser, IReadOnlyList<Card> deck,
+                                         float timeoutSeconds, Action<int[]> onOrder);
     }
 }

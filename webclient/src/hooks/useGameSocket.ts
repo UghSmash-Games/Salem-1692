@@ -16,6 +16,7 @@ import type {
   PrivateStatePayload,
   SecretPhasePromptPayload,
   ActionRequestPayload,
+  DeckRearrangeRequestPayload,
   PhaseResolvePayload,
   EliminationResultPayload,
   GameOverPayload,
@@ -49,6 +50,8 @@ export function useGameSocket(): void {
       useGameStore.getState().applySecretPhasePrompt(data);
     const onActionReq = (data: ActionRequestPayload) =>
       useGameStore.getState().applyActionRequest(data);
+    const onDeckRearrange = (data: DeckRearrangeRequestPayload) =>
+      useGameStore.getState().applyDeckRearrangeRequest(data);
     const onPhaseResolve = (data: PhaseResolvePayload) =>
       useGameStore.getState().applyPhaseResolve(data);
     const onElimination = (data: EliminationResultPayload) =>
@@ -70,6 +73,7 @@ export function useGameSocket(): void {
     socket.on(SERVER_TO_CLIENT.PRIVATE_STATE, onPrivate);
     socket.on(SERVER_TO_CLIENT.SECRET_PHASE_PROMPT, onSecretPrompt);
     socket.on(SERVER_TO_CLIENT.ACTION_REQUEST, onActionReq);
+    socket.on(SERVER_TO_CLIENT.DECK_REARRANGE_REQUEST, onDeckRearrange);
     socket.on(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
     socket.on(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);
     socket.on(SERVER_TO_CLIENT.GAME_OVER, onGameOver);
@@ -86,6 +90,7 @@ export function useGameSocket(): void {
       socket.off(SERVER_TO_CLIENT.PRIVATE_STATE, onPrivate);
       socket.off(SERVER_TO_CLIENT.SECRET_PHASE_PROMPT, onSecretPrompt);
       socket.off(SERVER_TO_CLIENT.ACTION_REQUEST, onActionReq);
+      socket.off(SERVER_TO_CLIENT.DECK_REARRANGE_REQUEST, onDeckRearrange);
       socket.off(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
       socket.off(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);
       socket.off(SERVER_TO_CLIENT.GAME_OVER, onGameOver);
