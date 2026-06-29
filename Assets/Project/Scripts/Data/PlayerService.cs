@@ -134,19 +134,34 @@ namespace Salem.Data
 
             player.IsEliminated = true;
 
+            // Matchmaker cascade — CAPTURE the bond BEFORE OnElimination, which discards the
+            // Matchmaker status card and clears MatchedPlayer on BOTH sides
+            // (ClearStatusCardsAndRecompute → RecomputeStatusFromStatusCards → ClearMatch).
+            // Per rulebook p13, eliminating one matchmaker owner eliminates BOTH — even if the
+            // partner was saved or confessed (EliminateNow reveals the partner regardless).
+            // NOTE (#7, Mary Warren): her cascade exceptions (Mary survives the chain;
+            // both-teams-lose → only the intended target dies) go right at the
+            // mmPartner.EliminateNow() call below — inserted later on this working branch.
+            var mmPartner = player.MatchedPlayer;
+            bool mmCascades = mmPartner != null &&
+                              player.HasStatus("Matchmaker") &&
+                              mmPartner.HasStatus("Matchmaker") &&
+                              !mmPartner.IsEliminated;
+
             // Discard hand + status cards (or transfer to John Proctor holder)
             player.OnElimination();
 
-            // Matchmaker cascade: if eliminated player has Matchmaker bond, eliminate partner too
-            if (player.MatchedPlayer != null &&
-                player.HasStatus("Matchmaker") &&
-                player.MatchedPlayer.HasStatus("Matchmaker") &&
-                !player.MatchedPlayer.IsEliminated)
+            // Cascade the partner now, using the captured bond (OnElimination has since cleared
+            // the live references). EliminateNow reveals all the partner's tryals → TrialService
+            // → PlayerService.Eliminate(partner) — the full elimination path (guarded against
+            // re-entrancy by the IsEliminated check at the top of this method).
+            if (mmCascades && !mmPartner.IsEliminated)
             {
-                var partner = player.MatchedPlayer;
+                Debug.Log($"[Matchmaker] {player.PlayerNameText} eliminated — matched partner " +
+                          $"{mmPartner.PlayerNameText} is also eliminated.");
                 player.ClearMatch();
-                partner.ClearMatch();
-                partner.EliminateNow();
+                mmPartner.ClearMatch();
+                mmPartner.EliminateNow();
             }
 
             // Cotton Mather / Martha Corey edge: a living Martha copying the eliminated

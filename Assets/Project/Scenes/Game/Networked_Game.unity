@@ -3108,7 +3108,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6167894361538682681, guid: 1a98ac3b80dea9046b2024e692eabcec, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0003853827
+      value: 0.00038516603
       objectReference: {fileID: 0}
     - target: {fileID: 6192359919368445799, guid: 1a98ac3b80dea9046b2024e692eabcec, type: 3}
       propertyPath: m_AnchorMax.x
@@ -4252,11 +4252,11 @@ PrefabInstance:
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[0].card
       value: 
-      objectReference: {fileID: 11400000, guid: 07b0acaa342939b4095a8d5b01be536f, type: 2}
+      objectReference: {fileID: 11400000, guid: c87cb0d2abde68b48b764de9555c3830, type: 2}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[1].card
       value: 
-      objectReference: {fileID: 11400000, guid: f3caad35c54392149bad08e2cc7a4646, type: 2}
+      objectReference: {fileID: 11400000, guid: 6d37343c412757b45acbbc6f72a948bb, type: 2}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[1].seatIndex
       value: 1

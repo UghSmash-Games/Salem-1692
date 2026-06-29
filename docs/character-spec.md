@@ -118,9 +118,12 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
 - **Edge cases (rulebook p13):** Interaction with George Burroughs and with piety holders is
   the whole point — see the verified table.
 - **Interactions:** George Burroughs, Piety, Curse.
-- **Code status:** ✗ −1 applied after piety doubling (Player.cs:794–796). Non-piety correct,
-  piety cases off by the piety delta.
-- **Build:** Move the −1 to the base before piety ×2 per the locked spec.
+- **Code status:** ✅ FIXED (Phase 5). `CheckAccusations` now applies Danforth's −1 to the
+  BASE before the piety ×2 (and curse last): non-Danforth uses `currentAccusationLimit` as-is;
+  the Danforth branch recomputes `effBase = baseAccusationLimit − 1` → ×2 if piety → −1 if
+  curse. Verified against every row of the table (normal 6, piety 12, George 7, George+piety
+  14). Keyed on the ACCUSER's `HasTownHall(ThomasDanforth)` (so a Martha copying Danforth also
+  applies). Required the **Piety card-`Op` data fix** (below) before piety rows could be tested.
 
 ## 4. George Burroughs ◐ (base ✅, Danforth-interaction via #3 fix)
 
@@ -130,9 +133,9 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   was WRONG — corrected.)
 - **Edge cases:** All four numbers above; piety doubles his base like anyone else.
 - **Interactions:** Thomas Danforth (relative math), Piety.
-- **Code status:** ✅ base 8 (`baseAccusationLimit++`, Player.cs:149). Danforth+George piety
-  numbers depend on the #3 fix.
-- **Build:** Nothing for the base; correctness of the piety rows comes from fixing Danforth.
+- **Code status:** ✅ base 8 (`baseAccusationLimit++`, Player.cs:149). Danforth+George numbers
+  (7 / 14) now correct via the landed #3 Danforth fix; all four rows verified in playtest.
+- **Build:** Nothing — base 8 + the #3 fix cover all four numbers.
 
 ## 5. John Proctor ◐ (needs `IPlayerInput` for the split edge)
 
@@ -183,14 +186,23 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   - Black Cat: she cannot be given the black cat (immune).
 - **Code status:**
   - Black Cat immunity ✅ (Player.cs:617; CardEffectManager:166 excludes her as a target).
+  - **Base matchmaker cascade ✅ (Phase 5):** Matchmaker cards only started attaching after the
+    card-data `Op` fix (every blue SO had `Op:0`); the first real exercise then surfaced an
+    ORDERING bug — the cascade checked the bond AFTER `OnElimination` had discarded the
+    Matchmaker card and nulled `MatchedPlayer` (two-way, via `RecomputeStatusFromStatusCards`
+    → `ClearMatch`), so it never fired. Fixed by **capturing the bond before `OnElimination`
+    and cascading after** (`PlayerService.Eliminate`, `mmPartner`/`mmCascades` →
+    `mmPartner.EliminateNow()`). "Both die even if the partner was saved/confessed" now works.
   - Matchmaker: ✗ currently makes her **un-linkable** (CardEffectManager:120) — **wrong model;
     remove it** per D1.
-  - Night-cascade Mary-immunity ✗✗ not built (`PlayerService.Eliminate` cascade has no Mary
-    check, ~140–149).
+  - Night-cascade Mary-immunity ✗✗ not built.
   - Both-teams-lose rule ✗✗ not built.
-- **Build:** Remove CardEffectManager:120 (allow the link); in `PlayerService.Eliminate`'s
-  matchmaker cascade, skip eliminating the partner **iff the partner is Mary Warren**; add the
-  both-teams-lose guard (only the intended target dies). Keep Black Cat immunity.
+- **Build (#7):** Remove CardEffectManager:120 (allow the link). The cascade now lives at the
+  captured-bond branch in `PlayerService.Eliminate` (capture-before-`OnElimination`); insert
+  the two guards **right at the `mmPartner.EliminateNow()` call** — skip eliminating the
+  partner **iff the partner is Mary Warren** (she survives), and add the both-teams-lose guard
+  (only the intended target dies). These are conditions on a now-working branch, not a
+  re-fix. Keep Black Cat immunity.
 
 ## 8. William Phipps ◐ (human UI deferred)
 
@@ -256,12 +268,20 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
 
 ## Card-rule edge cases that affect character math (rulebook p12–14)
 
-- **Piety:** doubles the base threshold (Player.cs:541 ✅). **If a player loses piety while at
-  ≥7 accusations, they immediately lose a tryal; the player who removed piety chooses which.**
-  ⚠️ Not found in the accusation code — **verify / build** alongside Danforth/Burroughs.
+- **Card-`Op` data fix ✅ (Phase 5):** every blue/persistent SO had `Op:0` (= `ActionOp.Accusation`,
+  the enum default), so playing them routed to the Accusation handler and never attached
+  (`CardEffectManager.ExecuteActionOp` keys on `Op`). Fixed the `Op` on **6 SOs** — Piety (13),
+  Asylum (11), Matchmaker (12), Stocks (1), Scapegoat (10), Black Cat (5). This unblocked
+  Piety/Danforth-piety, and made Asylum (night immunity) and Matchmaker (link + cascade)
+  actually work — all three re-verified in playtest. (Code was correct; data was wrong.)
+- **Piety:** doubles the base threshold (Player.cs:541 ✅; now attaches after the `Op` fix).
+  **If a player loses piety while at ≥7 accusations, they immediately lose a tryal; the player
+  who removed piety chooses which.** ⚠️ Not found in the accusation code — **verify / build**
+  alongside Danforth/Burroughs.
 - **Matchmaker:** cannot receive a 2nd; if one linked player is night-killed both die even if
-  the other confessed or was saved (✅ `PlayerService.Eliminate`). Mary Warren + both-teams-lose
-  exceptions → see #7.
+  the other confessed or was saved (✅ `PlayerService.Eliminate`, Phase 5: cascade ORDERING
+  fixed — capture the bond before `OnElimination` clears it; re-verified in playtest). Mary
+  Warren + both-teams-lose exceptions → see #7 (guards land at `mmPartner.EliminateNow()`).
 - **Black Cat:** witches may self-give at dawn (✅ 4b); the owner who draws conspiracy chooses
   which of their tryals is revealed (verify in the conspiracy path); Mary Warren immune (✅).
 

@@ -794,10 +794,19 @@ namespace Salem.Players
 
         private void CheckAccusations(Player accuser = null)
         {
-            // Thomas Danforth: threshold reduced by 1 when he is the accuser
+            // Reveal threshold for THIS accusation. Danforth (the ACCUSER) reduces the
+            // TARGET's BASE by 1 BEFORE piety doubling (rulebook); curse applies last. For a
+            // non-Danforth accuser, currentAccusationLimit is already correct
+            // (base → piety×2 → curse); only the Danforth case recomputes from the base.
             int effectiveLimit = currentAccusationLimit;
             if (accuser != null && accuser.HasTownHall(TownhallName.ThomasDanforth))
-                effectiveLimit = Math.Max(1, effectiveLimit - 1);
+            {
+                int effBase = Math.Max(1, baseAccusationLimit - 1);                  // −1 on the BASE
+                bool targetHasPiety = StatusCards.Any(c => c.Name == "Piety");
+                bool targetHasCurse = StatusCards.Any(c => c.Name == "Curse");
+                effectiveLimit = targetHasPiety ? effBase * 2 : effBase;             // then piety ×2
+                if (targetHasCurse) effectiveLimit = Math.Max(1, effectiveLimit - 1); // curse last
+            }
 
             if (currentAccusationCount >= effectiveLimit)
             {

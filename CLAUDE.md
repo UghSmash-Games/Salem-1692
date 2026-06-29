@@ -102,6 +102,20 @@ kills (PlayerService.Eliminate, PlayerService.cs:104-114 ← NightResolver.cs:91
 a masked/timed confess window exists (GamePhaseManager.RunConfessWindow — 4c
 replaced the legacy local ExecuteConfessionRound).
 
+⚠️ CORRECTION (Phase 5): the Phase-4 "asylum checked at resolution" verification was
+true about the resolution LOGIC but WRONG in practice — asylum (and matchmaker, stocks,
+scapegoat, piety) never actually attached, so they were never exercised. Root cause: a
+card-DATA bug, not code — every blue/persistent card SO had `Op: 0` (= ActionOp.Accusation,
+the enum's default), so playing them routed to the Accusation handler and never reached
+`PlayStatusCardOnTarget`/`AddStatusCard`. The effect map (CardEffectManager `_ops`),
+`PlayStatusCardOnTarget`, and the piety/asylum threshold/flag logic were all correct.
+Fixed by setting each SO's `Op` to its real value (Piety 13, Asylum 11, Matchmaker 12,
+Stocks 1, Scapegoat 10, Black Cat 5 — Black Cat was insulated via name-handling at draw).
+**Asylum night-immunity and matchmaker (linking + the cascade exceptions) must be
+RE-VERIFIED now that cards actually attach** — this directly affects Mary Warren (#7,
+matchmaker-based). Lesson: dispatch keys on `ActionCardSO.Op`, but several places match by
+`Card.Name` — a card needs BOTH its `Op` and `Name` correct.
+
 ## Phase 4 — Networked Night & Dawn (COMPLETE: 4a / 4b / 4c)
 
 Phase 4 was an architecture conversion (not bug-fixing): the active flow
