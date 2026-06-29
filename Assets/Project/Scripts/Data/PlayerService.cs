@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using Salem.Cards;
 using Salem.GameFlow;
 using Salem.Players;
 using UnityEngine;
@@ -147,6 +148,33 @@ namespace Salem.Data
                 partner.ClearMatch();
                 partner.EliminateNow();
             }
+
+            // Cotton Mather / Martha Corey edge: a living Martha copying the eliminated
+            // player must re-resolve immediately — e.g. evidence against her reverts 1→3
+            // when Cotton Mather dies. Recompute every alive Martha's accusation total and
+            // re-check her threshold (ApplyAccusation(0) = recompute + CheckAccusations), so
+            // she never sits above the reveal threshold after the revert. GetEffectiveTownHallName
+            // already drops the eliminated player (IsEliminated set above + townhallCard cleared
+            // in OnElimination), so a Martha now resolves to her next living neighbour.
+            //
+            // DEFERRED (Phase 5 #6, Martha dispatcher): copied CHARGE/LIMIT re-resolve
+            // (George's accusation limit, Tituba/Parris charges via Martha). ApplyMarthaCoreyCopy
+            // can't be reused as-is — baseAccusationLimit++ is cumulative and charges would
+            // reset. When that dispatcher lands, move this hook into its OnPlayerEliminated
+            // handler and add the charge/limit re-resolve there.
+            foreach (var m in GetAlivePlayers())
+                if (m != null && m.townhallCard != null &&
+                    m.townhallCard.CardName == TownhallName.MarthaCorey)
+                {
+                    m.RecomputeStatusFromStatusCards(); // revert the count first (no reveal yet)
+                    // TEMP (Phase 5 test) — label the revert so the Cotton→Martha edge is
+                    // visible in the console (currentAccusationCount is a non-serialized
+                    // property, so it isn't shown in the inspector). Remove with the other
+                    // Phase 5 debug diagnostics.
+                    Debug.Log($"[CottonRevert] Martha '{m.PlayerNameText}' after '{player.PlayerNameText}' " +
+                              $"eliminated → acc count {m.currentAccusationCount}/{m.currentAccusationLimit}.");
+                    m.ApplyAccusation(0); // recompute (idempotent) + threshold check (reveals if the revert crosses)
+                }
 
             // Re-index turn order after removal
             GameTurnManager.Instance?.OnPlayerEliminated(player);

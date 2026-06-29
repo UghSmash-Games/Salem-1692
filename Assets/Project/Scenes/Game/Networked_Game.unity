@@ -4245,6 +4245,22 @@ PrefabInstance:
       propertyPath: tableLayoutController
       value: 
       objectReference: {fileID: 1749139308}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[0].card
+      value: 
+      objectReference: {fileID: 11400000, guid: 07b0acaa342939b4095a8d5b01be536f, type: 2}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[1].card
+      value: 
+      objectReference: {fileID: 11400000, guid: f3caad35c54392149bad08e2cc7a4646, type: 2}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[1].seatIndex
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5472059439929990727, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: rootPanel
       value: 

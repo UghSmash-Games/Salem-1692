@@ -102,11 +102,13 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   already in front of her.
 - **Interactions:** Martha (copy), Danforth/Burroughs (independent threshold math),
   Will Grigs (Witness still 7).
-- **Code status:** ✅ base (Player.cs:568). ◐ Martha-revert edge: *partially* automatic
-  because `HasTownHall` resolves live, but **verify** `RecalculateAccusations` re-fires when
-  Cotton is eliminated (the count must recompute, not stay cached).
-- **Build:** Confirm/trigger an accusation recompute on Cotton's elimination for any Martha
-  copying him.
+- **Code status:** ✅ base (`RecomputeStatusFromStatusCards`, Player.cs:572; live path =
+  CardEffectManager → `ApplyAccusation` → recompute). ✅ Martha-revert edge: on elimination,
+  `PlayerService.Eliminate` now recomputes + re-checks every alive Martha (`ApplyAccusation(0)`),
+  so evidence reverts 1→3 immediately and an over-threshold revert reveals at once.
+- **Note:** a dead legacy `Player.ApplyCardEffect` (Player.cs:358) has a broken display-name
+  check `PlayerNameText == "Cotton Mather"` (and "Sarah Good"); no live caller — delete in a
+  cleanup pass.
 
 ## 3. Thomas Danforth ✗ (bug)
 
@@ -160,6 +162,13 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   ability).
 - **Build:** Re-resolve copied charges/limits whenever Martha's effective source changes
   (neighbor eliminated). Implement `onAbilityInherited` / `onAbilityLost` semantics.
+  - **Existing hook to relocate:** `PlayerService.Eliminate` already recomputes every alive
+    Martha's *accusations* on each elimination (added for the Cotton revert, #2 —
+    `m.ApplyAccusation(0)`). The dispatcher should **move this into its `OnPlayerEliminated`
+    handler** and **add the charge/limit re-resolve there** (George's `baseAccusationLimit`,
+    Tituba/Parris/Phipps charges). Cannot reuse `ApplyMarthaCoreyCopy` as-is —
+    `baseAccusationLimit++` is cumulative and charges would reset; needs proper reset +
+    consumed-charge handling.
 
 ## 7. Mary Warren ◐ → ✗✗ (matchmaker chain) — **rulebook model, D1**
 
