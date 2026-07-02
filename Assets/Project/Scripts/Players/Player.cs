@@ -550,10 +550,6 @@ namespace Salem.Players
             // Stocks: skip turn if any Stocks cards are in front of this player
             skipTurn = StatusCards.Any(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
 
-            // Curse makes accusations easier to trigger (limit -1, min 1)
-            bool hasCurse = StatusCards.Any(c => c.Name == "Curse");
-            if (hasCurse) currentAccusationLimit = (byte)Mathf.Max(1, currentAccusationLimit - 1);
-
             // Asylum blocks Night targeting/elimination
             hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
 
@@ -795,17 +791,15 @@ namespace Salem.Players
         private void CheckAccusations(Player accuser = null)
         {
             // Reveal threshold for THIS accusation. Danforth (the ACCUSER) reduces the
-            // TARGET's BASE by 1 BEFORE piety doubling (rulebook); curse applies last. For a
-            // non-Danforth accuser, currentAccusationLimit is already correct
-            // (base → piety×2 → curse); only the Danforth case recomputes from the base.
+            // TARGET's BASE by 1 BEFORE piety doubling (rulebook). For a non-Danforth accuser,
+            // currentAccusationLimit is already correct (base → piety×2); only the Danforth
+            // case recomputes from the base.
             int effectiveLimit = currentAccusationLimit;
             if (accuser != null && accuser.HasTownHall(TownhallName.ThomasDanforth))
             {
                 int effBase = Math.Max(1, baseAccusationLimit - 1);                  // −1 on the BASE
                 bool targetHasPiety = StatusCards.Any(c => c.Name == "Piety");
-                bool targetHasCurse = StatusCards.Any(c => c.Name == "Curse");
                 effectiveLimit = targetHasPiety ? effBase * 2 : effBase;             // then piety ×2
-                if (targetHasCurse) effectiveLimit = Math.Max(1, effectiveLimit - 1); // curse last
             }
 
             if (currentAccusationCount >= effectiveLimit)

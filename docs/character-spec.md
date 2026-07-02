@@ -48,9 +48,10 @@ effectiveBase = baseAccusationLimit              // 7 normal; 8 for George Burro
 if (accuser is Thomas Danforth)                  // −1 on the BASE, BEFORE piety
     effectiveBase = max(1, effectiveBase - 1)
 threshold = hasPiety ? effectiveBase * 2 : effectiveBase
-if (hasCurse) threshold = max(1, threshold - 1)  // curse is a card, not a character
 reveal when accusationCount >= threshold
 ```
+(Only piety doubles the threshold and only Danforth reduces it. **Curse does NOT affect the
+threshold** — it's a green card that discards a blue card; see the card-rule note below.)
 
 | Scenario | Threshold |
 |---|---|
@@ -63,12 +64,12 @@ reveal when accusationCount >= threshold
 | George + piety | **16** |
 | George + piety, Danforth accuses | **14** |
 
-**Current code bug (Player.cs `CheckAccusations`, ~794–796):** Danforth's `−1` is applied to
-`currentAccusationLimit`, which has *already* been doubled for piety (set ~541). So every
-**piety** row is wrong (piety target reveals at 13 not 12; George+piety at 15 not 14). The
-non-piety rows happen to be correct. **Fix:** apply Danforth's −1 to `baseAccusationLimit`
-*before* the piety ×2 (as in the pseudocode above). `baseAccusationLimit = 7` default
-(Player.cs:92); George's `baseAccusationLimit++` → 8 (Player.cs:149) is already correct.
+**Status: ✅ FIXED (Phase 5).** `CheckAccusations` now applies Danforth's −1 to
+`baseAccusationLimit` *before* the piety ×2 (non-Danforth uses `currentAccusationLimit` as-is;
+the Danforth branch recomputes `effBase = baseAccusationLimit − 1` → ×2 if piety). Every row of
+the table above was verified in playtest. `baseAccusationLimit = 7` default (Player.cs:92);
+George's `baseAccusationLimit++` → 8 (Player.cs:149). (The earlier bug applied the −1 to the
+already-piety-doubled `currentAccusationLimit`, so piety rows read 13/15 instead of 12/14.)
 
 Accusation card values (Player.cs `RecalculateAccusations`, ~568): Accusation = 1,
 **Evidence = 3** (1 vs Cotton Mather), Witness = 7.
@@ -110,20 +111,21 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   check `PlayerNameText == "Cotton Mather"` (and "Sarah Good"); no live caller — delete in a
   cleanup pass.
 
-## 3. Thomas Danforth ✗ (bug)
+## 3. Thomas Danforth ✅ (FIXED)
 
 - **Ability:** When **he** is the accuser, the reveal threshold is reduced by **1**.
 - **Numbers:** −1 on the **base**, before piety doubling (see locked spec). Normal target
   6th accusation triggers; piety target 12; George 7; George+piety 14.
 - **Edge cases (rulebook p13):** Interaction with George Burroughs and with piety holders is
   the whole point — see the verified table.
-- **Interactions:** George Burroughs, Piety, Curse.
+- **Interactions:** George Burroughs, Piety. (Curse does NOT interact — it discards a blue
+  card, not a threshold modifier; see the card-rule note.)
 - **Code status:** ✅ FIXED (Phase 5). `CheckAccusations` now applies Danforth's −1 to the
-  BASE before the piety ×2 (and curse last): non-Danforth uses `currentAccusationLimit` as-is;
-  the Danforth branch recomputes `effBase = baseAccusationLimit − 1` → ×2 if piety → −1 if
-  curse. Verified against every row of the table (normal 6, piety 12, George 7, George+piety
-  14). Keyed on the ACCUSER's `HasTownHall(ThomasDanforth)` (so a Martha copying Danforth also
-  applies). Required the **Piety card-`Op` data fix** (below) before piety rows could be tested.
+  BASE before the piety ×2: non-Danforth uses `currentAccusationLimit` as-is; the Danforth
+  branch recomputes `effBase = baseAccusationLimit − 1` → ×2 if piety. Verified against every
+  row of the table (normal 6, piety 12, George 7, George+piety 14). Keyed on the ACCUSER's
+  `HasTownHall(ThomasDanforth)` (so a Martha copying Danforth also applies). Required the
+  **Piety card-`Op` data fix** (below) before piety rows could be tested.
 
 ## 4. George Burroughs ◐ (base ✅, Danforth-interaction via #3 fix)
 
@@ -284,6 +286,19 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   Warren + both-teams-lose exceptions → see #7 (guards land at `mmPartner.EliminateNow()`).
 - **Black Cat:** witches may self-give at dawn (✅ 4b); the owner who draws conspiracy chooses
   which of their tryals is revealed (verify in the conspiracy path); Mary Warren immune (✅).
+- **Curse:** a base-game **green** card — *"discard one blue card currently in front of another
+  player"* (rulebook p12: blue cards stay "until moved or discarded by another card such as
+  scapegoat or curse"). Targets any blue card — Asylum / Piety / Matchmaker — **and the Black
+  Cat** (rulebook p12: after dawn the black cat "can be discarded by a curse card"). ✅
+  `CardEffectManager` `ActionOp.Curse` handler (discards a blue status card; black cat
+  special-cased). Stocks is a **green** card, so it is correctly NOT curse-targetable.
+  **It does NOT modify accusation thresholds** — the earlier "curse −1 threshold" was a phantom
+  and has been removed from the code + spec.
+  - ⚠️ **Deferred fidelity item (own task):** the handler auto-discards the *first* blue card it
+    finds (and forces the black cat first if held), rather than letting the curse-player CHOOSE
+    which blue card. The rulebook implies the player picks. Needs **networked player-choice
+    input** (the `IPlayerInput` pattern) — its own task, likely pairing with the deferred
+    accusation-reveal tryal-choice. Do NOT build now.
 
 ## Build priority (per `/add-character` skill)
 
