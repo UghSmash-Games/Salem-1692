@@ -87,6 +87,17 @@ The host (Unity) emits these events. The server routes them to the correct recip
   `seconds` is the rearrange window (60) the phone renders as a countdown. The public
   `game_state_update` continues to expose only `deckCount`, never card identities.
 
+### `card_pick_request`
+- **Direction:** host → server → **one specific player**
+- **Recipients:** single player socket matching `playerId` (a John Proctor / Martha drafter)
+- **NEVER sent to:** host, mirrors, other players
+- **Payload:** `{ playerId: string, cards: string[], pickNumber: number, totalPicks: number, seconds: number }`
+- **Note:** `cards` is an eliminated player's hand (card labels) — private information (the draft pool),
+  routed to exactly one socket, never broadcast. `pickNumber`/`totalPicks` are display hints
+  ("pick N of up to 3"); `seconds` is the pick window the phone renders as a countdown. This is NOT a
+  masked secret phase — the draft's existence is public; only the card identities are private (same
+  class as `deck_rearrange_request`). The public `game_state_update` never exposes hand contents.
+
 ### `phase_resolve`
 - **Direction:** host → server → **all clients in room**
 - **Recipients:** host (echo back for sync), all players, all mirrors
@@ -139,6 +150,15 @@ Players emit these events from their phone clients. The server validates the sen
   forwards all submissions; the host owns the authoritative 60s deadline and applies the
   latest order received.
 
+### `card_pick_submit`
+- **Direction:** player → server → host
+- **Sender role:** player ONLY
+- **Client sends:** `{ index: number }`
+- **Server forwards to host:** `{ playerId: string, index: number }`
+- **Note:** `index` is the chosen card's index into the `cards` pool from `card_pick_request`. One pick
+  per request (single-stage — the host issues a fresh request for each of the drafter's up-to-3 picks,
+  alternating between John and Martha). The host owns the authoritative pick deadline.
+
 ---
 
 ## Role Enforcement Summary
@@ -153,6 +173,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `secret_phase_prompt` | ✅ (originates) | ❌ | ❌ |
 | `action_request` | ✅ (originates) | ❌ | ❌ |
 | `deck_rearrange_request` | ✅ (originates) | ❌ | ❌ |
+| `card_pick_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
 | `elimination_result` | ✅ (originates) | ❌ | ❌ |
 | `game_over` | ✅ (originates) | ❌ | ❌ |
@@ -160,6 +181,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `secret_phase_submit` | ❌ | ✅ | ❌ |
 | `confess` | ❌ | ✅ | ❌ |
 | `deck_rearrange_submit` | ❌ | ✅ | ❌ |
+| `card_pick_submit` | ❌ | ✅ | ❌ |
 
 ---
 
@@ -169,6 +191,6 @@ These rules are enforced at the server dispatch layer:
 
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
-3. **`action_request`** and **`deck_rearrange_request`** are each routed to exactly one player socket. The deck card list never appears in any broadcast.
+3. **`action_request`**, **`deck_rearrange_request`**, and **`card_pick_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
 4. Mirrors receive only: `game_state_update`, `phase_resolve`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

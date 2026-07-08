@@ -90,6 +90,18 @@ export interface DeckRearrangeRequestPayload {
   seconds: number;
 }
 
+/** John Proctor / Martha card-draft pick prompt (server → this one drafter only). */
+export interface CardPickRequestPayload {
+  /** The draft pool — an eliminated player's hand labels. */
+  cards: string[];
+  /** 1-based index of this pick, for display ("pick N of up to 3"). */
+  pickNumber: number;
+  /** Max picks this drafter may take (3). */
+  totalPicks: number;
+  /** The pick window in seconds — shown as a countdown. */
+  seconds: number;
+}
+
 export interface PhaseResolvePayload {
   /** UTC epoch ms at which all screens should trigger the reveal. */
   revealAt: number;
@@ -144,4 +156,10 @@ export interface DeckRearrangeSubmitPayload {
   order: number[];
   /** false = tentative in-progress order; true = final (Confirm or countdown expiry). */
   confirmed: boolean;
+}
+
+/** A John Proctor / Martha drafter's single card pick (this player → host). */
+export interface CardPickSubmitPayload {
+  /** The chosen card's index into the pool from CardPickRequestPayload. */
+  index: number;
 }

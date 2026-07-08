@@ -61,5 +61,17 @@ namespace Salem.Players
         /// </summary>
         IEnumerator RequestDeckRearrange(Player chooser, IReadOnlyList<Card> deck,
                                          float timeoutSeconds, Action<int[]> onOrder);
+
+        /// <summary>
+        /// John Proctor / Martha draft: show the chooser a pool of cards (an eliminated player's hand)
+        /// and await ONE pick — the index into `pool` of the card they take. Called repeatedly by the
+        /// draft coroutine, alternating between drafters (John first), up to 3 each. `pickNumber`
+        /// (1-based) and `totalPicks` (3) are display hints ("pick N of up to 3"). NOT a masked secret
+        /// phase — the draft's existence is public; only the card identities are private, so the pool
+        /// is routed to this one socket (like RequestDeckRearrange). Resolves on the player's submit or
+        /// the timeout; reports the chosen index, or -1 if nothing was submitted (caller safety-picks).
+        /// </summary>
+        IEnumerator RequestCardPick(Player chooser, IReadOnlyList<Card> pool, int pickNumber,
+                                    int totalPicks, float timeoutSeconds, Action<int> onIndex);
     }
 }

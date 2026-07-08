@@ -176,6 +176,21 @@ function registerDispatch(io) {
       }
     });
 
+    // Card pick request → one specific player ONLY (a John Proctor / Martha drafter).
+    // Carries an eliminated player's hand card list — private, never broadcast.
+    socket.on('card_pick_request', (data) => {
+      if (socket.role !== 'host') return;
+      if (!data || !data.playerId) return;
+
+      const player = getPlayerByPlayerId(socket.roomCode, data.playerId);
+      if (!player) return;
+
+      const targetSocket = io.sockets.sockets.get(player.socketId);
+      if (targetSocket) {
+        targetSocket.emit('card_pick_request', data);
+      }
+    });
+
     // Phase resolve → ALL clients in room (synchronized reveal timestamp)
     socket.on('phase_resolve', (data) => {
       if (socket.role !== 'host') return;
@@ -217,6 +232,11 @@ function registerDispatch(io) {
     socket.on('deck_rearrange_submit', (data) => {
       if (socket.role !== 'player') return;
       forwardToHost(io, socket, 'deck_rearrange_submit', data);
+    });
+
+    socket.on('card_pick_submit', (data) => {
+      if (socket.role !== 'player') return;
+      forwardToHost(io, socket, 'card_pick_submit', data);
     });
 
     // ─── Disconnect ────────────────────────────────────────────

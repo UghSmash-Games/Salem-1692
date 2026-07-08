@@ -320,5 +320,49 @@ namespace Salem.Players
             // null if she never moved anything → caller keeps the current order.
             onOrder?.Invoke(latestOrder);
         }
+
+        public IEnumerator RequestCardPick(Player p, IReadOnlyList<Card> pool, int pickNumber,
+                                           int totalPicks, float timeoutSeconds, System.Action<int> onIndex)
+        {
+            var nm = NetworkManager.Instance;
+            if (nm == null || string.IsNullOrEmpty(p.NetworkId) || pool == null || pool.Count == 0)
+            {
+                onIndex?.Invoke(-1); // no network / nothing to pick — caller safety-picks
+                yield break;
+            }
+
+            int chosen = -1;
+            bool done = false;
+
+            void Handler(CardPickSubmitMsg msg)
+            {
+                if (done) return;
+                if (msg == null || msg.playerId != p.NetworkId) return;
+                if (msg.index < 0 || msg.index >= pool.Count) return; // ignore out-of-range submits
+                chosen = msg.index;
+                done = true;
+            }
+
+            nm.OnCardPickSubmit += Handler;
+
+            nm.SendCardPickRequest(new CardPickRequestMsg
+            {
+                playerId = p.NetworkId,
+                cards = pool.Select(c => c != null ? c.Name : "").ToArray(),
+                pickNumber = pickNumber,
+                totalPicks = totalPicks,
+                seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
+            });
+
+            // Resolve on the player's submit or the host-owned deadline. Unlike RequestDeckRearrange,
+            // the draft is NOT tied to the drafter's turn, so we do NOT cancel on TurnId change (a turn
+            // advancing elsewhere must not abort an in-flight draft).
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+            yield return new WaitUntil(() => done || Time.realtimeSinceStartup >= deadline);
+
+            nm.OnCardPickSubmit -= Handler;
+
+            onIndex?.Invoke(chosen); // -1 on timeout → caller safety-picks
+        }
     }
 }

@@ -236,6 +236,39 @@ describe('player → host forwarding', () => {
     mirror.emit('deck_rearrange_submit', { order: [0, 1], confirmed: true });
     await expectNoEvent(host, 'deck_rearrange_submit');
   });
+
+  test('card_pick_submit is forwarded to host with playerId', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player = trackClient(createClient());
+    await waitForConnect(player);
+    player.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player, 'joined');
+
+    player.emit('card_pick_submit', { index: 2 });
+    const received = await waitFor(host, 'card_pick_submit');
+
+    expect(received.playerId).toBe('p0');
+    expect(received.index).toBe(2);
+  });
+
+  test('card_pick_submit from a mirror is silently ignored', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    mirror.emit('card_pick_submit', { index: 0 });
+    await expectNoEvent(host, 'card_pick_submit');
+  });
 });
 
 // ─── Role Enforcement ──────────────────────────────────────────
@@ -473,6 +506,45 @@ describe('privacy isolation', () => {
     // The deck card list must never reach another player or a mirror.
     await expectNoEvent(player1, 'deck_rearrange_request');
     await expectNoEvent(mirror, 'deck_rearrange_request');
+  });
+
+  test('card_pick_request is sent ONLY to the target player (never others/mirror)', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player0 = trackClient(createClient());
+    await waitForConnect(player0);
+    player0.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player0, 'joined');
+
+    const player1 = trackClient(createClient());
+    await waitForConnect(player1);
+    player1.emit('join_room', { code, displayName: 'Bob' });
+    await waitFor(player1, 'joined');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    host.emit('card_pick_request', {
+      playerId: 'p0',
+      cards: ['Accusation', 'Alibi', 'Asylum'],
+      pickNumber: 1,
+      totalPicks: 3,
+      seconds: 45,
+    });
+
+    const p0Data = await waitFor(player0, 'card_pick_request');
+    expect(p0Data.cards).toEqual(['Accusation', 'Alibi', 'Asylum']);
+    expect(p0Data.pickNumber).toBe(1);
+    expect(p0Data.totalPicks).toBe(3);
+
+    // The eliminated player's hand list must never reach another player or a mirror.
+    await expectNoEvent(player1, 'card_pick_request');
+    await expectNoEvent(mirror, 'card_pick_request');
   });
 });
 

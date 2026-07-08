@@ -139,41 +139,47 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   (7 / 14) now correct via the landed #3 Danforth fix; all four rows verified in playtest.
 - **Build:** Nothing — base 8 + the #3 fix cover all four numbers.
 
-## 5. John Proctor ◐ (needs `IPlayerInput` for the split edge)
+## 5. John Proctor ✅ (dispatcher + networked draft — Group B)
 
-- **Ability:** When a player is eliminated, take all blue (status) cards in front of them and
-  all cards in their hand.
-- **Edge cases (rulebook p12–13):** If **Martha** has inherited John's ability, John and
-  Martha **look at the eliminated player's cards and take turns picking 3 each, John first.**
+- **Ability (rulebook-CORRECTED, reviewer-confirmed):** When a player is eliminated, choose **up to
+  THREE cards from their HAND** to take; discard the rest of the hand. The eliminated player's
+  cards **in play** (status: red + blue) are eliminated/discarded — **not** taken. (The earlier
+  "take all blue cards + all hand" here and the auto-transfer in code were WRONG — John takes from
+  the HAND only, and it's a CHOICE, so even the single-John case needs the pick UI when hand > 3.)
+- **Edge cases (rulebook p12–13):** If **Martha** has inherited John's ability, John and Martha
+  **look at the eliminated player's hand and take turns picking ONE card each, John first**, up to
+  3 each, **alternating until the pool is exhausted** for short hands; leftovers are discarded.
 - **Interactions:** Martha Corey (inheritance/split), Cotton Mather (Martha's evidence value),
-  Matchmaker cascade ordering.
-- **Code status:** ◐ base transfer to the single John holder (Player.OnElimination,
-  Player.cs:742). ✗✗ John/Martha split not built.
-- **Build:** This is where the **event-dispatcher / `ICharacterAbility`** foundation should
-  be introduced. The split needs **networked input** (both players pick from a revealed set,
-  alternating, John first).
+  Matchmaker cascade ordering (a drafter may die in the cascade → recomputed at draft time).
+- **Code status:** ✅ `JohnProctorAbility` (`IOnPlayerEliminated`) driven by
+  `CharacterAbilityDispatcher`'s serialized draft queue; `Player.OnElimination` now leaves the HAND
+  in place for the draft when a live drafter exists (else discards it), and ALWAYS discards status +
+  Black Cat. Networked pick over the new `card_pick` socket event (`RequestCardPick` on `IPlayerInput`;
+  AI drafters auto-pick). Single-John and John+Martha split both go through the same coroutine.
+- **Build:** Done in Group B. (This is where the **event-dispatcher / `ICharacterAbility`**
+  foundation was introduced, per #6.)
 
-## 6. Martha Corey ◐ (inheritance — build dispatcher here)
+## 6. Martha Corey ✅ (inheritance — dispatcher foundation lives here)
 
 - **Ability:** Has the same ability as the **first living player to her right** (recomputed
   as neighbors die).
 - **Edge cases (rulebook p12):** John Proctor split (see #5). Cotton Mather revert on Cotton's
   death (see #2). Inheriting a charge-based ability (Tituba/Parris/Phipps) grants the charge.
 - **Interactions:** Every character she can copy; especially John, Cotton Mather.
-- **Code status:** ◐ `GetEffectiveTownHallName` recomputes live (Player.cs:178–204) and
-  `HasTownHall` honors it (165–172). But charge/limit copies are set **once at setup**
-  (`ApplyMarthaCoreyCopy`, 210–230) — they won't update if the copied neighbor changes
-  mid-game (e.g. the right neighbor is eliminated and the new neighbor has a different
-  ability).
-- **Build:** Re-resolve copied charges/limits whenever Martha's effective source changes
-  (neighbor eliminated). Implement `onAbilityInherited` / `onAbilityLost` semantics.
-  - **Existing hook to relocate:** `PlayerService.Eliminate` already recomputes every alive
-    Martha's *accusations* on each elimination (added for the Cotton revert, #2 —
-    `m.ApplyAccusation(0)`). The dispatcher should **move this into its `OnPlayerEliminated`
-    handler** and **add the charge/limit re-resolve there** (George's `baseAccusationLimit`,
-    Tituba/Parris/Phipps charges). Cannot reuse `ApplyMarthaCoreyCopy` as-is —
-    `baseAccusationLimit++` is cumulative and charges would reset; needs proper reset +
-    consumed-charge handling.
+- **Code status:** ✅ `GetEffectiveTownHallName` recomputes live and `HasTownHall` honors it
+  (Player.cs). Copied charges/limits now **re-resolve mid-game** via `ReResolveMarthaCopy`
+  (Player.cs), driven by the dispatcher on every elimination — no longer a set-once-at-setup bug.
+- **Mechanism (the landmine, solved):** `ReResolveMarthaCopy` is **reset-then-reapply gated on a
+  source change**: it returns early when the effective source is unchanged (preserving a spent
+  Tituba/Parris charge — never resurrected), and only on a real change resets copied modifiers to
+  `_intrinsicBase` (captured once at card assignment in `ApplyTownHallAbility`, immune to
+  re-capture pollution) before reapplying the new source's fresh charge/limit (so George's +1 never
+  double-counts). `ApplyMarthaCoreyCopy` (setup) and the mid-game path share this one method.
+- **Dispatcher:** `CharacterAbilityDispatcher` (`Assets/Project/Scripts/Characters/`) is the
+  foundation introduced here — a self-bootstrapping singleton that subscribes to
+  `PlayerService.OnPlayerEliminated` and, per elimination, runs the Martha re-resolve + Cotton
+  revert (relocated out of `PlayerService.Eliminate`) and drives the John draft. Remaining
+  name-check characters migrate onto it incrementally (see the migration note below).
 
 ## 7. Mary Warren ◐ → ✗✗ (matchmaker chain) — **rulebook model, D1**
 
@@ -302,8 +308,24 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
 
 ## Build priority (per `/add-character` skill)
 
-1. Tituba → 2. Cotton Mather → 3. Thomas Danforth → 4. George Burroughs →
-5. John Proctor → 6. Martha Corey → 7. Mary Warren → 8. remaining.
+1. Tituba ✅ → 2. Cotton Mather ✅ → 3. Thomas Danforth ✅ → 4. George Burroughs ✅ →
+5. John Proctor ✅ → 6. Martha Corey ✅ → **7. Mary Warren (NEXT)** → 8. remaining.
 Fix the Danforth piety-ordering bug (#3) before/with Burroughs (#4). Introduce the
 event-dispatcher at John/Martha (#5–6). Mary Warren (#7) folds in the deferred Phase-4
 matchmaker exceptions.
+
+**#1–#6 DONE.** The `CharacterAbilityDispatcher` (`Assets/Project/Scripts/Characters/`) is now the
+foundation: a self-bootstrapping singleton subscribed to `PlayerService.OnPlayerEliminated`, keyed by
+`GetEffectiveTownHallName()` (so Martha's inheritance routes automatically), with a serialized
+re-entrant-safe draft queue. It owns the Martha copy re-resolve, the Cotton revert (relocated from
+`PlayerService.Eliminate`), and the John draft (`JohnProctorAbility : IOnPlayerEliminated`). Remaining
+name-check characters (Parris, the passives) migrate onto it incrementally — the elimination-time ones
+first (they already have an event), then holder-triggered ones via the `_abilities` registry. #7 Mary
+Warren is next: remove the un-linkable guard (CardEffectManager), then add the Mary-immunity +
+both-teams-lose guards at the `mmPartner.EliminateNow()` cascade call in `PlayerService.Eliminate`.
+
+**Deferred (verified manually, no automated harness):** the cascade-orphan regression — the sole John
+drafter dies in the same matchmaker cascade that left a hand dangling, so the draft finds no drafter and
+the orphaned hand must discard cleanly (`JohnProctorAbility` empty-drafters branch). Verified via the
+TestManager debug harness (Link Matchmaker + Eliminate partner + Dump Dispatcher State); a scripted
+regression test is a follow-up whenever a Unity play-mode test harness exists.

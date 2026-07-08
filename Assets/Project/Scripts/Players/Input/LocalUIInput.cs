@@ -105,5 +105,15 @@ namespace Salem.Players
             onOrder?.Invoke(null);
             yield break;
         }
+
+        // Local play has no card-pick UI — auto-take the first card in the pool so a local/test
+        // John draft still resolves (the phone-driven pick is the real experience). Building a local
+        // host card-pick UI is out of scope, same rationale as RequestDeckRearrange.
+        public IEnumerator RequestCardPick(Player chooser, IReadOnlyList<Card> pool, int pickNumber,
+                                           int totalPicks, float timeoutSeconds, Action<int> onIndex)
+        {
+            onIndex?.Invoke(pool != null && pool.Count > 0 ? 0 : -1);
+            yield break;
+        }
     }
 }

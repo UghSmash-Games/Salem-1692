@@ -18,6 +18,7 @@ import type {
   SecretPhaseSubmitPayload,
   ConfessPayload,
   DeckRearrangeSubmitPayload,
+  CardPickSubmitPayload,
 } from './types';
 
 const SERVER_URL =
@@ -67,4 +68,8 @@ export function sendConfess(payload: ConfessPayload): void {
 
 export function sendDeckRearrange(payload: DeckRearrangeSubmitPayload): void {
   socket.emit(CLIENT_TO_SERVER.DECK_REARRANGE_SUBMIT, payload);
+}
+
+export function sendCardPick(payload: CardPickSubmitPayload): void {
+  socket.emit(CLIENT_TO_SERVER.CARD_PICK_SUBMIT, payload);
 }

@@ -102,6 +102,14 @@ namespace Salem.Players
         public Player MatchedPlayer;
         //the amount of uses a town hall ability has currently
         public byte townHallAbilityCharges { get; private set; }
+        // Martha Corey copy re-resolve (Phase 5 #6): _intrinsicBase is Martha's own (uncopied)
+        // accusation base, captured once at setup; _appliedCopySource is the ability her copied
+        // charges/limits currently reflect. Together they let a mid-game source change (a right
+        // neighbour dying) reset-then-reapply EXACTLY once — never double-incrementing George's +1
+        // and never resurrecting a spent Tituba/Parris charge (we only reset when the source
+        // actually changes). Unused for non-Martha players.
+        private byte _intrinsicBase;
+        private TownhallName? _appliedCopySource;
         // Black Cat holder flag (keep separate from StatusCards to avoid Scapegoat moving it)
         public bool IsBlackCatHolder { get; private set; }
         public HandManager HandManager => handManager ??= GetComponent<HandManager>();
@@ -143,6 +151,16 @@ namespace Salem.Players
         {
             if (townhallCard == null) return;
 
+            // Reset ability-modified stats to defaults FIRST so re-assigning a town hall card cleanly
+            // REPLACES the prior card's effects instead of stacking on them. This matters because the
+            // Phase-5 forced-seat debug override calls setTownhall a SECOND time: a seat whose random
+            // deal was George (base→8) then forced to another character used to keep the stray +1,
+            // corrupting that character's base AND Martha's _intrinsicBase capture (the root cause of the
+            // base-9 double-count). Harmless for the normal single-assignment path (defaults == initial).
+            baseAccusationLimit = 7;
+            currentAccusationLimit = 7;
+            townHallAbilityCharges = 0;
+
             switch (townhallCard.CardName)
             {
                 case TownhallName.GeorgeBurroughs:
@@ -157,6 +175,12 @@ namespace Salem.Players
                     townHallAbilityCharges = 2;
                     break;
             }
+
+            // Capture each player's TRUE intrinsic (uncopied) accusation base ONCE per card assignment,
+            // before any Martha copy. Martha's stays 7 (no bump); George's is 8. ReResolveMarthaCopy
+            // resets to this — capturing here (not in ApplyMarthaCoreyCopy) makes the baseline immune to
+            // the re-capture pollution that produced base 9.
+            _intrinsicBase = baseAccusationLimit;
 
             // DIAGNOSTIC (Tituba option trace): confirm the charge was set at setup.
             Debug.Log($"[Tituba?] ApplyTownHallAbility {PlayerNameText}: card={townhallCard.CardName}, " +
@@ -208,15 +232,51 @@ namespace Salem.Players
         }
 
         /// <summary>
-        /// Applies passive effects for Martha Corey based on the copied ability.
-        /// Must be called after all players have their Town Hall cards assigned.
+        /// SETUP entry point for Martha Corey's copy. Captures her intrinsic (uncopied) base once,
+        /// then resolves the copied charge/limit through <see cref="ReResolveMarthaCopy"/>. This is the
+        /// SAME code path used mid-game on every elimination, so setup and neighbour-death re-resolves
+        /// can never drift. Must be called after all players have their Town Hall cards assigned.
         /// </summary>
         public void ApplyMarthaCoreyCopy()
         {
-            var effective = GetEffectiveTownHallName();
-            if (effective == null) return;
+            // _intrinsicBase is captured in ApplyTownHallAbility (once, before any copy) — NOT here,
+            // so a re-run can never re-capture an already-copied base.
+            _appliedCopySource = null;            // force the first resolve to apply
+            ReResolveMarthaCopy();
+        }
 
-            switch (effective.Value)
+        /// <summary>
+        /// Restores Martha's copied stat modifiers to her intrinsic baseline: base accusation limit
+        /// back to <c>_intrinsicBase</c> and copied charges cleared. <see cref="ReResolveMarthaCopy"/>
+        /// re-applies the current source's fresh modifiers afterward. Reuses
+        /// <see cref="RecomputeStatusFromStatusCards"/> so <c>currentAccusationLimit</c> and Piety ×2
+        /// are re-derived from the reset base.
+        /// </summary>
+        private void ResetCopiedModifiers()
+        {
+            baseAccusationLimit = _intrinsicBase;
+            townHallAbilityCharges = 0;         // clear copied charges; the reapply re-grants fresh if applicable
+            RecomputeStatusFromStatusCards();   // currentAccusationLimit = base, then Piety ×2 if present
+        }
+
+        /// <summary>
+        /// Re-resolves Martha Corey's copied charge/limit to her current effective source (the first
+        /// living player to her right, via <see cref="GetEffectiveTownHallName"/>). Called at setup and
+        /// on every elimination (by the character dispatcher). "Fresh charges on switch only": if the
+        /// effective source is UNCHANGED we return immediately, preserving any consumed charges; only a
+        /// real source change resets-then-reapplies (so George's +1 never double-counts and a spent
+        /// Tituba/Parris charge is never resurrected). No-op for non-Martha holders.
+        /// </summary>
+        public void ReResolveMarthaCopy()
+        {
+            if (townhallCard == null || townhallCard.CardName != TownhallName.MarthaCorey) return;
+
+            var src = GetEffectiveTownHallName();
+            if (src == _appliedCopySource) return; // unchanged → keep consumed-charge state as-is
+
+            ResetCopiedModifiers();
+
+            switch (src)
             {
                 case TownhallName.GeorgeBurroughs:
                     baseAccusationLimit++;
@@ -230,7 +290,8 @@ namespace Salem.Players
                     townHallAbilityCharges = 2;
                     break;
             }
-            Debug.Log($"[Player] Martha Corey ({PlayerNameText}) copies ability of {effective.Value}.");
+
+            _appliedCopySource = src;
         }
 
         public void ConsumeTownHallCharge()
@@ -732,54 +793,41 @@ namespace Salem.Players
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
         }
 
-        // Called after IsEliminated is set. Discards hand + status cards,
-        // or transfers them to John Proctor holder if one exists.
+        // Called after IsEliminated is set. STATUS cards (red + blue) and the Black Cat are ALWAYS
+        // discarded — "cards in play affecting the eliminated player are eliminated" (rulebook). The
+        // HAND is John Proctor's ability target: John (or a Martha effectively-John) takes UP TO 3
+        // cards FROM THE HAND and the rest are discarded. Because that pick is a networked choice, we
+        // can't resolve it inline here — so if a drafter is alive we LEAVE the hand in place and the
+        // CharacterAbilityDispatcher runs the draft (via OnPlayerEliminated) after this returns; the
+        // draft coroutine discards the leftovers. With no drafter, the hand discards immediately (as
+        // before). See CharacterAbilityDispatcher / JohnProctorAbility.
         public void OnElimination()
         {
-            // Find alive player with John Proctor town hall card
-            var johnProctor = PlayerService.GetAlivePlayers()
-                .FirstOrDefault(p => p != this && p.townhallCard != null
-                    && p.townhallCard.CardName == TownhallName.JohnProctor);
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
 
-            if (johnProctor != null)
+            // HAND — leave for the draft only if a live drafter exists (real John OR a Martha whose
+            // effective ability is John, via HasTownHall). Otherwise discard now.
+            bool hasDrafter = PlayerService.GetAlivePlayers()
+                .Any(p => p != this && p.HasTownHall(TownhallName.JohnProctor));
+            if (hasDrafter)
             {
-                Debug.Log($"[Elimination] {PlayerNameText}'s cards transferred to {johnProctor.PlayerNameText} (John Proctor).");
-                TransferEntireHandTo(johnProctor);
-                // Transfer status cards (excluding Black Cat which is handled separately)
-                var blackCat = RemoveBlackCat(false);
-                foreach (var s in StatusCards.ToList())
-                    johnProctor.AddStatusCard(s);
-                ClearStatusCards();
-                johnProctor.RecomputeStatusFromStatusCards();
-                // Black Cat goes to discard, not to John Proctor
-                if (blackCat != null)
-                {
-                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                    if (dm != null) dm.AddToDiscardPile(blackCat);
-                }
+                // Hand stays on this (eliminated) player until the dispatcher's draft coroutine
+                // takes/discards it. Nobody else reads a dead player's hand in the interim.
             }
             else
             {
                 Debug.Log($"[Elimination] {PlayerNameText}'s cards discarded.");
-                // Discard all hand cards
-                var handCards = HandManager.GetCards();
-                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                foreach (var c in handCards)
-                {
+                foreach (var c in HandManager.GetCards())
                     if (dm != null) dm.AddToDiscardPile(c);
-                }
                 HandManager.ClearHand();
-                // Remove Black Cat
-                var blackCat = RemoveBlackCat(false);
-                if (blackCat != null && dm != null)
-                    dm.AddToDiscardPile(blackCat);
-                // Discard status cards (red, blue, Stocks) to discard pile
-                foreach (var sc in StatusCards)
-                {
-                    if (dm != null) dm.AddToDiscardPile(sc);
-                }
-                ClearStatusCardsAndRecompute();
             }
+
+            // BLACK CAT + STATUS cards — always discarded, never transferred (not even to John).
+            var blackCat = RemoveBlackCat(false);
+            if (blackCat != null && dm != null) dm.AddToDiscardPile(blackCat);
+            foreach (var sc in StatusCards)
+                if (dm != null) dm.AddToDiscardPile(sc);
+            ClearStatusCardsAndRecompute();
 
             RecomputeStatusFromStatusCards();
 

@@ -11,6 +11,7 @@ export type Screen =
   | 'action'
   | 'secret_phase'
   | 'deck_rearrange'
+  | 'card_pick'
   | 'spectator'
   | 'game_over';
 
@@ -18,7 +19,8 @@ export type Screen =
  * Decide which screen to render from the current store slices.
  *
  * Priority order:
- *   game_over  > eliminated (spectator) > secret phase > action > idle > join
+ *   game_over  > eliminated (spectator) > secret phase > card pick > deck rearrange
+ *              > action > idle > join
  */
 export function useCurrentScreen(): Screen {
   return useGameStore((s): Screen => {
@@ -33,6 +35,9 @@ export function useCurrentScreen(): Screen {
     if (me?.eliminated) return 'spectator';
 
     if (s.prompt) return 'secret_phase';
+    // The John/Martha draft can arrive while the drafter is mid-turn (someone
+    // else was eliminated), so it takes precedence over their own action/rearrange.
+    if (s.cardPick) return 'card_pick';
     if (s.deckRearrange) return 'deck_rearrange';
     if (s.actionRequest) return 'action';
 

@@ -74,6 +74,15 @@ namespace Salem.Networking
         public bool confirmed; // false = tentative in-progress order, true = final
     }
 
+    // John Proctor / Martha card draft — phone → host. index = the chosen card's index
+    // into the pool sent in CardPickRequestMsg. One pick per request (single-stage).
+    [Serializable]
+    public class CardPickSubmitMsg
+    {
+        public string playerId;
+        public int index;
+    }
+
     // ΓöÇΓöÇΓöÇ Sent by Host (and PhaseResolveMsg echoed back) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     // Public, per-player board entry. PUBLIC DATA ONLY — never tryals/role/hand.
@@ -155,6 +164,19 @@ namespace Salem.Networking
     {
         public string playerId;
         public string[] cards;
+        public int seconds;
+    }
+
+    // John Proctor / Martha card draft — host → ONE drafter only (private card identities;
+    // never broadcast). cards = the draft pool's labels; pickNumber/totalPicks are display
+    // hints ("pick N of up to 3"); seconds = the pick window the phone shows as a countdown.
+    [Serializable]
+    public class CardPickRequestMsg
+    {
+        public string playerId;
+        public string[] cards;
+        public int pickNumber;
+        public int totalPicks;
         public int seconds;
     }
 

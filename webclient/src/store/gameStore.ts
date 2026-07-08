@@ -20,6 +20,7 @@ import type {
   SecretPhasePromptPayload,
   ActionRequestPayload,
   DeckRearrangeRequestPayload,
+  CardPickRequestPayload,
   PhaseResolvePayload,
   EliminationResultPayload,
   GameOverPayload,
@@ -76,6 +77,17 @@ export interface DeckRearrangeSlice {
   seconds: number;
 }
 
+export interface CardPickSlice {
+  /** The draft pool — an eliminated player's hand labels. */
+  cards: string[];
+  /** 1-based index of this pick ("pick N of up to 3"). */
+  pickNumber: number;
+  /** Max picks this drafter may take (3). */
+  totalPicks: number;
+  /** Pick window in seconds — shown as a countdown. */
+  seconds: number;
+}
+
 export interface GameOverSlice {
   winner: 'witches' | 'townspeople';
   tryals: Record<string, TryalCardView[]>;
@@ -90,6 +102,7 @@ interface GameStore {
   prompt: PromptSlice | null;
   actionRequest: ActionRequestSlice | null;
   deckRearrange: DeckRearrangeSlice | null;
+  cardPick: CardPickSlice | null;
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
@@ -110,6 +123,8 @@ interface GameStore {
   applyActionRequest: (data: ActionRequestPayload) => void;
   applyDeckRearrangeRequest: (data: DeckRearrangeRequestPayload) => void;
   clearDeckRearrange: () => void;
+  applyCardPickRequest: (data: CardPickRequestPayload) => void;
+  clearCardPick: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
@@ -157,6 +172,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   prompt: null,
   actionRequest: null,
   deckRearrange: null,
+  cardPick: null,
   reveal: null,
   lastElimination: null,
   gameOver: null,
@@ -189,6 +205,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prompt: null,
       actionRequest: null,
       deckRearrange: null,
+      cardPick: null,
       reveal: null,
       lastElimination: null,
       gameOver: null,
@@ -245,6 +262,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
       actionRequest: null,
       deckRearrange: null,
+      cardPick: null,
     }),
 
   applyActionRequest: (data) =>
@@ -254,6 +272,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // After a rearrange, the host re-prompts the turn action — leave the
       // rearrange screen for the action screen.
       deckRearrange: null,
+      cardPick: null,
     }),
 
   // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
@@ -262,9 +281,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deckRearrange: { cards: data.cards ?? [], seconds: data.seconds ?? 60 },
       prompt: null,
       actionRequest: null,
+      cardPick: null,
     }),
 
   clearDeckRearrange: () => set({ deckRearrange: null }),
+
+  // John Proctor / Martha card draft — mutually exclusive with prompt/action/rearrange.
+  applyCardPickRequest: (data) =>
+    set({
+      cardPick: {
+        cards: data.cards ?? [],
+        pickNumber: data.pickNumber ?? 1,
+        totalPicks: data.totalPicks ?? 3,
+        seconds: data.seconds ?? 45,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+    }),
+
+  clearCardPick: () => set({ cardPick: null }),
 
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 

@@ -187,6 +187,21 @@ Approach: implement in priority order (Tituba first), introduce a minimal `IChar
 convention to stop name-check sprawl, and promote to a full event-dispatcher when the first
 inheritance character (John Proctor / Martha Corey) demands it.
 
+**`CharacterAbilityDispatcher` EXISTS now (Phase 5 #5/#6, `Assets/Project/Scripts/Characters/`).**
+It is a self-bootstrapping (`[RuntimeInitializeOnLoadMethod]`, no scene wiring) singleton that
+subscribes to `PlayerService.OnPlayerEliminated` and dispatches via `GetEffectiveTownHallName()`
+(so a Martha copying an ability routes through that ability automatically). It owns, per
+elimination: the Martha copied-charge/limit re-resolve (`Player.ReResolveMarthaCopy`), the
+Cotton-Mather revert (relocated OUT of `PlayerService.Eliminate`), and the John Proctor draft
+(`JohnProctorAbility : IOnPlayerEliminated`, via a serialized re-entrant-safe draft queue over the
+`card_pick` socket event). **This is the pattern for migrating the remaining name-check characters**
+(Parris, the passives): elimination-time abilities implement `IOnPlayerEliminated`; holder-triggered
+ones register in the `_abilities` map keyed by `TownhallName`. Migrate incrementally — do NOT rip out
+all existing `HasTownHall()` name-checks at once. Verified follow-up (no automated harness yet): the
+cascade-orphan regression — sole John drafter dies in the same matchmaker cascade that held a hand →
+`JohnProctorAbility` empty-drafters branch must discard the orphaned hand cleanly (checked manually
+via the TestManager debug harness).
+
 **`docs/character-spec.md` is the Phase 5 source of truth** (the `protocol.md` equivalent for
 characters): the rulebook-locked ability/numbers/edge-cases for all 15 characters, the
 corrected accusation-threshold spec, current code status (done/partial/stub/bug), and which

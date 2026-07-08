@@ -11,6 +11,7 @@ import { IdleScreen } from './screens/IdleScreen';
 import { ActionScreen } from './screens/ActionScreen';
 import { SecretPhaseScreen } from './screens/SecretPhaseScreen';
 import { DeckRearrangeScreen } from './screens/DeckRearrangeScreen';
+import { CardPickScreen } from './screens/CardPickScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
 
@@ -29,6 +30,8 @@ export default function App() {
       return <SecretPhaseScreen />;
     case 'deck_rearrange':
       return <DeckRearrangeScreen />;
+    case 'card_pick':
+      return <CardPickScreen />;
     case 'spectator':
       return <SpectatorScreen />;
     case 'game_over':

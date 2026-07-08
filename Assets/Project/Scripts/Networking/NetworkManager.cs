@@ -38,6 +38,7 @@ namespace Salem.Networking
         public event Action<SecretPhaseSubmitMsg> OnSecretPhaseSubmit;
         public event Action<ConfessMsg> OnConfess;
         public event Action<DeckRearrangeSubmitMsg> OnDeckRearrangeSubmit;
+        public event Action<CardPickSubmitMsg> OnCardPickSubmit;
         public event Action<PhaseResolveMsg> OnPhaseResolveEcho;
         public event Action OnRoomClosed;
         public event Action OnConnectedToServer;
@@ -191,6 +192,12 @@ namespace Salem.Networking
             _ = socketClient.Emit("deck_rearrange_request", JsonUtility.ToJson(msg));
         }
 
+        public void SendCardPickRequest(CardPickRequestMsg msg)
+        {
+            if (!GuardConnected("SendCardPickRequest")) return;
+            _ = socketClient.Emit("card_pick_request", JsonUtility.ToJson(msg));
+        }
+
         public void SendPhaseResolve(PhaseResolveMsg msg)
         {
             if (!GuardConnected("SendPhaseResolve")) return;
@@ -261,6 +268,13 @@ namespace Salem.Networking
                 var msg = JsonUtility.FromJson<DeckRearrangeSubmitMsg>(json);
                 Debug.Log($"[NetworkManager] Deck rearrange submit from {msg.playerId}: confirmed={msg.confirmed}");
                 OnDeckRearrangeSubmit?.Invoke(msg);
+            });
+
+            socketClient.On("card_pick_submit", json =>
+            {
+                var msg = JsonUtility.FromJson<CardPickSubmitMsg>(json);
+                Debug.Log($"[NetworkManager] Card pick submit from {msg.playerId}: index {msg.index}");
+                OnCardPickSubmit?.Invoke(msg);
             });
 
             socketClient.On("phase_resolve", json =>
