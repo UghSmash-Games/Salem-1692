@@ -202,6 +202,21 @@ cascade-orphan regression — sole John drafter dies in the same matchmaker casc
 `JohnProctorAbility` empty-drafters branch must discard the orphaned hand cleanly (checked manually
 via the TestManager debug harness).
 
+**Mary Warren (#7) DONE — with TWO rulebook corrections that overturned earlier assumptions (do NOT
+reintroduce the old behavior):**
+- **Matchmaker: linkable but chain-immune.** Mary receives the Matchmaker card and links normally; her
+  immunity is inline guards at the `mmPartner.EliminateNow()` cascade in `PlayerService.Eliminate`
+  (partner-is-Mary → spare; plus the GENERAL both-teams-lose guard via
+  `GameManager.CascadeWouldEndBothTeams`, a non-mutating win-check). **CORRECTION:** a SPARED partner's
+  Matchmaker card **PERSISTS** (blue cards persist per rulebook) — it is NOT discarded. Safety comes from
+  the GENERAL **"can't receive a 2nd matchmaker"** refusal in the `ActionOp.Matchmaker` handler, not from
+  discarding the card. The both-teams-lose guard is reachable only via the sticky-`IsWitch` lost-card
+  witch (`Player.DetermineRole`), so it is code-review-verified, not live-fire tested.
+- **Black Cat: held-but-inert, NOT refused.** Mary CAN be given and hold the Black Cat (her card says
+  immune to the ILL EFFECTS). **CORRECTION:** `AssignBlackCat` no longer discards for her; her immunity
+  is relocated to Conspiracy step 1 (`GamePhaseManager.ConspiracyRoutine` skips the tryal reveal when the
+  black-cat holder is Mary — no redirect). Non-harmful holder effects (e.g. dawn "goes first") still apply.
+
 **`docs/character-spec.md` is the Phase 5 source of truth** (the `protocol.md` equivalent for
 characters): the rulebook-locked ability/numbers/edge-cases for all 15 characters, the
 corrected accusation-threshold spec, current code status (done/partial/stub/bug), and which

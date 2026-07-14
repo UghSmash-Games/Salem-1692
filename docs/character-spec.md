@@ -181,7 +181,7 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   revert (relocated out of `PlayerService.Eliminate`) and drives the John draft. Remaining
   name-check characters migrate onto it incrementally (see the migration note below).
 
-## 7. Mary Warren ◐ → ✗✗ (matchmaker chain) — **rulebook model, D1**
+## 7. Mary Warren ✅ (matchmaker chain — rulebook model, D1)
 
 - **Ability:** Immune to the **ill effects** of Matchmaker and Black Cat.
 - **Rulebook model (D1, decided):** "Unaffected by matchmaker" = she IS linkable, but is
@@ -189,28 +189,54 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   - If her matchmaker partner is night-killed, the chain would kill Mary — **Mary survives**.
   - If **Mary** is eliminated, her partner **still dies** (chain fires for the partner).
   - If the chain would make **both teams lose simultaneously**, only the intended target dies
-    (not the matched partner). *(This is the deferred Phase-4 matchmaker exception, landing
-    here.)*
-  - Black Cat: she cannot be given the black cat (immune).
-- **Code status:**
-  - Black Cat immunity ✅ (Player.cs:617; CardEffectManager:166 excludes her as a target).
-  - **Base matchmaker cascade ✅ (Phase 5):** Matchmaker cards only started attaching after the
-    card-data `Op` fix (every blue SO had `Op:0`); the first real exercise then surfaced an
-    ORDERING bug — the cascade checked the bond AFTER `OnElimination` had discarded the
-    Matchmaker card and nulled `MatchedPlayer` (two-way, via `RecomputeStatusFromStatusCards`
-    → `ClearMatch`), so it never fired. Fixed by **capturing the bond before `OnElimination`
-    and cascading after** (`PlayerService.Eliminate`, `mmPartner`/`mmCascades` →
-    `mmPartner.EliminateNow()`). "Both die even if the partner was saved/confessed" now works.
-  - Matchmaker: ✗ currently makes her **un-linkable** (CardEffectManager:120) — **wrong model;
-    remove it** per D1.
-  - Night-cascade Mary-immunity ✗✗ not built.
-  - Both-teams-lose rule ✗✗ not built.
-- **Build (#7):** Remove CardEffectManager:120 (allow the link). The cascade now lives at the
-  captured-bond branch in `PlayerService.Eliminate` (capture-before-`OnElimination`); insert
-  the two guards **right at the `mmPartner.EliminateNow()` call** — skip eliminating the
-  partner **iff the partner is Mary Warren** (she survives), and add the both-teams-lose guard
-  (only the intended target dies). These are conditions on a now-working branch, not a
-  re-fix. Keep Black Cat immunity.
+    (not the matched partner). *(Deferred Phase-4 matchmaker exception, landing here.)*
+  - Black Cat: she CAN be given and hold the black cat, but is immune to its ILL EFFECT (the
+    Conspiracy step-1 tryal reveal) — held-but-inert, not refused. (Her card says "immune to the
+    ill effects"; the rulebook has no Mary+black-cat entry, so the card is authoritative.)
+- **Code status: ✅ DONE (Phase 5 #7).**
+  - **Linkable ✅:** the un-linkable early-return in the `ActionOp.Matchmaker` handler
+    (`CardEffectManager`) was REMOVED — Mary now receives the Matchmaker card and links via
+    `Player.TryFormMatchmakerLink` like anyone else.
+  - **Chain immunity ✅:** inline guards at the captured-bond cascade in `PlayerService.Eliminate`
+    (the `mmPartner.EliminateNow()` branch). `partnerIsMary` (cheap, first) skips the partner
+    elimination when the cascade victim is Mary; because the guard checks `mmPartner`, a Mary who is
+    the *initially*-eliminated player still cascades to her (non-Mary) partner.
+  - **Both-teams-lose ✅ (GENERAL — guards EVERY matchmaker cascade, not just Mary):**
+    `GameManager.CascadeWouldEndBothTeams(intendedTarget, partner)` — a non-mutating hypothetical that
+    returns true only if eliminating the partner would satisfy BOTH win conditions at once (villagers'
+    all-witch-tryals-revealed AND witches' parity). It models the double-kill by treating BOTH the
+    intended target's and the partner's tryals as revealed. Win logic stays centralized in GameManager.
+    - **Verification: MANUAL/code-review only (not live-fire tested)** — same posture as the
+      cascade-orphan edge. The guard is only *reachable* when an alive player is `IsWitch == true` with
+      NO unrevealed Witch tryal (so villagers-win and witches-parity can hold at once). That state only
+      arises from the rulebook's "a player who loses their only witch card remains a witch" rule (a
+      conspiracy swap), preserved by the STICKY `IsWitch` in `Player.DetermineRole`
+      (`if (!IsWitch) IsWitch = hasWitchTryal;`). Manufacturing that state live is highly artificial and
+      the current TestManager harness has no tryal/role/reveal control, so a live-fire test would be more
+      fragile than valuable. A future live-fire test would need a `SetTryalsOnSeat(seat, TryalCard[])`
+      debug method (assign `TryalCards` + `DetermineRole`) to build: intended target `[NotAWitch]`
+      matchmaker-linked to a non-Mary partner holding the last unrevealed `[Witch]`, plus a third seat
+      made a sticky lost-card witch (`SetTryals([Witch])` then `SetTryals([NotAWitch])`) for parity —
+      then Eliminate the intended target and expect `SPARED (both-teams-lose)`.
+  - **Spared partner's card PERSISTS ✅ (rulebook-corrected):** a SPARED partner (Mary or
+    both-teams-lose) KEEPS their now-partnerless Matchmaker card — blue cards persist per rulebook; the
+    bond is already cleared by `ClearMatch`, leaving them free to re-link if a new Matchmaker is played.
+    (The earlier `DiscardMatchmakerStatus` auto-discard was REVERTED — nothing in the rules discards a
+    survivor's matchmaker card, and the re-link is legitimate, not a bad state.) The real safety guard is
+    the **"can't receive a 2nd matchmaker" refusal** below.
+  - **"Can't receive a 2nd matchmaker" ✅ (GENERAL, rulebook p13):** the `ActionOp.Matchmaker` handler
+    (`CardEffectManager`) now refuses the play (card not placed) when the target already
+    `HasStatus("Matchmaker")`. Applies to every player, not just Mary; closes the two-cards-on-one-player
+    hole and makes a spared holder's persistent card safe.
+  - **Base matchmaker cascade ✅ (Phase 5):** capture-before-`OnElimination` ordering fix (see the
+    card-rule note); "both die even if the partner was saved/confessed" works. The #7 guards are
+    conditions on that working branch.
+  - **Black Cat: held-but-inert ✅ (rulebook-corrected):** Mary CAN be given and hold the Black Cat —
+    she's immune to its ILL EFFECT, not refused. The old `AssignBlackCat` Mary-discard and the human-draw
+    target exclusion were REMOVED (the AI path never excluded her; Dawn routes through `AssignBlackCat`).
+    Her immunity is relocated to **Conspiracy step 1** (`GamePhaseManager.ConspiracyRoutine`): when the
+    black-cat holder is Mary, the tryal reveal is SKIPPED (treated as "no black cat," no redirect).
+    Non-harmful holder effects (e.g. "goes first" at dawn) are unaffected — only the ill effect is negated.
 
 ## 8. William Phipps ◐ (human UI deferred)
 
@@ -286,12 +312,16 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   **If a player loses piety while at ≥7 accusations, they immediately lose a tryal; the player
   who removed piety chooses which.** ⚠️ Not found in the accusation code — **verify / build**
   alongside Danforth/Burroughs.
-- **Matchmaker:** cannot receive a 2nd; if one linked player is night-killed both die even if
-  the other confessed or was saved (✅ `PlayerService.Eliminate`, Phase 5: cascade ORDERING
-  fixed — capture the bond before `OnElimination` clears it; re-verified in playtest). Mary
-  Warren + both-teams-lose exceptions → see #7 (guards land at `mmPartner.EliminateNow()`).
+- **Matchmaker:** cannot receive a 2nd (✅ #7 — `ActionOp.Matchmaker` handler refuses the play if the
+  target already `HasStatus("Matchmaker")`; general, any player); if one linked player is night-killed
+  both die even if the other confessed or was saved (✅ `PlayerService.Eliminate`, Phase 5: cascade
+  ORDERING fixed — capture the bond before `OnElimination` clears it; re-verified in playtest). Mary
+  Warren + both-teams-lose exceptions → see #7 (guards land at `mmPartner.EliminateNow()`). A SPARED
+  partner keeps their now-partnerless Matchmaker card (blue cards persist; bond cleared by `ClearMatch`;
+  free to re-link) — NOT auto-discarded.
 - **Black Cat:** witches may self-give at dawn (✅ 4b); the owner who draws conspiracy chooses
-  which of their tryals is revealed (verify in the conspiracy path); Mary Warren immune (✅).
+  which of their tryals is revealed (verify in the conspiracy path); Mary Warren held-but-inert (✅ #7 —
+  she holds the card but the Conspiracy step-1 reveal is skipped for her; NOT refused at assignment).
 - **Curse:** a base-game **green** card — *"discard one blue card currently in front of another
   player"* (rulebook p12: blue cards stay "until moved or discarded by another card such as
   scapegoat or curse"). Targets any blue card — Asylum / Piety / Matchmaker — **and the Black
@@ -309,20 +339,22 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
 ## Build priority (per `/add-character` skill)
 
 1. Tituba ✅ → 2. Cotton Mather ✅ → 3. Thomas Danforth ✅ → 4. George Burroughs ✅ →
-5. John Proctor ✅ → 6. Martha Corey ✅ → **7. Mary Warren (NEXT)** → 8. remaining.
+5. John Proctor ✅ → 6. Martha Corey ✅ → 7. Mary Warren ✅ → **8. remaining (NEXT)**.
 Fix the Danforth piety-ordering bug (#3) before/with Burroughs (#4). Introduce the
-event-dispatcher at John/Martha (#5–6). Mary Warren (#7) folds in the deferred Phase-4
+event-dispatcher at John/Martha (#5–6). Mary Warren (#7) folded in the deferred Phase-4
 matchmaker exceptions.
 
-**#1–#6 DONE.** The `CharacterAbilityDispatcher` (`Assets/Project/Scripts/Characters/`) is now the
+**#1–#7 DONE.** The `CharacterAbilityDispatcher` (`Assets/Project/Scripts/Characters/`) is the
 foundation: a self-bootstrapping singleton subscribed to `PlayerService.OnPlayerEliminated`, keyed by
 `GetEffectiveTownHallName()` (so Martha's inheritance routes automatically), with a serialized
 re-entrant-safe draft queue. It owns the Martha copy re-resolve, the Cotton revert (relocated from
-`PlayerService.Eliminate`), and the John draft (`JohnProctorAbility : IOnPlayerEliminated`). Remaining
-name-check characters (Parris, the passives) migrate onto it incrementally — the elimination-time ones
-first (they already have an event), then holder-triggered ones via the `_abilities` registry. #7 Mary
-Warren is next: remove the un-linkable guard (CardEffectManager), then add the Mary-immunity +
-both-teams-lose guards at the `mmPartner.EliminateNow()` cascade call in `PlayerService.Eliminate`.
+`PlayerService.Eliminate`), and the John draft (`JohnProctorAbility : IOnPlayerEliminated`). Mary Warren
+(#7) is NOT a dispatcher ability — her chain-immunity + the GENERAL both-teams-lose rule are inline
+prevention guards at the `mmPartner.EliminateNow()` cascade call (the dispatcher fires post-elimination,
+too late to prevent a death); `GameManager.CascadeWouldEndBothTeams` holds the hypothetical win-check.
+Remaining #8 characters are mostly done/passive (Abigail, Anne Putnam, Giles, Rebecca, Sarah Good, Will
+Grigs ✅); the open items are **Samuel Parris** (networked discard-pick) and **William Phipps** (human
+fake-confess UI) — migrate the elimination-time/holder-triggered ones onto the dispatcher incrementally.
 
 **Deferred (verified manually, no automated harness):** the cascade-orphan regression — the sole John
 drafter dies in the same matchmaker cascade that left a hand dangling, so the draft finds no drafter and

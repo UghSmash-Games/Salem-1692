@@ -674,14 +674,9 @@ namespace Salem.Players
                 return;
             }
 
-            // Mary Warren is immune to Black Cat
-            if (HasTownHall(TownhallName.MaryWarren))
-            {
-                Debug.Log($"[TownHall] Mary Warren ({PlayerNameText}) is immune to Black Cat. Discarding.");
-                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                dm?.AddToDiscardPile(card);
-                return;
-            }
+            // Mary Warren CAN be given and hold the Black Cat (rulebook: she's immune to its ILL
+            // EFFECTS, not refused). Her immunity is applied at Conspiracy step 1
+            // (GamePhaseManager.ConspiracyRoutine skips the reveal when the holder is Mary), NOT here.
 
             if (!StatusCards.Contains(card))
             {

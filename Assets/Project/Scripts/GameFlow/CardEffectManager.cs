@@ -116,12 +116,19 @@ namespace Salem.GameFlow
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Piety,      (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
                     { ActionOp.Matchmaker, (s,t,_,_,c) => {
-                        // Mary Warren is immune to Matchmaker
-                        if (t.HasTownHall(TownhallName.MaryWarren))
+                        // Rulebook (p13): "A player cannot be given a second matchmaker card if they
+                        // already have one." General refusal — the card is not placed. (This is also
+                        // what keeps a spared Mary's persistent Matchmaker card safe: she can't be given
+                        // a second, and a NEW copy on another player forms a legitimate fresh link.)
+                        if (t.HasStatus("Matchmaker"))
                         {
-                            Debug.Log($"[TownHall] Mary Warren ({t.PlayerNameText}) is immune to Matchmaker.");
+                            Debug.Log($"[Matchmaker] {t.PlayerNameText} already holds a Matchmaker — " +
+                                      $"cannot receive a second; play refused.");
                             return;
                         }
+                        // Mary Warren IS linkable (rulebook D1) — she is immune to the elimination
+                        // CHAIN, not to the link itself. Her chain immunity lives at the cascade in
+                        // PlayerService.Eliminate, NOT here.
                         s.PlayStatusCardOnTarget(c, t);
                         Player.TryFormMatchmakerLink();
                     }},
@@ -162,8 +169,7 @@ namespace Salem.GameFlow
                         target =>
                             target != null &&
                             !target.IsEliminated &&
-                            target != drawer &&
-                            !target.HasTownHall(TownhallName.MaryWarren),
+                            target != drawer, // Mary Warren CAN be given the Black Cat (immune to its effect, not refused)
                         target =>
                         {
                             target.AssignBlackCat(card);

@@ -139,9 +139,6 @@ namespace Salem.Data
             // (ClearStatusCardsAndRecompute → RecomputeStatusFromStatusCards → ClearMatch).
             // Per rulebook p13, eliminating one matchmaker owner eliminates BOTH — even if the
             // partner was saved or confessed (EliminateNow reveals the partner regardless).
-            // NOTE (#7, Mary Warren): her cascade exceptions (Mary survives the chain;
-            // both-teams-lose → only the intended target dies) go right at the
-            // mmPartner.EliminateNow() call below — inserted later on this working branch.
             var mmPartner = player.MatchedPlayer;
             bool mmCascades = mmPartner != null &&
                               player.HasStatus("Matchmaker") &&
@@ -157,11 +154,35 @@ namespace Salem.Data
             // re-entrancy by the IsEliminated check at the top of this method).
             if (mmCascades && !mmPartner.IsEliminated)
             {
-                Debug.Log($"[Matchmaker] {player.PlayerNameText} eliminated — matched partner " +
-                          $"{mmPartner.PlayerNameText} is also eliminated.");
+                // #7 cascade exceptions (guards on the cascade victim = mmPartner):
+                //  (a) Mary Warren survives the chain — if the PARTNER is Mary, spare her. (When Mary
+                //      is the initially-eliminated `player`, she is not mmPartner, so her partner
+                //      still dies — "if Mary dies, her partner still dies".)
+                //  (b) both-teams-lose (GENERAL, any cascade): if eliminating the partner would satisfy
+                //      BOTH win conditions at once, only the intended target dies. Mary-check first (cheap).
+                bool partnerIsMary = mmPartner.HasTownHall(TownhallName.MaryWarren);
+                bool bothTeamsLose = !partnerIsMary && GameManager.Instance != null &&
+                                     GameManager.Instance.CascadeWouldEndBothTeams(player, mmPartner);
+
                 player.ClearMatch();
                 mmPartner.ClearMatch();
-                mmPartner.EliminateNow();
+
+                if (partnerIsMary || bothTeamsLose)
+                {
+                    // Spare the partner — skip the cascade elimination. The now-partnerless Matchmaker
+                    // card PERSISTS in front of them (blue cards persist per rulebook); the bond is
+                    // already cleared by the ClearMatch above, leaving them free to re-link if a new
+                    // Matchmaker is played. Safety against a bad state is the "can't receive a 2nd
+                    // matchmaker" refusal in CardEffectManager, NOT discarding this card.
+                    Debug.Log($"[Matchmaker] partner {mmPartner.PlayerNameText} SPARED " +
+                              $"({(partnerIsMary ? "Mary Warren immune" : "both-teams-lose")}).");
+                }
+                else
+                {
+                    Debug.Log($"[Matchmaker] {player.PlayerNameText} eliminated — matched partner " +
+                              $"{mmPartner.PlayerNameText} is also eliminated.");
+                    mmPartner.EliminateNow();
+                }
             }
 
             // Cotton Mather / Martha Corey re-resolve on elimination has MOVED to

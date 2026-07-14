@@ -343,6 +343,14 @@ namespace Salem.GameFlow
 
             // Step 1: Drawer chooses a Tryal to reveal on the Black Cat holder
             var blackCatHolder = alivePlayers.Find(p => p.IsBlackCatHolder);
+            // Mary Warren is immune to the Black Cat's ILL EFFECT: she may hold the card, but the
+            // Conspiracy reveal does not fire on her. Treat exactly as "no player has the black cat"
+            // (skip the reveal, no redirect to another player).
+            if (blackCatHolder != null && blackCatHolder.HasTownHall(TownhallName.MaryWarren))
+            {
+                Debug.Log($"[Conspiracy] Black Cat holder {blackCatHolder.PlayerNameText} is Mary Warren — immune; skipping reveal.");
+                blackCatHolder = null;
+            }
             if (blackCatHolder != null)
             {
                 var unrevealed = new List<int>();

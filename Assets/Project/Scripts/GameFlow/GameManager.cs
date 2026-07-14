@@ -135,6 +135,33 @@ namespace Salem.GameFlow
             }
         }
 
+        /// <summary>
+        /// #7 both-teams-lose rule (GENERAL — any matchmaker cascade). Non-mutating hypothetical: would
+        /// eliminating the matched <paramref name="partner"/> (on top of the already-eliminated
+        /// <paramref name="intendedTarget"/>) satisfy BOTH win conditions at once? If so the cascade must
+        /// spare the partner and only the intended target dies. Win logic stays centralized here; the
+        /// cascade in PlayerService.Eliminate just reads this. Reads only — mutates nothing.
+        /// </summary>
+        public bool CascadeWouldEndBothTeams(Player intendedTarget, Player partner)
+        {
+            if (partner == null) return false;
+
+            // Villagers win: no unrevealed Witch tryals remain, treating BOTH the intended target's and
+            // the partner's tryals as revealed (elimination reveals tryals — the double-kill reveals both).
+            bool wouldVillagersWin = !PlayerService.All.Any(p =>
+                p != partner && p != intendedTarget && p.TryalCards != null &&
+                p.TryalCards.Any(c => c.TryalCardType == TryalCardType.Witch && !c.IsRevealed));
+
+            // Witches win (parity): among alive minus the partner (the intended target is already
+            // eliminated → already excluded from GetAlivePlayers()), witches >= nonWitches, witches > 0.
+            var aliveAfter = PlayerService.GetAlivePlayers().Where(p => p != partner).ToList();
+            int witchesAfter = aliveAfter.Count(p => p.IsWitch);
+            int nonWitchesAfter = aliveAfter.Count - witchesAfter;
+            bool wouldWitchesWin = witchesAfter > 0 && witchesAfter >= nonWitchesAfter;
+
+            return wouldVillagersWin && wouldWitchesWin;
+        }
+
         // Call EvaluateEndGame() at key points:
         public void OnDayLynchResolved() => EvaluateEndGame();
         public void OnNightResolved() => EvaluateEndGame();
