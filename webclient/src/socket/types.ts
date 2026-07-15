@@ -90,16 +90,19 @@ export interface DeckRearrangeRequestPayload {
   seconds: number;
 }
 
-/** John Proctor / Martha card-draft pick prompt (server → this one drafter only). */
+/** A card-pick prompt (server → this one player only): John Proctor draft OR Samuel Parris discard-pick. */
 export interface CardPickRequestPayload {
-  /** The draft pool — an eliminated player's hand labels. */
+  /** The pool of card labels to pick from (draft hand, or filtered discard pile). */
   cards: string[];
-  /** 1-based index of this pick, for display ("pick N of up to 3"). */
+  /** 1-based index of this pick, for display ("pick N of up to M"). */
   pickNumber: number;
-  /** Max picks this drafter may take (3). */
+  /** Max picks allowed (John: 3; Parris: 2). */
   totalPicks: number;
   /** The pick window in seconds — shown as a countdown. */
   seconds: number;
+  /** When true, the picker may decline / stop early (an "up to N" pick, e.g. Parris) — a Done button
+   *  that submits index -1 is shown. False/absent for a mandatory pick (John's draft). */
+  allowDone?: boolean;
 }
 
 export interface PhaseResolvePayload {

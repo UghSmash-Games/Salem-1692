@@ -67,6 +67,7 @@ namespace Salem.Characters
                 {
                     yield return drafter.Input.RequestCardPick(
                         drafter, pool, taken[drafter] + 1, MaxPicksEach, PickTimeoutSeconds,
+                        allowDone: false, // John's draft has no early-decline UI (a known minor "up to 3" gap)
                         chosen => idx = chosen);
                 }
                 if (idx < 0 || idx >= pool.Count) idx = 0; // timeout / bad index → safety-pick the top

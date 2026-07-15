@@ -1,14 +1,14 @@
 /**
- * John Proctor / Martha card-draft screen — shown only to a drafter (private channel).
+ * Card-pick screen — shown to a drafter (private channel). Serves two abilities:
+ *  - John Proctor / Martha draft (mandatory pick from a dead player's hand), and
+ *  - Samuel Parris discard-pick ("up to N" — `allowDone` shows a Done button that submits index -1).
  *
- * The drafter sees an eliminated player's hand (the draft pool) and taps ONE card to take.
- * The host issues a fresh request for each pick, alternating between John and Martha (John
- * first), up to 3 each; this screen therefore handles a SINGLE pick, then clears and reopens
- * when the next request arrives. A countdown shows the host-owned pick window — if it expires
- * the host safety-picks, so the phone just clears (no submit).
+ * The host issues a fresh request per pick; this screen handles a SINGLE pick, then clears and reopens
+ * when the next request arrives. A countdown shows the host-owned window — on expiry the host resolves
+ * (John safety-picks; Parris stops), so the phone just clears (no submit).
  *
- * NOT a masked secret phase: the draft's existence is public, only the card identities are
- * private (routed to this one socket, like the deck-rearrange pool).
+ * NOT a masked secret phase: the pick's existence is public, only the card identities are private
+ * (routed to this one socket, like the deck-rearrange pool).
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -21,6 +21,7 @@ export function CardPickScreen() {
   const pickNumber = useGameStore((s) => s.cardPick?.pickNumber ?? 1);
   const totalPicks = useGameStore((s) => s.cardPick?.totalPicks ?? 3);
   const seconds = useGameStore((s) => s.cardPick?.seconds ?? 45);
+  const allowDone = useGameStore((s) => s.cardPick?.allowDone ?? false);
   const clearCardPick = useGameStore((s) => s.clearCardPick);
 
   const [secondsLeft, setSecondsLeft] = useState(seconds);
@@ -32,6 +33,10 @@ export function CardPickScreen() {
     sendCardPick({ index });
     clearCardPick(); // reopens when the host sends the next pick request
   };
+
+  // "Done / take fewer" — only for "up to N" picks (allowDone). Submits the -1 skip sentinel,
+  // which the host interprets as "stop picking, take what I have."
+  const done = () => pick(-1);
 
   // Host-owned pick window: a 1Hz countdown. On expiry the host safety-picks, so we just
   // clear (no submit) to leave the screen.
@@ -75,6 +80,17 @@ export function CardPickScreen() {
           </li>
         ))}
       </ul>
+
+      {allowDone && (
+        <button
+          type="button"
+          onClick={done}
+          data-testid="card-pick-done"
+          className="mt-auto rounded-md border border-parchment/40 px-4 py-3 text-lg font-semibold text-parchment"
+        >
+          Done
+        </button>
+      )}
     </div>
   );
 }

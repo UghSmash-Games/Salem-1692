@@ -72,6 +72,6 @@ namespace Salem.Players
         /// the timeout; reports the chosen index, or -1 if nothing was submitted (caller safety-picks).
         /// </summary>
         IEnumerator RequestCardPick(Player chooser, IReadOnlyList<Card> pool, int pickNumber,
-                                    int totalPicks, float timeoutSeconds, Action<int> onIndex);
+                                    int totalPicks, float timeoutSeconds, bool allowDone, Action<int> onIndex);
     }
 }

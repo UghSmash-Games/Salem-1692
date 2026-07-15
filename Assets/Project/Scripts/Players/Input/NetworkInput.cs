@@ -67,15 +67,24 @@ namespace Salem.Players
                 // only with a charge; AI seats are run by AITurnSequencer and never see this.
                 bool canTituba = !hasPlayed &&
                     p.HasTownHall(Salem.Cards.TownhallName.Tituba) && p.townHallAbilityCharges > 0;
-                // DIAGNOSTIC (Tituba option trace): why is/ isn't "tituba" offered for this seat?
-                Debug.Log($"[Tituba?] {p.NetworkId} canTituba={canTituba} " +
-                          $"(hasPlayed={hasPlayed}, isHuman={p.IsHuman}, " +
-                          $"HasTownHall(Tituba)={p.HasTownHall(Salem.Cards.TownhallName.Tituba)}, " +
-                          $"effectiveTownHall={p.GetEffectiveTownHallName()}, " +
-                          $"charges={p.townHallAbilityCharges})");
-                var actions = hasPlayed
-                    ? new[] { "play", "end" }
-                    : (canTituba ? new[] { "tituba", "draw", "play" } : new[] { "draw", "play" });
+                // Samuel Parris — pick up to 2 from the discard pile INSTEAD of drawing. A turn-ENDING
+                // option in the same tier as "draw" (unlike Tituba's pre-turn loop-back). Same gate.
+                bool canParris = !hasPlayed &&
+                    p.HasTownHall(Salem.Cards.TownhallName.SamuelParris) && p.townHallAbilityCharges > 0;
+                string[] actions;
+                if (hasPlayed)
+                {
+                    actions = new[] { "play", "end" };
+                }
+                else
+                {
+                    var choice = new List<string>();
+                    if (canTituba) choice.Add("tituba");
+                    if (canParris) choice.Add("parris");
+                    choice.Add("draw");
+                    choice.Add("play");
+                    actions = choice.ToArray();
+                }
                 nm.SendActionRequest(new ActionRequestMsg { playerId = p.NetworkId, actions = actions });
                 if (VerboseLogging)
                     Debug.Log($"[NetworkInput] {p.NetworkId} prompted with [{string.Join(",", actions)}].");
@@ -135,6 +144,22 @@ namespace Salem.Players
                     else
                     {
                         Debug.LogWarning($"[NetworkInput] {p.NetworkId} sent 'tituba' when ineligible — ignored. Re-prompting.");
+                    }
+                }
+                else if (card == "parris")
+                {
+                    // Samuel Parris discard-pick — pick up to 2 (no black cards), then the turn ENDS
+                    // (RunParrisDiscardPick consumes the charge + EndTurn internally, like TryDrawFromDiscard).
+                    // Unlike "tituba", this does NOT loop back — set turnOver like "draw" does.
+                    if (!hasPlayed && p.HasTownHall(Salem.Cards.TownhallName.SamuelParris) &&
+                        p.townHallAbilityCharges > 0)
+                    {
+                        yield return gtm.RunParrisDiscardPick(p);
+                        turnOver = true;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[NetworkInput] {p.NetworkId} sent 'parris' when ineligible — ignored. Re-prompting.");
                     }
                 }
                 else if (string.IsNullOrEmpty(card))
@@ -322,7 +347,7 @@ namespace Salem.Players
         }
 
         public IEnumerator RequestCardPick(Player p, IReadOnlyList<Card> pool, int pickNumber,
-                                           int totalPicks, float timeoutSeconds, System.Action<int> onIndex)
+                                           int totalPicks, float timeoutSeconds, bool allowDone, System.Action<int> onIndex)
         {
             var nm = NetworkManager.Instance;
             if (nm == null || string.IsNullOrEmpty(p.NetworkId) || pool == null || pool.Count == 0)
@@ -338,7 +363,9 @@ namespace Salem.Players
             {
                 if (done) return;
                 if (msg == null || msg.playerId != p.NetworkId) return;
-                if (msg.index < 0 || msg.index >= pool.Count) return; // ignore out-of-range submits
+                // -1 is the explicit "Done / decline" skip sentinel (for "up to N" pickers like Parris,
+                // whose request sets allowDone). Any other out-of-range index is ignored.
+                if (msg.index != -1 && (msg.index < 0 || msg.index >= pool.Count)) return;
                 chosen = msg.index;
                 done = true;
             }
@@ -352,6 +379,7 @@ namespace Salem.Players
                 pickNumber = pickNumber,
                 totalPicks = totalPicks,
                 seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
+                allowDone = allowDone,
             });
 
             // Resolve on the player's submit or the host-owned deadline. Unlike RequestDeckRearrange,

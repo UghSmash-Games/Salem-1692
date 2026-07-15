@@ -43,6 +43,10 @@ export function ActionScreen() {
   // {card:'tituba'} → host runs RunTitubaRearrange → deck_rearrange_request → the
   // DeckRearrangeScreen. She still draws/plays this same turn afterward.
   const canTituba = actions.includes('tituba');
+  // Samuel Parris: twice/game, draw up to 2 from the discard pile INSTEAD of the deck. Sends
+  // player_action {card:'parris'} → host runs RunParrisDiscardPick → card_pick_request → the
+  // CardPickScreen (with a Done button). TURN-ENDING, like Draw 2 (not a loop-back like Tituba).
+  const canParris = actions.includes('parris');
 
   const submitPlay = () => {
     if (cardIndex === null || target === null) return;
@@ -93,6 +97,15 @@ export function ActionScreen() {
               className="rounded-md border border-candle bg-candle/20 px-4 py-3 text-lg font-semibold text-candle"
             >
               Rearrange the Deck
+            </button>
+          )}
+          {canParris && (
+            <button
+              type="button"
+              onClick={() => sendPlayerAction({ card: 'parris', targetPlayerId: '' })}
+              className="rounded-md border border-candle bg-candle/20 px-4 py-3 text-lg font-semibold text-candle"
+            >
+              Draw from Discard
             </button>
           )}
           {canDraw && (

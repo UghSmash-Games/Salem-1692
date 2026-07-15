@@ -178,6 +178,9 @@ namespace Salem.Networking
         public int pickNumber;
         public int totalPicks;
         public int seconds;
+        // When true the picker may decline / stop early (an "up to N" pick, e.g. Samuel Parris) — the
+        // phone shows a "Done" button that submits index -1. False for a mandatory pick (John's draft).
+        public bool allowDone;
     }
 
     [Serializable]

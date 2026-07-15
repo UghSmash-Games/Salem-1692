@@ -247,6 +247,21 @@ namespace Salem.Deck
             return drawn;
         }
 
+        /// <summary>
+        /// Removes a SPECIFIC card (by reference) from the discard pile and adds it to the given hand.
+        /// Used by Samuel Parris's networked discard-pick, where the holder CHOOSES which card to take
+        /// (unlike DrawFromDiscardPile which takes the top N). Returns true if the card was found + taken.
+        /// </summary>
+        public bool TakeSpecificFromDiscard(Card card, HandManager handManager)
+        {
+            if (card == null) return false;
+            int idx = DiscardPile.IndexOf(card); // first matching reference (duplicates are identical SOs)
+            if (idx < 0) return false;
+            DiscardPile.RemoveAt(idx);
+            handManager?.AddCard(card);
+            return true;
+        }
+
         public Card ExtractCardFromDeck(string cardName)
         {
             if (Deck == null || Deck.Count == 0)

@@ -40,5 +40,11 @@ namespace Salem.Cards
         public bool IsPlayed;
         public Player target;
         public string LogMessage = "{source} played {card} on {target}."; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
+
+        // The game's "black cards" (the special draw-and-resolve cards) are Night and Conspiracy.
+        // NOTE: they are authored as CardColor.White in the SOs (Black Cat is Blue), so identify them
+        // by NAME — the same way CardEffectManager and GameSetup do. Used by Samuel Parris's ability
+        // ("no black cards" from the discard pile).
+        public static bool IsBlackCard(Card c) => c != null && (c.Name == "Night" || c.Name == "Conspiracy");
     }
 }

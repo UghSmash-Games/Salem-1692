@@ -8,9 +8,9 @@ vi.mock('../socket/socketClient', () => ({
   sendCardPick: (payload: { index: number }) => sendSpy(payload),
 }));
 
-function renderWith(cards: string[], pickNumber = 1, totalPicks = 3, seconds = 45) {
+function renderWith(cards: string[], pickNumber = 1, totalPicks = 3, seconds = 45, allowDone = false) {
   useGameStore.getState().reset();
-  useGameStore.getState().applyCardPickRequest({ cards, pickNumber, totalPicks, seconds });
+  useGameStore.getState().applyCardPickRequest({ cards, pickNumber, totalPicks, seconds, allowDone });
   return render(<CardPickScreen />);
 }
 
@@ -38,6 +38,18 @@ describe('CardPickScreen', () => {
     fireEvent.click(screen.getByText('Alibi'));
 
     expect(sendSpy).toHaveBeenCalledWith({ index: 1 });
+    expect(useGameStore.getState().cardPick).toBeNull();
+  });
+
+  it('no Done button unless allowDone (John draft is mandatory)', () => {
+    renderWith(['Accusation', 'Alibi']); // allowDone defaults false
+    expect(screen.queryByTestId('card-pick-done')).toBeNull();
+  });
+
+  it('Done button (allowDone) submits the -1 skip sentinel and clears', () => {
+    renderWith(['Accusation', 'Alibi', 'Asylum'], 2, 2, 45, true);
+    fireEvent.click(screen.getByTestId('card-pick-done'));
+    expect(sendSpy).toHaveBeenCalledWith({ index: -1 });
     expect(useGameStore.getState().cardPick).toBeNull();
   });
 

@@ -30,9 +30,10 @@ reconciliation done before any Phase 5 implementation.
 These cannot be passive name-checks — they prompt the holder for a choice on their phone,
 the same masked/relayed pattern as Phase 4 secret phases:
 
-- **Tituba** — deck-rearrange UI (drag/reorder the deck for a timed window).
-- **Samuel Parris** — choose up to 2 cards from the discard pile.
-- **John Proctor / Martha Corey** — when both hold Proctor's ability, take turns picking 3
+- **Tituba** ✅ — deck-rearrange UI (drag/reorder the deck for a timed window).
+- **Samuel Parris** ✅ — choose up to 2 cards from the discard pile (reuses the `card_pick` event +
+  `RequestCardPick` with a Done/decline affordance; turn-ending like Draw 2).
+- **John Proctor / Martha Corey** ✅ — when both hold Proctor's ability, take turns picking 3
   cards each from an eliminated player's cards (John first).
 
 All other abilities are passive/automatic (no prompt).
@@ -158,6 +159,12 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   AI drafters auto-pick). Single-John and John+Martha split both go through the same coroutine.
 - **Build:** Done in Group B. (This is where the **event-dispatcher / `ICharacterAbility`**
   foundation was introduced, per #6.)
+- **⚠️ Known minor gap (deliberately NOT fixed):** John's "up to 3" currently cannot **voluntarily
+  decline early** — his draft loop only stops when the pool is exhausted or the 3-cap is hit, so he
+  effectively takes `min(3, pool)`. Choosing to take *fewer* is rules-allowed but rarely desirable
+  (cards are an advantage). The "Done/decline" affordance built for Samuel Parris (#12, `allowDone` on
+  `RequestCardPick` + a Done button on `CardPickScreen`) could be extended to John's draft to close this,
+  but it's out of scope for now. Recorded here so it isn't silently dropped.
 
 ## 6. Martha Corey ✅ (inheritance — dispatcher foundation lives here)
 
@@ -270,14 +277,31 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
 - **Code status:** ✅ GameTurnManager:281, 519.
 - **Build:** Verify the "exactly 2 Accusation cards drawn" detection when touched.
 
-## 12. Samuel Parris ◐ (needs `IPlayerInput`)
+## 12. Samuel Parris ✅ (networked discard-pick)
 
 - **Ability:** Twice per game, draw up to 2 cards from the **discard pile** instead of the
-  deck. **No black cards.**
-- **Numbers:** 2 charges (Player.cs:157).
-- **Code status:** ◐ GameTurnManager:324; charges exist.
-- **Build:** Verify the no-black-card filter; the discard-pick likely needs a **networked
-  choice** (which discard cards to take).
+  deck. **No black cards.** (Card-text authority — Parris isn't in the rulebook glossary.)
+- **Numbers:** 2 charges (Player.cs:157); 1 charge per use, up to 2 cards each.
+- **Code status: ✅ DONE.**
+  - **No-black-card filter FIXED:** the old predicate checked `Type == CardColor.Black`, but Night and
+    Conspiracy are authored as `CardColor.White` (Black Cat is Blue) — so it rejected NOTHING and Parris
+    could draw a Conspiracy (which reaches the discard via `CardEffectManager`). Now filtered by NAME via
+    `Card.IsBlackCard(c)` (`c.Name == "Night" || "Conspiracy"`), matching how the rest of the code
+    identifies black cards. Shared by `TryDrawFromDiscard` (local) and `RunParrisDiscardPick` (networked).
+  - **Networked pick:** `GameTurnManager.RunParrisDiscardPick` builds the filtered discard pool and calls
+    `IPlayerInput.RequestCardPick` up to twice (removing the chosen card between picks via
+    `DeckManager.TakeSpecificFromDiscard`). **Reuses the `card_pick` socket event** (John's machinery) — no
+    new event. `NetworkInput.RunTurn` offers a `"parris"` action (gate: his turn, no action yet,
+    HasTownHall, charges > 0).
+  - **TURN-ENDING (like Draw 2, NOT Tituba):** `"parris"` runs the pick then the turn ENDS
+    (`RunParrisDiscardPick` does `ConsumeTownHallCharge` + `currentTurnAction = DrawTwoCards` + `EndTurn`;
+    `NetworkInput` sets `turnOver = true`). Unlike `"tituba"`, it does NOT loop back to offer draw/play.
+  - **"Up to 2" / decline:** `RequestCardPick` gained an `allowDone` flag → the phone `CardPickScreen`
+    shows a **Done** button that submits index `-1` (skip sentinel). Caller-side interpretation: Parris
+    treats `-1` (Done OR timeout) as "stop, take what I have"; John's draft (allowDone=false) still treats
+    `-1` as its existing timeout safety-pick. Timeout behavior itself is unchanged.
+  - **Tier:** turn-mechanics (`GameTurnManager`/`NetworkInput`, like Tituba), NOT the
+    `CharacterAbilityDispatcher` (which only handles `OnPlayerEliminated`).
 
 ## 13. Rebecca Nurse ✅
 

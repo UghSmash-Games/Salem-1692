@@ -78,14 +78,16 @@ export interface DeckRearrangeSlice {
 }
 
 export interface CardPickSlice {
-  /** The draft pool — an eliminated player's hand labels. */
+  /** The pool of card labels to pick from (draft hand, or filtered discard pile). */
   cards: string[];
-  /** 1-based index of this pick ("pick N of up to 3"). */
+  /** 1-based index of this pick ("pick N of up to M"). */
   pickNumber: number;
-  /** Max picks this drafter may take (3). */
+  /** Max picks allowed (John: 3; Parris: 2). */
   totalPicks: number;
   /** Pick window in seconds — shown as a countdown. */
   seconds: number;
+  /** When true, a "Done" button lets the picker stop early (submits index -1). */
+  allowDone: boolean;
 }
 
 export interface GameOverSlice {
@@ -294,6 +296,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         pickNumber: data.pickNumber ?? 1,
         totalPicks: data.totalPicks ?? 3,
         seconds: data.seconds ?? 45,
+        allowDone: data.allowDone ?? false,
       },
       prompt: null,
       actionRequest: null,

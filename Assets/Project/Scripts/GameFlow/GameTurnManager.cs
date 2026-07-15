@@ -336,9 +336,11 @@ namespace Salem.GameFlow
             EnsureDeckManager();
             if (!deckManager) return false;
 
-            // Draw up to 2, reject Black cards
+            // Draw up to 2, reject black cards (Night/Conspiracy). Identify by name via
+            // Card.IsBlackCard — they are authored as CardColor.White, so the old `Type == Black`
+            // check rejected nothing and let Parris draw a Conspiracy from the discard.
             deckManager.DrawFromDiscardPile(requestingPlayer.HandManager, 2,
-                c => c.Type == Salem.Cards.Card.CardColor.Black);
+                Salem.Cards.Card.IsBlackCard);
             requestingPlayer.ConsumeTownHallCharge();
             currentTurnAction = TurnActionChoice.DrawTwoCards;
 
@@ -387,6 +389,67 @@ namespace Salem.GameFlow
             ResetIdleTimer(); // fresh inactivity window for her normal draw/play this same turn
             Debug.Log($"[TownHall] Tituba ({requestingPlayer.PlayerNameText}) rearranged the deck. " +
                       $"Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+        }
+
+        /// <summary>
+        /// Samuel Parris ability (twice per game): on his turn, draw UP TO 2 cards from the DISCARD PILE
+        /// (no black cards) INSTEAD of drawing from the deck. Networked: the holder picks which cards via
+        /// IPlayerInput.RequestCardPick (called up to twice, with a Done/decline option). TURN-ENDING —
+        /// mirrors TryDrawFromDiscard's tail (consume charge + currentTurnAction=DrawTwoCards + EndTurn).
+        /// The caller (NetworkInput) sets turnOver after this; it does NOT loop back like Tituba.
+        /// </summary>
+        public IEnumerator RunParrisDiscardPick(Player requestingPlayer)
+        {
+            if (!IsCurrentPlayersTurn(requestingPlayer)) yield break;
+            if (currentTurnAction != TurnActionChoice.None) yield break;
+            if (requestingPlayer == null ||
+                !requestingPlayer.HasTownHall(Salem.Cards.TownhallName.SamuelParris) ||
+                requestingPlayer.townHallAbilityCharges <= 0)
+            {
+                Debug.LogWarning("[TurnManager] Parris discard-pick requested without the ability or a charge — ignored.");
+                yield break;
+            }
+
+            EnsureDeckManager();
+            if (!deckManager) yield break;
+
+            const int maxPicks = 2;
+            const float pickTimeout = 45f;
+
+            suppressIdleTimer = true; // pause inactivity; the pick has its own deadline
+
+            // Filtered pool: the discard pile minus black cards (Night/Conspiracy). Mutable snapshot —
+            // shrinks as cards are taken so a second pick can't offer an already-taken card.
+            var pool = deckManager.GetDiscardPileCards()
+                .Where(c => !Salem.Cards.Card.IsBlackCard(c)).ToList();
+
+            int taken = 0;
+            while (taken < maxPicks && pool.Count > 0)
+            {
+                int chosen = -1;
+                yield return requestingPlayer.Input.RequestCardPick(
+                    requestingPlayer, pool, taken + 1, maxPicks, pickTimeout,
+                    allowDone: true, idx => chosen = idx);
+
+                // -1 = explicit Done/decline OR timeout → stop ("up to 2" semantics: 0, 1, or 2).
+                if (chosen < 0 || chosen >= pool.Count) break;
+
+                var card = pool[chosen];
+                if (!deckManager.TakeSpecificFromDiscard(card, requestingPlayer.HandManager)) break;
+                pool.RemoveAt(chosen);
+                taken++;
+            }
+
+            suppressIdleTimer = false;
+
+            requestingPlayer.ConsumeTownHallCharge();
+            currentTurnAction = TurnActionChoice.DrawTwoCards; // counts as the turn action (like Draw 2)
+            if (requestingPlayer.IsHuman) waitingForHuman = false;
+
+            Debug.Log($"[TownHall] Samuel Parris ({requestingPlayer.PlayerNameText}) discard-pick done — took " +
+                      $"{taken}. Charges remaining: {requestingPlayer.townHallAbilityCharges}");
+
+            EndTurn();
         }
 
         /// <summary>
