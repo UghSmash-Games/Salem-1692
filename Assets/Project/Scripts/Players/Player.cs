@@ -328,7 +328,7 @@ namespace Salem.Players
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
 
-                TrialService.OnTrialCardRevealed(this, card);
+                TrialService.OnTrialCardRevealed(this, card, fromAccusation);
                 TryalCardRevealed?.Invoke(this, card);
             }
             //TODO:arent we going to need a check if they try to reveal an already revealed card?
