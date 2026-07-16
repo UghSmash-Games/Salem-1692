@@ -425,23 +425,26 @@ describe('privacy isolation', () => {
     mirror.emit('join_mirror', { code });
     await waitFor(mirror, 'joined');
 
-    // Host sends secret_phase_prompt batch
+    // Host sends secret_phase_prompt batch. canFakeConfess (William Phipps) is per-player like
+    // acting — only p0's entry has it true.
     host.emit('secret_phase_prompt', {
       prompts: [
-        { playerId: 'p0', prompt: 'night_vote', targets: ['Alice', 'Bob'], acting: true },
-        { playerId: 'p1', prompt: 'night_vote', targets: ['Alice', 'Bob'], acting: false },
+        { playerId: 'p0', prompt: 'night_vote', targets: ['Alice', 'Bob'], acting: true, canFakeConfess: true },
+        { playerId: 'p1', prompt: 'night_vote', targets: ['Alice', 'Bob'], acting: false, canFakeConfess: false },
       ],
     });
 
-    // p0 gets their prompt with acting: true
+    // p0 gets their prompt with acting: true and canFakeConfess: true (their own entry only)
     const p0Data = await waitFor(player0, 'secret_phase_prompt');
     expect(p0Data.acting).toBe(true);
+    expect(p0Data.canFakeConfess).toBe(true);
     expect(p0Data.prompt).toBe('night_vote');
     expect(p0Data.playerId).toBeUndefined(); // playerId stripped
 
-    // p1 gets their prompt with acting: false
+    // p1 gets their prompt with acting: false and canFakeConfess: false — never p0's flag
     const p1Data = await waitFor(player1, 'secret_phase_prompt');
     expect(p1Data.acting).toBe(false);
+    expect(p1Data.canFakeConfess).toBe(false);
     expect(p1Data.prompt).toBe('night_vote');
 
     // Mirror gets NOTHING

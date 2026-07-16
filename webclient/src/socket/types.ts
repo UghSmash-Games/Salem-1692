@@ -74,6 +74,10 @@ export interface SecretPhasePromptPayload {
   prompt: SecretPhaseType;
   targets: string[];
   acting: boolean;
+  /** Confess window only: true ONLY on a William Phipps holder's own prompt (with a charge) — shows
+   *  the "confess without revealing" button. Per-player like `acting` (Town Hall identity is public,
+   *  so this is host-gated, not universal); never broadcast. */
+  canFakeConfess?: boolean;
 }
 
 export interface ActionRequestPayload {

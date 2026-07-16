@@ -59,6 +59,21 @@ tryals/role/hand. Do not break this pattern: never let a phone become structural
 distinguishable by role (layout, controls, flow, or timing), and never put witch
 coordination data on any broadcast/public channel.
 
+**Public vs secret info — the masking line (which UI pattern to use).** Masking-with-identical-controls
+is reserved for genuinely SECRET information: witch/constable identity, tryal cards, and whether a player
+is *acting* this round. What is NOT secret: **Town Hall character identity is PUBLIC** — cards are dealt
+face-up and each ability is read aloud to the group at setup. So a character's ability CONTROL may be shown
+only on that holder's own phone, **host-gated per-player** (the host computes eligibility and sends a
+per-player flag, e.g. the `action_request` `actions` array for Tituba/Parris, or `canFakeConfess` on the
+per-player `secret_phase_prompt` for William Phipps). A holder-only button leaks nothing an opponent
+doesn't already know. Do NOT reach for the universal-control-rendered-on-every-phone-with-silent-server-
+discard pattern (like the `acting:false` night-vote) for a Town Hall ability — that pattern exists to hide
+SECRET acting status, and using it for public character abilities is solving a problem that doesn't exist.
+Rule of thumb: **secret status → universal control + server discard; public identity → host-gated
+per-player control.** (Both still enforce the EFFECT server-side — never trust the client — but the
+VISIBILITY differs.) The base secret-phase interaction (the shared confess/skip or target choice) stays
+identical for everyone regardless; only a public-identity extra control may be role-conditional.
+
 **Private state isolation** — tryal cards and role (witch/constable) are NEVER sent
 to the host screen, mirror screens, or other players' phone clients. Enforced at the
 server dispatch layer, not the UI layer.

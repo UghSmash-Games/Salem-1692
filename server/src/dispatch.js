@@ -137,11 +137,13 @@ function registerDispatch(io) {
         const targetSocket = io.sockets.sockets.get(player.socketId);
         if (targetSocket) {
           // Send only this player's data — strip playerId from the payload
-          // since the player already knows who they are
+          // since the player already knows who they are. canFakeConfess (William Phipps,
+          // confess window) is per-player like acting — routed to this one socket only.
           targetSocket.emit('secret_phase_prompt', {
             prompt: entry.prompt,
             targets: entry.targets,
             acting: entry.acting,
+            canFakeConfess: entry.canFakeConfess,
           });
         }
       }

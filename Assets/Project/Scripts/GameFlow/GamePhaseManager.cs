@@ -921,9 +921,16 @@ namespace Salem.GameFlow
 
             if (sel == ConfessFake)
             {
-                // William Phipps fake confession (Town Hall): immune WITHOUT revealing a tryal.
-                if (p.townHallAbilityCharges > 0) p.ConsumeTownHallCharge();
-                plan.Confessors.Add(p);
+                // William Phipps ONLY: immune WITHOUT revealing a tryal, once per game. Any other
+                // player — or a Phipps with no charge — who submits "fake" is SILENTLY DISCARDED (no
+                // immunity, no charge). The "Confess without revealing" control exists on EVERY phone
+                // for masking; the EFFECT is server-enforced here (the client can't self-police). A
+                // discarded "fake" is functionally equivalent to "don't confess".
+                if (p.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && p.townHallAbilityCharges > 0)
+                {
+                    p.ConsumeTownHallCharge();
+                    plan.Confessors.Add(p);
+                }
                 return;
             }
 

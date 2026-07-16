@@ -36,6 +36,12 @@ const HEADERS: Record<SecretPhaseType, string> = {
 
 // Selection sentinel for "don't confess" (matches the host's ConfessSkip).
 const CONFESS_SKIP = 'skip';
+// Selection sentinel for "confess without revealing" (matches the host's ConfessFake). This control is
+// host-gated per-player — shown ONLY when prompt.canFakeConfess (a William Phipps with a charge), like
+// the Tituba/Parris action buttons. Town Hall identity is PUBLIC (cards face-up, ability read aloud),
+// so a holder-only button leaks nothing — unlike witch/tryal secrecy. The server still enforces the
+// effect in RecordConfession (defense in depth), so a spoofed "fake" from anyone else grants nothing.
+const CONFESS_FAKE = 'fake';
 
 export function SecretPhaseScreen() {
   const prompt = useGameStore((s) => s.prompt);
@@ -89,10 +95,12 @@ export function SecretPhaseScreen() {
 
   const isConfess = prompt.type === 'confess';
 
-  // Confess options: each of the player's OWN face-down tryals (selection = its index)
-  // plus a "don't confess" choice (selection = CONFESS_SKIP). Confessing is a public
-  // act, so there is no role to hide here — every phone shows this same structure; only
-  // the private card labels differ (same class as tryals).
+  // Confess options: each of the player's OWN face-down tryals (selection = its index) plus a
+  // "don't confess" choice (selection = CONFESS_SKIP). This BASE structure is identical on every
+  // phone — it protects the secret of WHO confesses this round (masked via deferred reveal); only
+  // the private card labels differ (same class as tryals). A William Phipps additionally sees a
+  // "confess without revealing" button (prompt.canFakeConfess) — host-gated, since Town Hall
+  // identity is public and not a secret to mask.
   const faceDownTryals = myTryals
     .map((card, index) => ({ card, index }))
     .filter(({ card }) => !card.faceUp);
@@ -131,6 +139,22 @@ export function SecretPhaseScreen() {
               </li>
             );
           })}
+          {prompt.canFakeConfess && (
+            <li>
+              <button
+                type="button"
+                onClick={() => handleTentative(CONFESS_FAKE)}
+                className={[
+                  'w-full rounded-md border px-4 py-3 text-center transition-colors',
+                  selected === CONFESS_FAKE
+                    ? 'border-ember bg-ember/30 text-parchment'
+                    : 'border-parchment/40 bg-ink/40 text-parchment hover:border-ember/60',
+                ].join(' ')}
+              >
+                Confess without revealing
+              </button>
+            </li>
+          )}
           <li>
             <button
               type="button"

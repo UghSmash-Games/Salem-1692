@@ -141,6 +141,12 @@ namespace Salem.Networking
         public string prompt;
         public string[] targets;
         public bool acting;
+        // Confess window only: true ONLY on the William Phipps holder's own entry (with a charge) —
+        // his phone shows the "confess without revealing" button. Town Hall identity is PUBLIC, so
+        // this is host-gated per-player (like Tituba/Parris action buttons), NOT a universal control.
+        // Routed to that one socket via the per-player secret_phase_prompt unpack — same privacy class
+        // as the `acting` flag; never broadcast.
+        public bool canFakeConfess;
     }
 
     [Serializable]

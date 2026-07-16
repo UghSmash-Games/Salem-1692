@@ -245,17 +245,45 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
     black-cat holder is Mary, the tryal reveal is SKIPPED (treated as "no black cat," no redirect).
     Non-harmful holder effects (e.g. "goes first" at dawn) are unaffected — only the ill effect is negated.
 
-## 8. William Phipps ◐ (human UI deferred)
+## 8. William Phipps ✅ (human fake-confess UI + security hardening)
 
 - **Ability:** Once per game, confess **without** revealing one of your tryal cards (still
   gains night immunity).
-- **Numbers:** 1 charge (Player.cs:154).
-- **Code status:** ◐ AI fake-confess wired in 4c (`GamePhaseManager.AiConfessSelection` →
-  `ConfessFake`). ✗✗ **human** fake-confess UI not built — a human Phipps can't fake-confess
-  through the masked confess window yet.
-- **Build:** A masking-compatible fake-confess control for a human Phipps in the confess
-  window (a Town Hall design question — only that holder's phone differs, like other private
-  data). Networked but small.
+- **Numbers:** 1 charge (Player.cs `WilliamsPhipps` case in `ApplyTownHallAbility`, shared with Tituba;
+  Martha-copy grants 1).
+- **Code status: ✅ DONE.**
+  - **Human UI — host-gated button, NOT universal (corrected model):** the **"Confess without revealing"**
+    control ([SecretPhaseScreen.tsx](../webclient/src/screens/SecretPhaseScreen.tsx), confess variant) is
+    shown **only** when the per-player `prompt.canFakeConfess` flag is true — computed host-side in
+    `NetworkInput.RequestSecretPhase` as `promptType=="confess" && HasTownHall(WilliamsPhipps) && charges > 0`,
+    carried on that player's own `SecretPhasePromptEntry` and routed to their one socket by the existing
+    per-player `secret_phase_prompt` unpack (same privacy class as the `acting` flag — never broadcast).
+    **Why holder-only is fine:** Town Hall identity is **PUBLIC** (cards dealt face-up, ability read aloud at
+    setup), so a Phipps-only button leaks nothing — exactly like the Tituba/Parris action buttons that
+    already render only on the holder's screen. This is unlike witch/constable/tryal secrecy, which is what
+    the confess window's CORE masking protects (every phone still gets the identical base confess/skip choice;
+    only the third button's visibility is role-conditional). Sends the `"fake"` sentinel (`CONFESS_FAKE`,
+    matches host `ConfessFake`). The flag naturally disappears once the charge is spent (`charges > 0`
+    becomes false) — no "remove after use" logic.
+  - **Immunity server-enforced (SECURITY FIX — defense in depth, kept even though the button is client-gated):**
+    `RecordConfession`'s `ConfessFake` branch ([GamePhaseManager.cs](../Assets/Project/Scripts/GameFlow/GamePhaseManager.cs))
+    grants immunity (`plan.Confessors.Add`) + consumes the charge **only if** `HasTownHall(WilliamsPhipps) &&
+    charges > 0`. Previously it added to `Confessors` **unconditionally** (gated only the charge consume) — a
+    real hole: a spoofed `"fake"` from any client granted free night immunity. A non-Phipps (or spent-charge
+    Phipps) `"fake"` is now **silently discarded** (== "don't confess"). The host never trusts the client.
+  - **Immunity path:** `plan.Confessors` → `NightResolver.Resolve` saves the confessor — the SAME path as
+    a real confession, but the fake-confess is NOT added to `pendingConfessions`, so **no tryal flips** at
+    `revealAt`. Indistinguishable from "not targeted" at the public reveal (night target is secret) — so the
+    USE of the ability is still masked, even though the button's visibility isn't.
+  - **AI path (unchanged):** `AiConfessSelection` still returns `ConfessFake` for a witch Phipps-with-charge
+    (50%).
+- **Masking model:** the confess window's core masking (who confesses this round; witch/tryal secrecy) is
+  intact and universal; only the Phipps button's **visibility** is host-gated per-player, because Town Hall
+  identity is public. The server-enforced effect is defense in depth.
+- **Verification:** webclient tests lock (a) the base confess/skip structure identical across roles, (b) the
+  button appears only with `canFakeConfess`, (c) it sends `"fake"`; the server test confirms `canFakeConfess`
+  routes per-player only (never to others/mirror). The host gating (non-Phipps `"fake"` → no immunity) is
+  **code-review-verified** (Unity C#, no play-mode harness — same posture as the cascade-orphan / both-teams-lose edges).
 
 ## 9. Abigail Williams ✅
 

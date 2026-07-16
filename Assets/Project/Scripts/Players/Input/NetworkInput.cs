@@ -274,6 +274,13 @@ namespace Salem.Players
 
             nm.OnSecretPhaseSubmit += Handler;
 
+            // Confess window: the "confess without revealing" button is offered ONLY to a William
+            // Phipps with a charge (host-gated per-player — Town Hall identity is public, like the
+            // Tituba/Parris action buttons). Routed to this one socket, never broadcast.
+            bool canFakeConfess = promptType == "confess" &&
+                p.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) &&
+                p.townHallAbilityCharges > 0;
+
             nm.SendSecretPhasePrompt(new SecretPhasePromptMsg
             {
                 prompts = new[]
@@ -284,6 +291,7 @@ namespace Salem.Players
                         prompt = promptType,
                         targets = targetNames,
                         acting = acting,
+                        canFakeConfess = canFakeConfess,
                     },
                 },
             });

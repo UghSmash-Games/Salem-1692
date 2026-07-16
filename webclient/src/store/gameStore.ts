@@ -63,6 +63,9 @@ export interface PromptSlice {
   targets: string[];
   /** Stored, never read by render/timing logic. */
   acting: boolean;
+  /** Confess window only: this player is a William Phipps with a charge → show the "confess without
+   *  revealing" button. Host-gated per-player (Town Hall identity is public). */
+  canFakeConfess: boolean;
   submitted: boolean;
 }
 
@@ -260,6 +263,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         type: data.prompt,
         targets: data.targets ?? [],
         acting: data.acting,
+        canFakeConfess: data.canFakeConfess ?? false,
         submitted: false,
       },
       actionRequest: null,
