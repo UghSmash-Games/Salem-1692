@@ -30,6 +30,7 @@ export const SERVER_TO_CLIENT = {
   DECK_REARRANGE_REQUEST: 'deck_rearrange_request',
   CARD_PICK_REQUEST: 'card_pick_request',
   PHASE_RESOLVE: 'phase_resolve',
+  PUBLIC_REVEAL: 'public_reveal',
   ELIMINATION_RESULT: 'elimination_result',
   GAME_OVER: 'game_over',
   ERROR_MSG: 'error_msg',

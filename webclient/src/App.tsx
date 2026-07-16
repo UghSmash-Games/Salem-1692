@@ -14,9 +14,9 @@ import { DeckRearrangeScreen } from './screens/DeckRearrangeScreen';
 import { CardPickScreen } from './screens/CardPickScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
+import { PublicRevealToast } from './components/PublicRevealToast';
 
-export default function App() {
-  useGameSocket();
+function CurrentScreen() {
   const screen = useCurrentScreen();
 
   switch (screen) {
@@ -37,4 +37,17 @@ export default function App() {
     case 'game_over':
       return <GameOverScreen />;
   }
+}
+
+export default function App() {
+  useGameSocket();
+
+  // The toast is a fixed-position overlay mounted once, so it surfaces on every
+  // phone screen (public_reveal is public data already routed to players).
+  return (
+    <>
+      <CurrentScreen />
+      <PublicRevealToast />
+    </>
+  );
 }

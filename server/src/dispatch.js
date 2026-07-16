@@ -202,6 +202,13 @@ function registerDispatch(io) {
       socket.emit('phase_resolve', data);
     });
 
+    // Public reveal → all players + all mirrors (public card-show, e.g. Giles Corey).
+    // Carries only public card names; not echoed to host (host renders from its own model).
+    socket.on('public_reveal', (data) => {
+      if (socket.role !== 'host') return;
+      socket.to(socket.roomCode).emit('public_reveal', data);
+    });
+
     // Elimination result → ALL clients in room
     socket.on('elimination_result', (data) => {
       if (socket.role !== 'host') return;

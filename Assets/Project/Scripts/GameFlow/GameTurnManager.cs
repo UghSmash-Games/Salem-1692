@@ -283,22 +283,7 @@ namespace Salem.GameFlow
             currentTurnAction = TurnActionChoice.DrawTwoCards;
             drawFromDiscardButtonUI?.Hide();
 
-            // Giles Corey: if both drawn cards are Accusation cards, draw a third
-            if (requestingPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
-            {
-                var hand = requestingPlayer.HandManager.Hand;
-                int newCards = hand.Count - handSizeBefore;
-                if (newCards >= 2)
-                {
-                    var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
-                    bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
-                    if (bothAccusation)
-                    {
-                        deckManager.DrawCard(requestingPlayer.HandManager);
-                        Debug.Log($"[TownHall] Giles Corey ({requestingPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
-                    }
-                }
-            }
+            ApplyGilesCoreyBonus(requestingPlayer, handSizeBefore);
 
             if (requestingPlayer.IsHuman)
             {
@@ -596,27 +581,66 @@ namespace Salem.GameFlow
                 deckManager.DrawMultipleCards(currentPlayer.HandManager, 2);
                 currentTurnAction = TurnActionChoice.DrawTwoCards;
 
-                // Giles Corey: if both drawn cards are Accusation cards, draw a third
-                if (currentPlayer.HasTownHall(Salem.Cards.TownhallName.GilesCorey))
-                {
-                    var hand = currentPlayer.HandManager.Hand;
-                    int newCards = hand.Count - handSizeBefore;
-                    if (newCards >= 2)
-                    {
-                        var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
-                        bool bothAccusation = lastTwo.All(c => c is Salem.Cards.ActionCardSO ac && ac.Op == Salem.Cards.ActionOp.Accusation);
-                        if (bothAccusation)
-                        {
-                            deckManager.DrawCard(currentPlayer.HandManager);
-                            Debug.Log($"[TownHall] Giles Corey ({currentPlayer.PlayerNameText}) drew 2 Accusations — bonus 3rd card drawn.");
-                        }
-                    }
-                }
+                // Giles Corey (same rule as the voluntary Draw-2 path above).
+                ApplyGilesCoreyBonus(currentPlayer, handSizeBefore);
             }
 
             waitingForHuman = false;
             EndTurn();
         }
+
+        /// <summary>
+        /// Giles Corey: "IF YOU DRAW TWO RED CARDS, SHOW THE OTHER PLAYERS AND DRAW A THIRD CARD."
+        /// Trigger is card COLOR (red = Accusation/Evidence/Witness), not the Accusation op. Shared by
+        /// the voluntary Draw-2 and the idle-forced Draw-2 paths. Fires a PUBLIC `public_reveal` naming
+        /// the two red cards (host/mirror/phones) before drawing the private 3rd card. No-op if the
+        /// player isn't Giles, fewer than 2 cards landed (deck ran low / black card resolved), or the
+        /// two aren't both red.
+        /// </summary>
+        private void ApplyGilesCoreyBonus(Player player, int handSizeBefore)
+        {
+            if (player == null || !player.HasTownHall(Salem.Cards.TownhallName.GilesCorey)) return;
+            if (deckManager == null) return;
+
+            var hand = player.HandManager.Hand;
+            int newCards = hand.Count - handSizeBefore;
+            if (newCards < 2) return;
+
+            var lastTwo = hand.Skip(handSizeBefore).Take(2).ToList();
+            bool bothRed = lastTwo.All(c => c != null && c.Type == Salem.Cards.Card.CardColor.Red);
+            if (!bothRed) return;
+
+            // "SHOW THE OTHER PLAYERS" — public announcement of the two red cards BEFORE drawing the 3rd
+            // (the 3rd goes privately into the hand and is NOT shown).
+            //  • Host screen: the existing public-announcement log (local AND networked play).
+            //  • Phones + mirrors: the networked public_reveal broadcast (networked only).
+            string shown = string.Join(" & ", lastTwo.Where(c => c != null).Select(c => c.Name));
+            Salem.UI.CardLogManager.Log($"{player.PlayerNameText} shows {shown} (Giles Corey).");
+            AnnounceGilesReveal(player, lastTwo);
+
+            deckManager.DrawCard(player.HandManager);
+            Debug.Log($"[TownHall] Giles Corey ({player.PlayerNameText}) drew 2 red cards — shown + bonus 3rd card drawn.");
+        }
+
+        // Emit a PUBLIC card-show (card NAMES only) to all players + mirrors. Networked games only.
+        private static void AnnounceGilesReveal(Player player, List<Salem.Cards.Card> redCards)
+        {
+            if (PlayerService.Mode != GameMode.Networked) return;
+            var nm = Salem.Networking.NetworkManager.Instance;
+            if (nm == null || !nm.IsConnected) return;
+
+            nm.SendPublicReveal(new Salem.Networking.PublicRevealMsg
+            {
+                playerId = PublicIdOf(player),
+                cards = redCards.Where(c => c != null).Select(c => c.Name).ToArray(),
+                reason = "giles_corey",
+            });
+        }
+
+        // Public display id: NetworkId for human seats, synthetic PublicId for AI.
+        // Mirrors NetworkStateBroadcaster.PublicIdFor / GamePhaseManager.PublicIdOf.
+        private static string PublicIdOf(Player p)
+            => p == null ? "" : (!string.IsNullOrEmpty(p.NetworkId) ? p.NetworkId : (p.PublicId ?? ""));
 
         private void HandlePhaseChanged(GamePhase phase)
         {

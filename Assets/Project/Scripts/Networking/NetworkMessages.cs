@@ -195,6 +195,16 @@ namespace Salem.Networking
         public long revealAt;
     }
 
+    // Public card-show → all players + all mirrors (host originates). PUBLIC DATA ONLY —
+    // card NAMES, never tryals/role/hand. e.g. Giles Corey showing two red cards to the table.
+    [Serializable]
+    public class PublicRevealMsg
+    {
+        public string playerId;   // actor's public id (PublicIdFor)
+        public string[] cards;    // shown card labels, e.g. ["Evidence","Witness"]
+        public string reason;     // trigger code, e.g. "giles_corey"
+    }
+
     [Serializable]
     public class EliminationResultMsg
     {

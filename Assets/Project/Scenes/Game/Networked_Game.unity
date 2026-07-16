@@ -3108,7 +3108,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6167894361538682681, guid: 1a98ac3b80dea9046b2024e692eabcec, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.00038975908
+      value: 0.0007522845
       objectReference: {fileID: 0}
     - target: {fileID: 6192359919368445799, guid: 1a98ac3b80dea9046b2024e692eabcec, type: 3}
       propertyPath: m_AnchorMax.x
@@ -4255,19 +4255,35 @@ PrefabInstance:
       objectReference: {fileID: 1749139308}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.size
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[0].card
       value: 
-      objectReference: {fileID: 11400000, guid: 473f2d05cfff48f49bdfa423885cd8b6, type: 2}
+      objectReference: {fileID: 11400000, guid: bd635c90b63be1d46895f3b8d58e29f2, type: 2}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[1].card
       value: 
-      objectReference: {fileID: 11400000, guid: 8c5cee8f41c401b4e882d5634e606fe9, type: 2}
+      objectReference: {fileID: 11400000, guid: bd635c90b63be1d46895f3b8d58e29f2, type: 2}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[2].card
+      value: 
+      objectReference: {fileID: 11400000, guid: bd635c90b63be1d46895f3b8d58e29f2, type: 2}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[3].card
+      value: 
+      objectReference: {fileID: 11400000, guid: bd635c90b63be1d46895f3b8d58e29f2, type: 2}
     - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: DEBUG_forcedTownHall.Array.data[1].seatIndex
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[2].seatIndex
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5285103112733079957, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: DEBUG_forcedTownHall.Array.data[3].seatIndex
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 5472059439929990727, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: rootPanel

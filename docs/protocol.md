@@ -104,6 +104,18 @@ The host (Unity) emits these events. The server routes them to the correct recip
 - **Payload:** `{ revealAt: number }` _(UTC timestamp, typically 3 seconds in the future)_
 - **Note:** All screens calculate local delay as `revealAt - Date.now()` and trigger reveal animations at the same wall-clock moment.
 
+### `public_reveal`
+- **Direction:** host → server → **all players + all mirrors**
+- **Recipients:** all players, all mirrors (NOT echoed to host — the host renders from its own model)
+- **Payload:** `{ playerId: string, cards: string[], reason: string }`
+- **Note:** A genuinely PUBLIC, one-shot announcement that a player is showing specific cards to
+  the whole table (e.g. Giles Corey: "IF YOU DRAW TWO RED CARDS, SHOW THE OTHER PLAYERS…").
+  `playerId` is the actor's public id; `cards` are the shown card labels (names only, e.g.
+  `["Evidence","Witness"]`); `reason` is a machine code for the trigger (e.g. `"giles_corey"`)
+  the client uses to phrase the toast. Carries NO private data — same visibility class as
+  `game_state_update.statusCards` (public card names) and `elimination_result`. This is NOT a
+  masked secret phase; the reveal's existence and content are public by the card rules.
+
 ### `elimination_result`
 - **Direction:** host → server → **all clients in room**
 - **Recipients:** all players, all mirrors
@@ -175,6 +187,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `deck_rearrange_request` | ✅ (originates) | ❌ | ❌ |
 | `card_pick_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
+| `public_reveal` | ✅ (originates) | ❌ | ❌ |
 | `elimination_result` | ✅ (originates) | ❌ | ❌ |
 | `game_over` | ✅ (originates) | ❌ | ❌ |
 | `player_action` | ❌ | ✅ | ❌ |
@@ -192,5 +205,5 @@ These rules are enforced at the server dispatch layer:
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
 3. **`action_request`**, **`deck_rearrange_request`**, and **`card_pick_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
-4. Mirrors receive only: `game_state_update`, `phase_resolve`, `elimination_result`, `game_over`, `room_closed`.
+4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

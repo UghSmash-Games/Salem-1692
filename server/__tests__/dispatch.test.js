@@ -335,6 +335,56 @@ describe('host → client broadcasting', () => {
     expect(mirrorReceived.turn).toBe('p0');
   });
 
+  test('public_reveal reaches all players and mirrors (public card-show)', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player = trackClient(createClient());
+    await waitForConnect(player);
+    player.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player, 'joined');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    const payload = { playerId: 'p0', cards: ['Evidence', 'Witness'], reason: 'giles_corey' };
+    host.emit('public_reveal', payload);
+
+    const pData = await waitFor(player, 'public_reveal');
+    const mData = await waitFor(mirror, 'public_reveal');
+
+    expect(pData.cards).toEqual(['Evidence', 'Witness']);
+    expect(pData.reason).toBe('giles_corey');
+    expect(mData.cards).toEqual(['Evidence', 'Witness']);
+  });
+
+  test('public_reveal from a player or mirror is silently ignored (host-only)', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player = trackClient(createClient());
+    await waitForConnect(player);
+    player.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player, 'joined');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    // A non-host emitting public_reveal must not be relayed to anyone.
+    player.emit('public_reveal', { playerId: 'p0', cards: ['Witness'], reason: 'spoof' });
+    mirror.emit('public_reveal', { playerId: 'p0', cards: ['Witness'], reason: 'spoof' });
+    await expectNoEvent(host, 'public_reveal');
+    await expectNoEvent(mirror, 'public_reveal');
+  });
+
   test('phase_resolve reaches all clients including host', async () => {
     const host = trackClient(createClient());
     await waitForConnect(host);

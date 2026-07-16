@@ -84,7 +84,8 @@ Room management:         create_room | join_room | join_mirror
                          room_created | joined | player_joined | room_closed
 
 Server → clients:        game_state_update | private_state | secret_phase_prompt
-                         action_request | phase_resolve | elimination_result | game_over
+                         action_request | phase_resolve | public_reveal
+                         elimination_result | game_over
 
 Client → server:         player_action | secret_phase_submit | confess
 

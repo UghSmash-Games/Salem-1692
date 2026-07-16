@@ -204,6 +204,12 @@ namespace Salem.Networking
             _ = socketClient.Emit("phase_resolve", JsonUtility.ToJson(msg));
         }
 
+        public void SendPublicReveal(PublicRevealMsg msg)
+        {
+            if (!GuardConnected("SendPublicReveal")) return;
+            _ = socketClient.Emit("public_reveal", JsonUtility.ToJson(msg));
+        }
+
         public void SendEliminationResult(EliminationResultMsg msg)
         {
             if (!GuardConnected("SendEliminationResult")) return;

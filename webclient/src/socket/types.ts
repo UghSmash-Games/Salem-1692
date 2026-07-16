@@ -114,6 +114,17 @@ export interface PhaseResolvePayload {
   revealAt: number;
 }
 
+/** A public one-shot card-show to the whole table (e.g. Giles Corey's two red cards).
+ *  PUBLIC — card names only, never tryals/role/hand. Same visibility class as statusCards. */
+export interface PublicRevealPayload {
+  /** The actor's public id. */
+  playerId: string;
+  /** Shown card labels (names only), e.g. ["Evidence", "Witness"]. */
+  cards: string[];
+  /** Machine code for the trigger, e.g. "giles_corey" — used to phrase the toast. */
+  reason: string;
+}
+
 export interface EliminationResultPayload {
   playerId: string;
   eliminated: boolean;

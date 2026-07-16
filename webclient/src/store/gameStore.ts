@@ -22,6 +22,7 @@ import type {
   DeckRearrangeRequestPayload,
   CardPickRequestPayload,
   PhaseResolvePayload,
+  PublicRevealPayload,
   EliminationResultPayload,
   GameOverPayload,
 } from '../socket/types';
@@ -111,6 +112,8 @@ interface GameStore {
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
+  /** The most recent public_reveal (e.g. Giles Corey showing two red cards), for a public toast. */
+  lastPublicReveal: PublicRevealPayload | null;
   gameOver: GameOverSlice | null;
 
   // ── Connection / session ──
@@ -132,6 +135,8 @@ interface GameStore {
   clearCardPick: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
+  applyPublicReveal: (data: PublicRevealPayload) => void;
+  clearPublicReveal: () => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
   applyGameOver: (data: GameOverPayload) => void;
 
@@ -180,6 +185,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   cardPick: null,
   reveal: null,
   lastElimination: null,
+  lastPublicReveal: null,
   gameOver: null,
 
   setConnected: (connected) =>
@@ -213,6 +219,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cardPick: null,
       reveal: null,
       lastElimination: null,
+      lastPublicReveal: null,
       gameOver: null,
     }),
 
@@ -312,6 +319,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 
   clearReveal: () => set({ reveal: null }),
+
+  // Public card-show (e.g. Giles Corey). Store-only; a UI toast reads it and clears it.
+  applyPublicReveal: (data) => set({ lastPublicReveal: data }),
+
+  clearPublicReveal: () => set({ lastPublicReveal: null }),
 
   applyEliminationResult: (data) => {
     const { playerId } = get().session;

@@ -12,6 +12,7 @@ import { BoardSummary } from '../components/BoardSummary';
 import { DeckSummary } from '../components/DeckSummary';
 import { NightDawnOverlay } from '../components/NightDawnOverlay';
 import { RevealOverlay } from '../components/RevealOverlay';
+import { PublicRevealToast } from '../components/PublicRevealToast';
 import { GameOverScreen } from './GameOverScreen';
 
 export function MirrorScreen() {
@@ -58,6 +59,8 @@ export function MirrorScreen() {
       {/* Overlays — phase comes from PUBLIC state; reveal from the timestamp. */}
       <NightDawnOverlay phase={phase} />
       <RevealOverlay />
+      {/* Non-blocking public announcement (e.g. Giles Corey); sits below RevealOverlay. */}
+      <PublicRevealToast />
     </div>
   );
 }
