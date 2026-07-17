@@ -849,13 +849,9 @@ namespace Salem.Players
             {
                 AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
 
-                // Ann Putnam: draw 2 cards before reveal when she places the final accusation
-                if (accuser != null && accuser.HasTownHall(TownhallName.AnnePutnam))
-                {
-                    var dm2 = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                    dm2?.DrawMultipleCards(accuser.HandManager, 2);
-                    Debug.Log($"[TownHall] Ann Putnam ({accuser.PlayerNameText}) draws 2 cards before tryal reveal.");
-                }
+                // Anne Putnam's draw is NO LONGER here. Her card is "at the END of your turn, draw two
+                // cards for EACH tryal you revealed this turn" — tallied per actual reveal in
+                // TrialService.OnTrialCardRevealed → GameTurnManager, consumed at EndTurn.
 
                 // Discard all red cards in front of this player
                 DiscardRedStatusCards();

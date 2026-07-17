@@ -375,6 +375,20 @@ namespace Salem.GameFlow
                         int pick = unrevealed[rng.NextInt(0, unrevealed.Count)];
                         blackCatHolder.RevealTryalCard(pick);
                     }
+
+                    // Anne Putnam: she just caused a tryal to be revealed on ANOTHER player.
+                    // This reveal fires on a detached coroutine AFTER her EndTurn, so it can't feed
+                    // the end-of-turn accusation tally — grant her the 2 cards here instead (timing
+                    // ≈ end of turn, since drawing Conspiracy ends her turn). Self-reveal excluded
+                    // (blackCatHolder == drawer → she revealed her OWN tryal), matching the
+                    // accusation path's owner != currentPlayer.
+                    if (drawer != null && blackCatHolder != drawer
+                        && drawer.HasTownHall(TownhallName.AnnePutnam))
+                    {
+                        var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                        dm?.DrawMultipleCards(drawer.HandManager, 2);
+                        Debug.Log($"[TownHall] Anne Putnam ({drawer.PlayerNameText}) draws 2 from Conspiracy reveal on {blackCatHolder.PlayerNameText}.");
+                    }
                 }
             }
             else

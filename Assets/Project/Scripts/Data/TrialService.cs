@@ -32,6 +32,11 @@ namespace Salem.Data
                     dm?.DrawCard(nurse.HandManager);
                     Debug.Log($"[TownHall] Rebecca Nurse ({nurse.PlayerNameText}) draws a card from tryal reveal on {owner.PlayerNameText}.");
                 }
+
+                // Anne Putnam: tally this ACTUAL accusation reveal for her end-of-turn draw (2× count).
+                // Counts only when it's the acting player's turn and the reveal is on someone else;
+                // the turn manager owns that gating. See GameTurnManager.NotifyAccusationRevealOnOther.
+                GameTurnManager.Instance?.NotifyAccusationRevealOnOther(owner);
             }
 
             if (IsWitchCard(revealedCard))

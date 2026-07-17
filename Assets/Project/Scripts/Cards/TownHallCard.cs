@@ -68,7 +68,7 @@ namespace Salem.Cards
                 TownhallName.WilliamsPhipps => "Once per game, you may confess without revealing one of your Tryal cards.",
                 TownhallName.Tituba => "Once per game, on your turn before drawing, rearrange the deck for 60 seconds.",
                 TownhallName.AbigailWilliams => "When you trigger a Tryal reveal, discard all accusations in front of your own Tryals.",
-                TownhallName.AnnePutnam => "When you trigger a Tryal reveal, draw 2 cards before the Tryal is revealed.",
+                TownhallName.AnnePutnam => "At the end of your turn, draw two cards for each tryal card you revealed during your turn.",
                 TownhallName.GeorgeBurroughs => "8 total accusations must be played against you to reveal a Tryal.",
                 TownhallName.MaryWarren => "You are immune to the ill effects of Matchmaker and Black Cat.",
                 _ => ""

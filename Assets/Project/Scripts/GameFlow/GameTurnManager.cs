@@ -56,6 +56,10 @@ namespace Salem.GameFlow
         private Player currentPlayer;
         private float turnTimer;
         private int turnId;   // increments each StartTurn; lets async inputs detect their turn ended
+        // Count of tryal reveals the CURRENT player caused on OTHER players THIS turn (accusation
+        // reveals only). Reset each StartTurn; consumed at EndTurn by Anne Putnam (draw 2× this).
+        // Character-agnostic: incremented for every current player, but only Anne draws from it.
+        private int accusationRevealsOnOthersThisTurn = 0;
         private bool isTurnActive = false;
         private bool waitingForHuman;
         private bool suppressIdleTimer; // true during a Tituba rearrange (it has its own 60s deadline)
@@ -193,6 +197,7 @@ namespace Salem.GameFlow
             isTurnActive = true;
             waitingForHuman = false;
             currentTurnAction = TurnActionChoice.None;
+            accusationRevealsOnOthersThisTurn = 0;   // Anne Putnam: fresh per-turn reveal tally
             TurnStarted?.Invoke(currentPlayer);
             UpdateTownHallActionButtons(CurrentPlayer);
             OnTurnStart?.Invoke();
@@ -493,6 +498,19 @@ namespace Salem.GameFlow
             TurnEnded?.Invoke(currentPlayer);
             drawFromDiscardButtonUI?.Hide();
 
+            // Anne Putnam: "At the end of your turn, draw two cards for each tryal card you revealed
+            // during your turn." Accusation reveals were tallied this turn; draw 2× now. Guarded on
+            // !IsEliminated (she gets nothing if she died mid-turn). (Conspiracy reveals are granted
+            // separately in GamePhaseManager.ConspiracyRoutine — they fire after EndTurn.)
+            if (currentPlayer != null && !currentPlayer.IsEliminated
+                && currentPlayer.HasTownHall(Salem.Cards.TownhallName.AnnePutnam)
+                && accusationRevealsOnOthersThisTurn > 0)
+            {
+                EnsureDeckManager();
+                deckManager?.DrawMultipleCards(currentPlayer.HandManager, 2 * accusationRevealsOnOthersThisTurn);
+                Debug.Log($"[TownHall] Anne Putnam ({currentPlayer.PlayerNameText}) draws {2 * accusationRevealsOnOthersThisTurn} at end of turn ({accusationRevealsOnOthersThisTurn} reveal(s)).");
+            }
+
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0) return;
 
@@ -501,6 +519,18 @@ namespace Salem.GameFlow
             int nextIndex = (CurrentPlayerIndex + 1) % players.Count;
 
             StartTurn(nextIndex); // Move to the next player's turn
+        }
+
+        /// <summary>
+        /// Record that the current player caused a tryal reveal on ANOTHER player this turn
+        /// (accusation reveals). Called by TrialService on each accusation-driven reveal. The tally
+        /// is consumed at EndTurn by Anne Putnam (draw 2× the count). Character-agnostic — it counts
+        /// for whoever's turn it is; only Anne draws from it.
+        /// </summary>
+        public void NotifyAccusationRevealOnOther(Player owner)
+        {
+            if (isTurnActive && currentPlayer != null && owner != currentPlayer)
+                accusationRevealsOnOthersThisTurn++;
         }
         #endregion
 
