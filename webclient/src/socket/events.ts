@@ -15,6 +15,7 @@ export const CLIENT_TO_SERVER = {
   CONFESS: 'confess',
   DECK_REARRANGE_SUBMIT: 'deck_rearrange_submit',
   CARD_PICK_SUBMIT: 'card_pick_submit',
+  CONFIRM_SUBMIT: 'confirm_submit',
 } as const;
 
 // Server → Client
@@ -29,6 +30,7 @@ export const SERVER_TO_CLIENT = {
   ACTION_REQUEST: 'action_request',
   DECK_REARRANGE_REQUEST: 'deck_rearrange_request',
   CARD_PICK_REQUEST: 'card_pick_request',
+  CONFIRM_REQUEST: 'confirm_request',
   PHASE_RESOLVE: 'phase_resolve',
   PUBLIC_REVEAL: 'public_reveal',
   ELIMINATION_RESULT: 'elimination_result',

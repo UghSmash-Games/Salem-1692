@@ -79,6 +79,12 @@ namespace Salem.Players
             set => _input = value;
         }
 
+        // Abigail Williams: set when she places a threshold-crossing accusation, meaning she owes a
+        // "may I discard my accusations?" decision. Set in CheckAccusations (which is synchronous and
+        // so cannot await a prompt) and consumed by NetworkInput.RunTurn on its next loop tick, still
+        // within her turn. Only ever set for a NetworkInput seat; AI/local auto-clear instead.
+        public bool PendingAbigailDiscardChoice;
+
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
         public Sprite townHallCardIcon { get; private set; }
@@ -872,11 +878,28 @@ namespace Salem.Players
                     }
                 }
 
-                // Abigail Williams: clear her own accusations when she triggers a tryal reveal
+                // Abigail Williams: "If you place the final accusation on a tryal, you MAY discard all
+                // accusations in front of you." Trigger = placing the accusation that CROSSES the
+                // threshold (not the reveal itself). The choice is real — keeping accusations is
+                // legitimate (Scapegoat can transfer them onto another player), so a phone-driven
+                // Abigail is prompted rather than auto-cleared.
+                //
+                // This method is SYNCHRONOUS (ApplyAccusation ← CardEffectManager ← ExecuteCardEffect),
+                // so a networked prompt can't be awaited here. Instead set a pending flag that
+                // NetworkInput.RunTurn consumes on its next loop tick — still her turn, before she can
+                // act again. AI and local-host seats have no prompt UI and auto-clear (same posture as
+                // the other phone-driven abilities).
                 if (accuser != null && accuser.HasTownHall(TownhallName.AbigailWilliams))
                 {
-                    accuser.ResetAccusationCount();
-                    Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations.");
+                    if (accuser.Input is NetworkInput)
+                    {
+                        accuser.PendingAbigailDiscardChoice = true;
+                    }
+                    else
+                    {
+                        accuser.ResetAccusationCount();
+                        Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations (auto — no prompt UI).");
+                    }
                 }
             }
         }

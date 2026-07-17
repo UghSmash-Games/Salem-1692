@@ -109,6 +109,20 @@ export interface CardPickRequestPayload {
   allowDone?: boolean;
 }
 
+/** A yes/no confirmation for this player's OWN optional ("may") ability choice
+ *  (server → this one player only). NOT a masked secret phase — Town Hall identity is public,
+ *  so a holder-only prompt leaks nothing; it's routed to one socket as private decision UI. */
+export interface ConfirmRequestPayload {
+  /** Machine code for the decision, e.g. "abigail_discard" — mapped to copy on the client. */
+  prompt: string;
+  /** Context card labels (e.g. her red cards in front of her). */
+  items: string[];
+  /** Numeric context (e.g. accusation total — differs from items.length: Evidence=3, Witness=7). */
+  count: number;
+  /** The window in seconds — shown as a countdown. */
+  seconds: number;
+}
+
 export interface PhaseResolvePayload {
   /** UTC epoch ms at which all screens should trigger the reveal. */
   revealAt: number;
@@ -180,4 +194,9 @@ export interface DeckRearrangeSubmitPayload {
 export interface CardPickSubmitPayload {
   /** The chosen card's index into the pool from CardPickRequestPayload. */
   index: number;
+}
+
+/** The answer to a ConfirmRequestPayload (this player → host). Single-stage. */
+export interface ConfirmSubmitPayload {
+  confirmed: boolean;
 }

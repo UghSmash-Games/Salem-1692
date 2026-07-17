@@ -19,6 +19,7 @@ import type {
   ConfessPayload,
   DeckRearrangeSubmitPayload,
   CardPickSubmitPayload,
+  ConfirmSubmitPayload,
 } from './types';
 
 const SERVER_URL =
@@ -72,4 +73,9 @@ export function sendDeckRearrange(payload: DeckRearrangeSubmitPayload): void {
 
 export function sendCardPick(payload: CardPickSubmitPayload): void {
   socket.emit(CLIENT_TO_SERVER.CARD_PICK_SUBMIT, payload);
+}
+
+/** Answer a yes/no confirmation for this player's own optional ability choice. */
+export function sendConfirm(payload: ConfirmSubmitPayload): void {
+  socket.emit(CLIENT_TO_SERVER.CONFIRM_SUBMIT, payload);
 }

@@ -30,6 +30,12 @@ namespace Salem.Players
         /// </summary>
         public static bool VerboseLogging = false;
 
+        /// <summary>
+        /// Window for Abigail Williams' discard confirmation. Matches the confess window (20s) and
+        /// sits well under the 60s Day idle timer, so the prompt can't outlive her turn.
+        /// </summary>
+        private const float AbigailConfirmSeconds = 20f;
+
         private readonly Player player;
         private PlayerActionMsg pending;
         private bool hasAction;
@@ -58,6 +64,34 @@ namespace Salem.Players
 
             while (!turnOver)
             {
+                // Abigail Williams: she just placed a threshold-crossing accusation and owes a
+                // "may I discard my accusations?" decision. CheckAccusations is synchronous so it
+                // only flags it; we resolve it HERE — a beat after the card resolved, still her turn,
+                // before she's offered another action. Resolving it inside her turn (rather than on a
+                // detached coroutine) matters: a late answer could otherwise wipe accusations played
+                // onto her after her turn ended.
+                if (p.PendingAbigailDiscardChoice)
+                {
+                    p.PendingAbigailDiscardChoice = false;   // consume once
+                    bool clearAccusations = true;            // timeout default = clear
+                    var reds = p.StatusCards
+                        .Where(c => c != null && c.Type == Card.CardColor.Red)
+                        .Select(c => c.Name)
+                        .ToArray();
+                    yield return RequestConfirmation(p, "abigail_discard", reds,
+                        p.currentAccusationCount, AbigailConfirmSeconds, v => clearAccusations = v);
+
+                    if (clearAccusations)
+                    {
+                        p.ResetAccusationCount();
+                        Debug.Log($"[TownHall] Abigail Williams ({p.PlayerNameText}) chose to discard her accusations.");
+                    }
+                    else
+                    {
+                        Debug.Log($"[TownHall] Abigail Williams ({p.PlayerNameText}) chose to KEEP her accusations.");
+                    }
+                }
+
                 hasAction = false;
                 pending = null;
 
@@ -399,6 +433,58 @@ namespace Salem.Players
             nm.OnCardPickSubmit -= Handler;
 
             onIndex?.Invoke(chosen); // -1 on timeout → caller safety-picks
+        }
+
+        // A yes/no confirmation for this player's own optional ("may") choice (Abigail's discard).
+        // Turn-bound like RequestDeckRearrange, so it resolves on the answer, the host-owned
+        // deadline, OR a TurnId change (a force-ended turn must not hang this). Single-stage: the
+        // answer IS the confirmation. Defaults to TRUE when there's no network / on timeout — the
+        // choice is near-always beneficial, so an AFK player shouldn't be punished.
+        public IEnumerator RequestConfirmation(Player p, string promptType, string[] contextItems,
+                                               int contextCount, float timeoutSeconds, System.Action<bool> onConfirm)
+        {
+            var nm = NetworkManager.Instance;
+            if (nm == null || string.IsNullOrEmpty(p.NetworkId))
+            {
+                onConfirm?.Invoke(true); // nothing to await — take the beneficial default
+                yield break;
+            }
+
+            bool answered = false;
+            bool result = true;
+
+            void Handler(ConfirmSubmitMsg msg)
+            {
+                if (answered) return;
+                if (msg == null || msg.playerId != p.NetworkId) return;
+                result = msg.confirmed;
+                answered = true;
+                GameTurnManager.Instance?.ResetIdleTimer(); // player acted — refresh inactivity window
+            }
+
+            nm.OnConfirmSubmit += Handler;
+
+            nm.SendConfirmRequest(new ConfirmRequestMsg
+            {
+                playerId = p.NetworkId,
+                prompt = promptType,
+                items = contextItems ?? new string[0],
+                count = contextCount,
+                seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
+            });
+
+            var gtm = GameTurnManager.Instance;
+            int myTurnId = gtm != null ? gtm.TurnId : 0;
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+
+            yield return new WaitUntil(() =>
+                answered ||
+                Time.realtimeSinceStartup >= deadline ||
+                (gtm != null && gtm.TurnId != myTurnId));
+
+            nm.OnConfirmSubmit -= Handler;
+
+            onConfirm?.Invoke(result); // unanswered → true (beneficial default)
         }
     }
 }

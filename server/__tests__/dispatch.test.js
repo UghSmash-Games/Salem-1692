@@ -255,6 +255,39 @@ describe('player → host forwarding', () => {
     expect(received.index).toBe(2);
   });
 
+  test('confirm_submit is forwarded to host with playerId', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player = trackClient(createClient());
+    await waitForConnect(player);
+    player.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player, 'joined');
+
+    player.emit('confirm_submit', { confirmed: true });
+    const received = await waitFor(host, 'confirm_submit');
+
+    expect(received.playerId).toBe('p0');
+    expect(received.confirmed).toBe(true);
+  });
+
+  test('confirm_submit from a mirror is silently ignored', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    mirror.emit('confirm_submit', { confirmed: true });
+    await expectNoEvent(host, 'confirm_submit');
+  });
+
   test('card_pick_submit from a mirror is silently ignored', async () => {
     const host = trackClient(createClient());
     await waitForConnect(host);
@@ -598,6 +631,45 @@ describe('privacy isolation', () => {
     // The eliminated player's hand list must never reach another player or a mirror.
     await expectNoEvent(player1, 'card_pick_request');
     await expectNoEvent(mirror, 'card_pick_request');
+  });
+
+  test('confirm_request is sent ONLY to the target player (never others/mirror)', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player0 = trackClient(createClient());
+    await waitForConnect(player0);
+    player0.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player0, 'joined');
+
+    const player1 = trackClient(createClient());
+    await waitForConnect(player1);
+    player1.emit('join_room', { code, displayName: 'Bob' });
+    await waitFor(player1, 'joined');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    host.emit('confirm_request', {
+      playerId: 'p0',
+      prompt: 'abigail_discard',
+      items: ['Evidence', 'Accusation'],
+      count: 4,
+      seconds: 20,
+    });
+
+    const p0Data = await waitFor(player0, 'confirm_request');
+    expect(p0Data.prompt).toBe('abigail_discard');
+    expect(p0Data.items).toEqual(['Evidence', 'Accusation']);
+    expect(p0Data.count).toBe(4);
+
+    // A player's own decision prompt must never reach another player or a mirror.
+    await expectNoEvent(player1, 'confirm_request');
+    await expectNoEvent(mirror, 'confirm_request');
   });
 });
 

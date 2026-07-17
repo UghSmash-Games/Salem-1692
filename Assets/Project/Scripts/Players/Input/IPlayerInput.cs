@@ -73,5 +73,19 @@ namespace Salem.Players
         /// </summary>
         IEnumerator RequestCardPick(Player chooser, IReadOnlyList<Card> pool, int pickNumber,
                                     int totalPicks, float timeoutSeconds, bool allowDone, Action<int> onIndex);
+
+        /// <summary>
+        /// A yes/no confirmation for this player's OWN optional ("may") ability choice — currently
+        /// Abigail Williams' "you may discard all accusations in front of you". `promptType` is a
+        /// machine code the phone maps to copy (e.g. "abigail_discard"); `contextItems` /
+        /// `contextCount` are display context (her red card names + her accusation total, which
+        /// differ because Evidence=3 / Witness=7). NOT a masked secret phase — Town Hall identity is
+        /// PUBLIC, so a holder-only prompt leaks nothing (same class as the Tituba/Parris action
+        /// buttons); it is routed to one socket because it is that player's own decision UI.
+        /// Resolves on the player's answer, the host-owned timeout, or the turn ending; reports
+        /// TRUE on timeout (take the near-always-beneficial action rather than punish an AFK player).
+        /// </summary>
+        IEnumerator RequestConfirmation(Player chooser, string promptType, string[] contextItems,
+                                        int contextCount, float timeoutSeconds, Action<bool> onConfirm);
     }
 }

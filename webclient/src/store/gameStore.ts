@@ -21,6 +21,7 @@ import type {
   ActionRequestPayload,
   DeckRearrangeRequestPayload,
   CardPickRequestPayload,
+  ConfirmRequestPayload,
   PhaseResolvePayload,
   PublicRevealPayload,
   EliminationResultPayload,
@@ -94,6 +95,17 @@ export interface CardPickSlice {
   allowDone: boolean;
 }
 
+export interface ConfirmSlice {
+  /** Machine code for the decision, e.g. "abigail_discard". */
+  prompt: string;
+  /** Context card labels shown with the question. */
+  items: string[];
+  /** Numeric context (e.g. accusation total). */
+  count: number;
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
+}
+
 export interface GameOverSlice {
   winner: 'witches' | 'townspeople';
   tryals: Record<string, TryalCardView[]>;
@@ -109,6 +121,7 @@ interface GameStore {
   actionRequest: ActionRequestSlice | null;
   deckRearrange: DeckRearrangeSlice | null;
   cardPick: CardPickSlice | null;
+  confirm: ConfirmSlice | null;
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
@@ -133,6 +146,8 @@ interface GameStore {
   clearDeckRearrange: () => void;
   applyCardPickRequest: (data: CardPickRequestPayload) => void;
   clearCardPick: () => void;
+  applyConfirmRequest: (data: ConfirmRequestPayload) => void;
+  clearConfirm: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
   applyPublicReveal: (data: PublicRevealPayload) => void;
@@ -183,6 +198,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   actionRequest: null,
   deckRearrange: null,
   cardPick: null,
+  confirm: null,
   reveal: null,
   lastElimination: null,
   lastPublicReveal: null,
@@ -217,6 +233,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       actionRequest: null,
       deckRearrange: null,
       cardPick: null,
+      confirm: null,
       reveal: null,
       lastElimination: null,
       lastPublicReveal: null,
@@ -276,6 +293,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       actionRequest: null,
       deckRearrange: null,
       cardPick: null,
+      confirm: null,
     }),
 
   applyActionRequest: (data) =>
@@ -286,6 +304,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // rearrange screen for the action screen.
       deckRearrange: null,
       cardPick: null,
+      confirm: null,
     }),
 
   // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
@@ -295,6 +314,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prompt: null,
       actionRequest: null,
       cardPick: null,
+      confirm: null,
     }),
 
   clearDeckRearrange: () => set({ deckRearrange: null }),
@@ -312,9 +332,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       prompt: null,
       actionRequest: null,
       deckRearrange: null,
+      confirm: null,
     }),
 
   clearCardPick: () => set({ cardPick: null }),
+
+  // A yes/no confirmation for this player's own optional ability choice (e.g. Abigail's
+  // discard) — mutually exclusive with the other prompts, like cardPick.
+  applyConfirmRequest: (data) =>
+    set({
+      confirm: {
+        prompt: data.prompt,
+        items: data.items ?? [],
+        count: data.count ?? 0,
+        seconds: data.seconds ?? 20,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+    }),
+
+  clearConfirm: () => set({ confirm: null }),
 
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 

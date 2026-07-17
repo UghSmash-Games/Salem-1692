@@ -83,6 +83,15 @@ namespace Salem.Networking
         public int index;
     }
 
+    // Answer to a ConfirmRequestMsg — phone → host. Single-stage: the answer IS the confirmation
+    // (no tentative stage). The host owns the deadline and defaults to true if this never arrives.
+    [Serializable]
+    public class ConfirmSubmitMsg
+    {
+        public string playerId;
+        public bool confirmed;
+    }
+
     // ΓöÇΓöÇΓöÇ Sent by Host (and PhaseResolveMsg echoed back) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     // Public, per-player board entry. PUBLIC DATA ONLY — never tryals/role/hand.
@@ -187,6 +196,22 @@ namespace Salem.Networking
         // When true the picker may decline / stop early (an "up to N" pick, e.g. Samuel Parris) — the
         // phone shows a "Done" button that submits index -1. False for a mandatory pick (John's draft).
         public bool allowDone;
+    }
+
+    // A yes/no confirmation for a character's OWN optional ("may") choice — host → ONE player only.
+    // Currently Abigail Williams' "you may discard all accusations in front of you". `prompt` is a
+    // machine code the phone maps to copy; `items`/`count` are display context (her red card names
+    // and her accusation total — values differ, Evidence 3 / Witness 7). NOT a masked secret phase:
+    // Town Hall identity is PUBLIC, so a holder-only prompt leaks nothing (like the Tituba/Parris
+    // action buttons); it is routed to one socket because it is that player's own decision UI.
+    [Serializable]
+    public class ConfirmRequestMsg
+    {
+        public string playerId;
+        public string prompt;    // e.g. "abigail_discard"
+        public string[] items;   // context card labels
+        public int count;        // numeric context (accusation total)
+        public int seconds;      // countdown window
     }
 
     [Serializable]

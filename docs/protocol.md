@@ -98,6 +98,20 @@ The host (Unity) emits these events. The server routes them to the correct recip
   masked secret phase — the draft's existence is public; only the card identities are private (same
   class as `deck_rearrange_request`). The public `game_state_update` never exposes hand contents.
 
+### `confirm_request`
+- **Direction:** host → server → **one specific player**
+- **Recipients:** single player socket matching `playerId`
+- **NEVER sent to:** host, mirrors, other players
+- **Payload:** `{ playerId: string, prompt: string, items: string[], count: number, seconds: number }`
+- **Note:** A generic yes/no confirmation for a character's OWN optional ("may") choice — currently
+  Abigail Williams' *"you may discard all accusations in front of you"*. `prompt` is a machine code
+  (e.g. `"abigail_discard"`) the phone maps to copy; `items` are context card labels (her red cards)
+  and `count` the numeric context (her accusation total — needed because values differ: Evidence 3,
+  Witness 7); `seconds` is the window the phone renders as a countdown.
+  This is NOT a masked secret phase — Town Hall identity is PUBLIC, so a holder-only prompt leaks
+  nothing (same class as `action_request`'s Tituba/Parris buttons). It is routed to exactly one
+  socket only because it is that player's private decision UI, not because the fact is secret.
+
 ### `phase_resolve`
 - **Direction:** host → server → **all clients in room**
 - **Recipients:** host (echo back for sync), all players, all mirrors
@@ -162,6 +176,15 @@ Players emit these events from their phone clients. The server validates the sen
   forwards all submissions; the host owns the authoritative 60s deadline and applies the
   latest order received.
 
+### `confirm_submit`
+- **Direction:** player → server → host
+- **Sender role:** player ONLY
+- **Client sends:** `{ confirmed: boolean }`
+- **Server forwards to host:** `{ playerId: string, confirmed: boolean }`
+- **Note:** The answer to a `confirm_request`. Single-stage (no tentative/confirm two-step — the
+  answer IS the confirmation). The host owns the authoritative deadline and defaults to `true`
+  (take the beneficial action) if no answer arrives before it expires.
+
 ### `card_pick_submit`
 - **Direction:** player → server → host
 - **Sender role:** player ONLY
@@ -186,6 +209,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `action_request` | ✅ (originates) | ❌ | ❌ |
 | `deck_rearrange_request` | ✅ (originates) | ❌ | ❌ |
 | `card_pick_request` | ✅ (originates) | ❌ | ❌ |
+| `confirm_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
 | `public_reveal` | ✅ (originates) | ❌ | ❌ |
 | `elimination_result` | ✅ (originates) | ❌ | ❌ |
@@ -195,6 +219,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `confess` | ❌ | ✅ | ❌ |
 | `deck_rearrange_submit` | ❌ | ✅ | ❌ |
 | `card_pick_submit` | ❌ | ✅ | ❌ |
+| `confirm_submit` | ❌ | ✅ | ❌ |
 
 ---
 
@@ -204,6 +229,6 @@ These rules are enforced at the server dispatch layer:
 
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
-3. **`action_request`**, **`deck_rearrange_request`**, and **`card_pick_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
+3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, and **`confirm_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
 4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

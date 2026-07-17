@@ -117,5 +117,15 @@ namespace Salem.Players
             onIndex?.Invoke(pool != null && pool.Count > 0 ? 0 : -1);
             yield break;
         }
+
+        // Local play has no confirm UI — auto-accept, which preserves the pre-prompt behavior (the
+        // choice is near-always beneficial). The opt-out is a phone affordance; building a local-host
+        // yes/no dialog is out of scope, same rationale as RequestDeckRearrange/RequestCardPick.
+        public IEnumerator RequestConfirmation(Player chooser, string promptType, string[] contextItems,
+                                               int contextCount, float timeoutSeconds, Action<bool> onConfirm)
+        {
+            onConfirm?.Invoke(true);
+            yield break;
+        }
     }
 }
