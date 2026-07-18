@@ -286,6 +286,25 @@ serialization): `constablePrompt`, `witchPrompt`, `dawnBlackCatPrompt`,
 self-protect exception), and `confessionChoiceUI` (orphaned in 4c when the local
 `ExecuteConfessionRound` was replaced by the networked `RunConfessWindow`).
 
+## Deferred — dead-code + hardening cleanup pass (end-of-Phase-5, not urgent)
+
+Batch these into one sweep once Phase 5 verification is done:
+
+- **`Player.PerformTurnAction` (Player.cs:~402‑419)** — dead (AI runs via `AITurnSequencer`); still uses
+  the old `.target`/unconditional-`RemoveCard` pattern. Delete.
+- **`Player.ApplyCardEffect` (Player.cs:~358)** — dead legacy; has the broken `PlayerNameText ==
+  "Cotton Mather"/"Sarah Good"` name-checks and its own Arson bare-clear. Delete.
+- **`Player.ClearHand`** — now caller-less (live paths use `BurnHand` / `HandManager.ClearHand`
+  directly); kept as a documented primitive. Remove if still unused at cleanup.
+- **`Card.target` field (Card.cs:41)** — no live reader/writer after the Robbery/Scapegoat SO-mutation
+  fix (recipient is a parameter now). Only dead code (`_Archive`, `PerformTurnAction`) references it.
+- **`TargetingPolicy.ValidateSecondary`** — add an `IsEliminated` check for defense-in-depth (currently
+  guaranteed only by the caller's eligibility list + `RequestTarget` re-verification).
+- **`forwardToHost` field ordering (server/src/dispatch.js)** — `...(data)` spreads AFTER
+  `playerId: socket.playerId`, so a client can overwrite its own `playerId`. Not a data leak (host
+  re-validates the sender), but a spoofing surface across the whole player→host forward family; put the
+  trusted `playerId` last.
+
 ## Testing
 
 Run server tests before any PR: `cd server && npm test`
