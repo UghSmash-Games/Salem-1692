@@ -75,9 +75,14 @@ namespace Salem.Players
                 }
             }
 
+            // Two-target cards (Robbery/Scapegoat). SelectRandomTarget excludes self but NOT the
+            // primary, so retry until the recipient differs; if it still collides, bail WITHOUT
+            // playing (the card is kept, never eaten). The recipient is passed to ExecuteCardEffect
+            // by parameter — it is NOT written onto action.target, which is a shared project asset.
+            Player secondary = null;
             if (chosen is ActionCardSO action && action.RequiresSecondTarget)
             {
-                var secondary = AITargetingHelper.SelectRandomTarget(driver);
+                secondary = AITargetingHelper.SelectRandomTarget(driver);
                 int guard = 0;
                 while (secondary == primary && guard++ < 4)
                 {
@@ -89,8 +94,6 @@ namespace Salem.Players
                     turnManager.RequestEndTurn(driver);
                     yield break;
                 }
-
-                action.target = secondary;
             }
 
             if (CardEffectManager.Instance == null)
@@ -100,8 +103,10 @@ namespace Salem.Players
                 yield break;
             }
 
-            CardEffectManager.Instance.ExecuteCardEffect(chosen, primary);
-            driver.HandManager?.RemoveCard(chosen);
+            // Only consume the card if the effect actually ran (e.g. the 2-player Robbery/Scapegoat
+            // disable rejects it) — a rejected play must never eat the card.
+            if (CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary))
+                driver.HandManager?.RemoveCard(chosen);
 
             if (forceEndTurnOnHuman && driver.IsHuman)
             {

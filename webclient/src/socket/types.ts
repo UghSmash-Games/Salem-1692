@@ -84,6 +84,20 @@ export interface ActionRequestPayload {
   playerId: string;
   /** Available top-level actions, e.g. ["draw", "play", "confess"]. */
   actions: string[];
+  /** Card NAMES in hand that can't legally be played right now (host-computed; e.g.
+   *  Robbery/Scapegoat with fewer than 3 players alive). Rendered greyed-out. */
+  unplayableCards?: string[];
+}
+
+/** Pick another PLAYER — the sub-target of a two-target card (server → this one player only).
+ *  `targets` are eligible PUBLIC player ids; resolve them to names via the public board. */
+export interface TargetRequestPayload {
+  /** Machine code, e.g. "robbery_recipient" | "scapegoat_recipient". */
+  prompt: string;
+  /** Eligible public player ids (host-computed: never self, never the victim, never eliminated). */
+  targets: string[];
+  /** The window in seconds — shown as a countdown. */
+  seconds: number;
 }
 
 /** Tituba's deck-rearrange prompt (server → this one player only). */
@@ -199,4 +213,9 @@ export interface CardPickSubmitPayload {
 /** The answer to a ConfirmRequestPayload (this player → host). Single-stage. */
 export interface ConfirmSubmitPayload {
   confirmed: boolean;
+}
+
+/** The chosen sub-target (this player → host). Single-stage; the host re-validates the id. */
+export interface TargetSubmitPayload {
+  targetPlayerId: string;
 }

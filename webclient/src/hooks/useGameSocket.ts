@@ -19,6 +19,7 @@ import type {
   DeckRearrangeRequestPayload,
   CardPickRequestPayload,
   ConfirmRequestPayload,
+  TargetRequestPayload,
   PhaseResolvePayload,
   PublicRevealPayload,
   EliminationResultPayload,
@@ -59,6 +60,8 @@ export function useGameSocket(): void {
       useGameStore.getState().applyCardPickRequest(data);
     const onConfirmRequest = (data: ConfirmRequestPayload) =>
       useGameStore.getState().applyConfirmRequest(data);
+    const onTargetRequest = (data: TargetRequestPayload) =>
+      useGameStore.getState().applyTargetRequest(data);
     const onPhaseResolve = (data: PhaseResolvePayload) =>
       useGameStore.getState().applyPhaseResolve(data);
     const onPublicReveal = (data: PublicRevealPayload) =>
@@ -85,6 +88,7 @@ export function useGameSocket(): void {
     socket.on(SERVER_TO_CLIENT.DECK_REARRANGE_REQUEST, onDeckRearrange);
     socket.on(SERVER_TO_CLIENT.CARD_PICK_REQUEST, onCardPick);
     socket.on(SERVER_TO_CLIENT.CONFIRM_REQUEST, onConfirmRequest);
+    socket.on(SERVER_TO_CLIENT.TARGET_REQUEST, onTargetRequest);
     socket.on(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
     socket.on(SERVER_TO_CLIENT.PUBLIC_REVEAL, onPublicReveal);
     socket.on(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);
@@ -105,6 +109,7 @@ export function useGameSocket(): void {
       socket.off(SERVER_TO_CLIENT.DECK_REARRANGE_REQUEST, onDeckRearrange);
       socket.off(SERVER_TO_CLIENT.CARD_PICK_REQUEST, onCardPick);
       socket.off(SERVER_TO_CLIENT.CONFIRM_REQUEST, onConfirmRequest);
+      socket.off(SERVER_TO_CLIENT.TARGET_REQUEST, onTargetRequest);
       socket.off(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
       socket.off(SERVER_TO_CLIENT.PUBLIC_REVEAL, onPublicReveal);
       socket.off(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);

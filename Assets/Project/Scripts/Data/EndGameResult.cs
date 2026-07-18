@@ -23,7 +23,7 @@ namespace Salem.Data
 {
     public Team WinningTeam { get; }
     public IReadOnlyList<Player> Winners { get; }
-    public string Reason { get; }  // optional: "All witches eliminated", "Parity reached", etc.
+    public string Reason { get; }  // optional: "All Witch Tryal cards revealed", "All townspeople eliminated or turned", etc.
 
     public EndGameResult(Team winningTeam, IReadOnlyList<Player> winners, string reason = "")
     {

@@ -75,7 +75,12 @@ The host (Unity) emits these events. The server routes them to the correct recip
 ### `action_request`
 - **Direction:** host → server → **one specific player**
 - **Recipients:** single player socket matching `playerId`
-- **Payload:** `{ playerId: string, actions: [...] }`
+- **Payload:** `{ playerId: string, actions: [...], unplayableCards: string[] }`
+- **Note:** `unplayableCards` are card NAMES in this player's hand that cannot legally be played right
+  now (currently Robbery/Scapegoat with fewer than 3 players alive — rulebook p13). The host computes
+  this in the same place it computes the `actions` array, and the phone greys those cards out. The
+  host **also** refuses the play if a client sends one anyway (host-gated eligibility + server-side
+  enforcement — the same two-layer pattern as the Tituba/Parris action buttons).
 
 ### `deck_rearrange_request`
 - **Direction:** host → server → **one specific player**
@@ -97,6 +102,22 @@ The host (Unity) emits these events. The server routes them to the correct recip
   ("pick N of up to 3"); `seconds` is the pick window the phone renders as a countdown. This is NOT a
   masked secret phase — the draft's existence is public; only the card identities are private (same
   class as `deck_rearrange_request`). The public `game_state_update` never exposes hand contents.
+
+### `target_request`
+- **Direction:** host → server → **one specific player**
+- **Recipients:** single player socket matching `playerId`
+- **NEVER sent to:** host, mirrors, other players
+- **Payload:** `{ playerId: string, prompt: string, targets: string[], seconds: number }`
+- **Note:** Asks ONE player to pick another **player** — the sub-target of a two-target card
+  (Robbery's recipient, Scapegoat's destination). `prompt` is a machine code (e.g.
+  `"robbery_recipient"`, `"scapegoat_recipient"`) the phone maps to copy. `targets` are the eligible
+  **PUBLIC player ids** (the host computes eligibility — never self, never the victim, never
+  eliminated); the phone resolves them to display names from its existing `game_state_update` board,
+  which avoids duplicate-display-name ambiguity. `seconds` is the window the phone shows as a
+  countdown. The host **re-verifies** the answer against the same eligibility rule — the client is
+  never trusted. If the player declines or the window expires, the card is **not** played and **not**
+  consumed. This is NOT a masked secret phase; it is the acting player's own choice, routed to one
+  socket as their private decision UI.
 
 ### `confirm_request`
 - **Direction:** host → server → **one specific player**
@@ -176,6 +197,15 @@ Players emit these events from their phone clients. The server validates the sen
   forwards all submissions; the host owns the authoritative 60s deadline and applies the
   latest order received.
 
+### `target_submit`
+- **Direction:** player → server → host
+- **Sender role:** player ONLY
+- **Client sends:** `{ targetPlayerId: string }`
+- **Server forwards to host:** `{ playerId: string, targetPlayerId: string }`
+- **Note:** The answer to a `target_request`. Single-stage. The host re-validates the chosen id
+  against the eligibility rule it used to build the list, and owns the deadline; no answer → the card
+  is not played and not consumed.
+
 ### `confirm_submit`
 - **Direction:** player → server → host
 - **Sender role:** player ONLY
@@ -209,6 +239,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `action_request` | ✅ (originates) | ❌ | ❌ |
 | `deck_rearrange_request` | ✅ (originates) | ❌ | ❌ |
 | `card_pick_request` | ✅ (originates) | ❌ | ❌ |
+| `target_request` | ✅ (originates) | ❌ | ❌ |
 | `confirm_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
 | `public_reveal` | ✅ (originates) | ❌ | ❌ |
@@ -219,6 +250,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `confess` | ❌ | ✅ | ❌ |
 | `deck_rearrange_submit` | ❌ | ✅ | ❌ |
 | `card_pick_submit` | ❌ | ✅ | ❌ |
+| `target_submit` | ❌ | ✅ | ❌ |
 | `confirm_submit` | ❌ | ✅ | ❌ |
 
 ---
@@ -229,6 +261,6 @@ These rules are enforced at the server dispatch layer:
 
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
-3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, and **`confirm_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
+3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, **`confirm_request`**, and **`target_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
 4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

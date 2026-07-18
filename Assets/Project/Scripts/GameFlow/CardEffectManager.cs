@@ -84,7 +84,10 @@ namespace Salem.GameFlow
                         t.AddStatusCard(c);
                         t.RecomputeStatusFromStatusCards();
                     }},
-                    { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.ClearHand(); } },
+                    // Arson burns the target's hand. BurnHand (not ClearHand) so the cards reach the
+                    // DISCARD PILE — the deck re-forms from the discard, so a bare clear would remove
+                    // them from circulation for the rest of the game. Sarah Good is immune.
+                    { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.BurnHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
                     { ActionOp.Curse,      (s,t,_,_,c) =>
@@ -205,13 +208,26 @@ namespace Salem.GameFlow
             return false;
         }
         
-        public void ExecuteCardEffect(Card card, Player target)
+        /// <summary>
+        /// Play a card. Returns TRUE only if the effect actually ran; FALSE on every rejection
+        /// (wrong phase, invalid primary/secondary target, 2-player disable).
+        ///
+        /// ⚠ CALLERS MUST HONOUR THE RETURN VALUE before consuming the card. A `void` early-return used
+        /// to be indistinguishable from success, so `NetworkInput` discarded the card anyway — that is
+        /// exactly how Robbery "did nothing but vanished from my hand."
+        ///
+        /// `secondary` is the second target for two-target ops (Robbery's recipient, Scapegoat's
+        /// destination). It is passed BY PARAMETER — never stored on the card. `ActionCardSO` is a
+        /// shared project asset, so writing the recipient onto it leaked state across plays and
+        /// between copies of the same card.
+        /// </summary>
+        public bool ExecuteCardEffect(Card card, Player target, Player secondary = null)
         {
             var phaseMgr = FindFirstObjectByType<GamePhaseManager>();
             if (phaseMgr != null && phaseMgr.CurrentPhase != GamePhase.Day)
             {
                 Debug.LogWarning($"[Effect] Ignored {card.Name}: not in Day phase.");
-                return;
+                return false;
             }
 
             UpdateCurrentPlayer();
@@ -219,24 +235,33 @@ namespace Salem.GameFlow
 
             if (card is ActionCardSO ac)
             {
+                // Playable at all right now? (2-player disable for Robbery/Scapegoat.) Host-side
+                // enforcement — the phone is also told not to offer these, but never trust the client.
+                int aliveCount = PlayerService.GetAlivePlayers().Count;
+                if (!Salem.Rules.TargetingPolicy.ValidatePlayable(ac.Op, aliveCount, out var whyNot))
+                {
+                    Debug.LogWarning($"[{ac.Op}] {whyNot}");
+                    return false;
+                }
+
                 // Primary target check
                 if (ac.NeedsTarget)
                 {
                     if (!Salem.Rules.TargetingPolicy.ValidatePrimary(CurrentPlayer, target, ac.Op, out var why))
                     {
                         Debug.LogWarning($"[{ac.Op}] {why}");
-                        return;
+                        return false;
                     }
                 }
 
-                // Secondary target check for two-target ops
+                // Secondary target check for two-target ops. The caller supplies it (the playing
+                // player chose it); it is NOT read off the card asset any more.
                 if (ac.RequiresSecondTarget)
                 {
-                    var secondary = ac.target; // we store the second target in card.target
                     if (!Salem.Rules.TargetingPolicy.ValidateSecondary(CurrentPlayer, target, secondary, ac.Op, out var why2))
                     {
                         Debug.LogWarning($"[{ac.Op}] {why2}");
-                        return;
+                        return false;
                     }
                 }
             }
@@ -253,7 +278,7 @@ namespace Salem.GameFlow
 
             if (card is ActionCardSO action)
             {
-                ExecuteActionOp(action, target);
+                ExecuteActionOp(action, target, secondary);
             }
             else
             {
@@ -267,14 +292,16 @@ namespace Salem.GameFlow
 
             // Raise event for CardLogManager to listen to
             OnCardPlayed?.Invoke(CardLogFormatter.Format(CurrentPlayer, card, target));
-            
+
             GameTurnManager.Instance.NotifyCardPlayed(CurrentPlayer);
+            return true;
         }
 
-        private void ExecuteActionOp(ActionCardSO action, Player target)
-        {          
+        // `secondary` comes from the caller (the playing player's choice), never from action.target —
+        // that field is a shared asset and writing to it leaked state between plays.
+        private void ExecuteActionOp(ActionCardSO action, Player target, Player secondary)
+        {
             //Debug.Log(action.Op.ToString() );
-            var secondary = action.RequiresSecondTarget ? action.target : null;
             if (_ops.TryGetValue(action.Op, out var op))
                 op(CurrentPlayer, target, secondary, Rng, action);
             else

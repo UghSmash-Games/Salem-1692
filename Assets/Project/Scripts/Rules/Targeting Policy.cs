@@ -39,5 +39,28 @@ namespace Salem.Rules
             if (secondary == primary) { reason = "Recipient must be different from the victim."; return false; }
             reason = null; return true;
         }
+
+        /// <summary>
+        /// Robbery and Scapegoat move cards BETWEEN TWO OTHER players, so they need a source, a victim
+        /// and a recipient — three living players. Rulebook p13: "They may only involve two other
+        /// players... Therefore, when only two players remain, robbery and scapegoat may not be played."
+        /// </summary>
+        public static bool NeedsThreePlayers(ActionOp op) =>
+            op == ActionOp.Robbery || op == ActionOp.Scapegoat;
+
+        /// <summary>
+        /// Can this op legally be played at all right now, independent of targets? The single source of
+        /// truth for the 2-player disable — used BOTH to gate what the phone is offered (greyed-out
+        /// cards in the hand) and to refuse the play host-side if a client sends it anyway.
+        /// </summary>
+        public static bool ValidatePlayable(ActionOp op, int aliveCount, out string reason)
+        {
+            if (NeedsThreePlayers(op) && aliveCount < 3)
+            {
+                reason = "Needs 3+ players (moves cards between two other players).";
+                return false;
+            }
+            reason = null; return true;
+        }
     }
 }

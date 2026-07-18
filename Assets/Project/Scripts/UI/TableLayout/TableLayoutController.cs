@@ -463,9 +463,32 @@ namespace Salem.UI
 
             Debug.Log($"[TableLayoutController] Playing {selectedCard.Name} from {selectedCardOwner.PlayerNameText} on {target.PlayerNameText}");
 
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, target);
+            // Capture before any ClearTargetSelection/BeginTargetSelection below wipes these fields.
+            Card card = selectedCard;
+            Player owner = selectedCardOwner;
+            Player primary = target;
 
-            GameTurnManager.Instance.NotifyCardPlayed(selectedCardOwner);
+            // Two-target cards (Robbery/Scapegoat): the player now picks the RECIPIENT — never
+            // themselves, never the victim. Previously the local path passed NO secondary at all, so
+            // the effect silently read a stale value off the shared card asset and was rejected.
+            if (card is ActionCardSO twoTarget && twoTarget.RequiresSecondTarget)
+            {
+                ClearTargetSelection();
+                BeginTargetSelection(
+                    owner,
+                    $"Choose who receives the cards ({card.Name}).",
+                    t => t != null && t != owner && t != primary && !t.IsEliminated,
+                    recipient =>
+                    {
+                        if (CardEffectManager.Instance.ExecuteCardEffect(card, primary, recipient))
+                            GameTurnManager.Instance.NotifyCardPlayed(owner);
+                        endTurnButtonUI.Show();
+                    });
+                return;
+            }
+
+            if (CardEffectManager.Instance.ExecuteCardEffect(card, primary))
+                GameTurnManager.Instance.NotifyCardPlayed(owner);
 
             endTurnButtonUI.Show();
 

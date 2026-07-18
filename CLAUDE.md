@@ -84,14 +84,34 @@ Room management:         create_room | join_room | join_mirror
                          room_created | joined | player_joined | room_closed
 
 Server → clients:        game_state_update | private_state | secret_phase_prompt
-                         action_request | confirm_request | phase_resolve
-                         public_reveal | elimination_result | game_over
+                         action_request | confirm_request | target_request
+                         phase_resolve | public_reveal | elimination_result | game_over
 
-Client → server:         player_action | secret_phase_submit | confess | confirm_submit
+Client → server:         player_action | secret_phase_submit | confess
+                         confirm_submit | target_submit
 
 NOTE: game_state_update is passed through by the server without inspection.
 Unity is solely responsible for ensuring it never contains private player data
 (tryal cards, role, acting flag).
+
+## Win Conditions (canonical — hard invariant, same weight as the masking model)
+
+**Salem has NO parity win condition.** This is a core rules fact — treat it like the masking model.
+
+- **Witches win ONLY when `nonWitches == 0`** — every alive player is a witch (≥1). This single check
+  covers BOTH rulebook triggers: "witches eliminate all townspeople" AND "the final remaining
+  townsperson becomes a witch" (that player now holds a witch tryal → `IsWitch` → no longer a
+  non-witch). When the win fires because the last townsperson JUST turned (via conspiracy), **that
+  player LOSES** — they are excluded from the winning witch team (rulebook: "in which case that player
+  loses").
+- **Townspeople win when the final "witch" tryal card is REVEALED** (`!anyUnrevealedWitch`),
+  independent of how many witches are alive or eliminated. Reveal beats elimination count; this is
+  checked FIRST so it wins any tie.
+- **There is NO "witches win at parity/majority" rule.** `witches >= nonWitches` was a Werewolf/Mafia
+  import (a real bug that ended games early — e.g. 1 witch vs 1 live townsperson falsely declared a
+  witch win). A full rulebook search for parity/outnumber/majority returns zero hits. **Never
+  reintroduce it.** The one authority is `GameManager.WitchesControl(aliveSet)`, used by both
+  `EvaluateEndGame` and `CascadeWouldEndBothTeams` (Mary Warren's both-teams-lose guard).
 
 ## Game Rules Gotchas
 

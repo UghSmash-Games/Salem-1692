@@ -83,6 +83,15 @@ namespace Salem.Networking
         public int index;
     }
 
+    // Answer to a TargetRequestMsg — phone → host. Single-stage. The host re-validates the chosen id
+    // against the same eligibility rule it used to build the list.
+    [Serializable]
+    public class TargetSubmitMsg
+    {
+        public string playerId;
+        public string targetPlayerId;
+    }
+
     // Answer to a ConfirmRequestMsg — phone → host. Single-stage: the answer IS the confirmation
     // (no tentative stage). The host owns the deadline and defaults to true if this never arrives.
     [Serializable]
@@ -169,6 +178,10 @@ namespace Salem.Networking
     {
         public string playerId;
         public string[] actions;
+        // Card NAMES in this player's hand that cannot legally be played right now (Robbery/Scapegoat
+        // with < 3 alive — rulebook p13). Computed host-side alongside `actions`; the phone greys them
+        // out. The host ALSO refuses the play if a client sends one anyway (never trust the client).
+        public string[] unplayableCards;
     }
 
     // Tituba's deck rearrange — host → ONE player only (private; never broadcast).
@@ -196,6 +209,20 @@ namespace Salem.Networking
         // When true the picker may decline / stop early (an "up to N" pick, e.g. Samuel Parris) — the
         // phone shows a "Done" button that submits index -1. False for a mandatory pick (John's draft).
         public bool allowDone;
+    }
+
+    // Ask ONE player to pick another PLAYER — the sub-target of a two-target card (Robbery's
+    // recipient, Scapegoat's destination). `targets` are the eligible PUBLIC player ids; the host
+    // computes eligibility (never self, never the victim, never eliminated) and RE-VERIFIES the
+    // answer. The phone resolves ids → names from its public board, which avoids duplicate-name
+    // ambiguity. Declining / timing out means the card is NOT played and NOT consumed.
+    [Serializable]
+    public class TargetRequestMsg
+    {
+        public string playerId;
+        public string prompt;    // e.g. "robbery_recipient" / "scapegoat_recipient"
+        public string[] targets; // eligible PUBLIC player ids
+        public int seconds;      // countdown window
     }
 
     // A yes/no confirmation for a character's OWN optional ("may") choice — host → ONE player only.

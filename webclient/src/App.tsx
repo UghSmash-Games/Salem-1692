@@ -13,6 +13,7 @@ import { SecretPhaseScreen } from './screens/SecretPhaseScreen';
 import { DeckRearrangeScreen } from './screens/DeckRearrangeScreen';
 import { CardPickScreen } from './screens/CardPickScreen';
 import { ConfirmScreen } from './screens/ConfirmScreen';
+import { TargetScreen } from './screens/TargetScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
 import { PublicRevealToast } from './components/PublicRevealToast';
@@ -35,6 +36,8 @@ function CurrentScreen() {
       return <CardPickScreen />;
     case 'confirm':
       return <ConfirmScreen />;
+    case 'target':
+      return <TargetScreen />;
     case 'spectator':
       return <SpectatorScreen />;
     case 'game_over':

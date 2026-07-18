@@ -20,6 +20,7 @@ import type {
   DeckRearrangeSubmitPayload,
   CardPickSubmitPayload,
   ConfirmSubmitPayload,
+  TargetSubmitPayload,
 } from './types';
 
 const SERVER_URL =
@@ -78,4 +79,9 @@ export function sendCardPick(payload: CardPickSubmitPayload): void {
 /** Answer a yes/no confirmation for this player's own optional ability choice. */
 export function sendConfirm(payload: ConfirmSubmitPayload): void {
   socket.emit(CLIENT_TO_SERVER.CONFIRM_SUBMIT, payload);
+}
+
+/** Submit the chosen sub-target of a two-target card (Robbery/Scapegoat recipient). */
+export function sendTargetSubmit(payload: TargetSubmitPayload): void {
+  socket.emit(CLIENT_TO_SERVER.TARGET_SUBMIT, payload);
 }

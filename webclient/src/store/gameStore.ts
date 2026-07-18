@@ -22,6 +22,7 @@ import type {
   DeckRearrangeRequestPayload,
   CardPickRequestPayload,
   ConfirmRequestPayload,
+  TargetRequestPayload,
   PhaseResolvePayload,
   PublicRevealPayload,
   EliminationResultPayload,
@@ -73,6 +74,17 @@ export interface PromptSlice {
 
 export interface ActionRequestSlice {
   actions: string[];
+  /** Card names that can't be played right now (host-computed) — rendered greyed-out. */
+  unplayableCards: string[];
+}
+
+export interface TargetRequestSlice {
+  /** Machine code, e.g. "robbery_recipient". */
+  prompt: string;
+  /** Eligible public player ids. */
+  targets: string[];
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
 }
 
 export interface DeckRearrangeSlice {
@@ -122,6 +134,7 @@ interface GameStore {
   deckRearrange: DeckRearrangeSlice | null;
   cardPick: CardPickSlice | null;
   confirm: ConfirmSlice | null;
+  targetRequest: TargetRequestSlice | null;
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
@@ -148,6 +161,8 @@ interface GameStore {
   clearCardPick: () => void;
   applyConfirmRequest: (data: ConfirmRequestPayload) => void;
   clearConfirm: () => void;
+  applyTargetRequest: (data: TargetRequestPayload) => void;
+  clearTargetRequest: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
   applyPublicReveal: (data: PublicRevealPayload) => void;
@@ -199,6 +214,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   deckRearrange: null,
   cardPick: null,
   confirm: null,
+  targetRequest: null,
   reveal: null,
   lastElimination: null,
   lastPublicReveal: null,
@@ -234,6 +250,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deckRearrange: null,
       cardPick: null,
       confirm: null,
+      targetRequest: null,
       reveal: null,
       lastElimination: null,
       lastPublicReveal: null,
@@ -294,17 +311,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deckRearrange: null,
       cardPick: null,
       confirm: null,
+      targetRequest: null,
     }),
 
   applyActionRequest: (data) =>
     set({
-      actionRequest: { actions: data.actions ?? [] },
+      actionRequest: {
+        actions: data.actions ?? [],
+        unplayableCards: data.unplayableCards ?? [],
+      },
       prompt: null,
       // After a rearrange, the host re-prompts the turn action — leave the
       // rearrange screen for the action screen.
       deckRearrange: null,
       cardPick: null,
       confirm: null,
+      targetRequest: null,
     }),
 
   // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
@@ -315,6 +337,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       actionRequest: null,
       cardPick: null,
       confirm: null,
+      targetRequest: null,
     }),
 
   clearDeckRearrange: () => set({ deckRearrange: null }),
@@ -333,6 +356,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       actionRequest: null,
       deckRearrange: null,
       confirm: null,
+      targetRequest: null,
     }),
 
   clearCardPick: () => set({ cardPick: null }),
@@ -351,9 +375,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       actionRequest: null,
       deckRearrange: null,
       cardPick: null,
+      targetRequest: null,
     }),
 
   clearConfirm: () => set({ confirm: null }),
+
+  // Sub-target pick for a two-target card (Robbery/Scapegoat recipient). Mutually exclusive with
+  // the other prompts — the host is blocking on this answer before the play resolves.
+  applyTargetRequest: (data) =>
+    set({
+      targetRequest: {
+        prompt: data.prompt,
+        targets: data.targets ?? [],
+        seconds: data.seconds ?? 30,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+    }),
+
+  clearTargetRequest: () => set({ targetRequest: null }),
 
   applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
 

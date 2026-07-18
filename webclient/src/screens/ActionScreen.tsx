@@ -18,6 +18,8 @@ type Step = 'choose' | 'select_card' | 'select_target' | 'confess';
 
 export function ActionScreen() {
   const actions = useGameStore((s) => s.actionRequest?.actions ?? []);
+  // Host-computed: cards that can't legally be played right now (Robbery/Scapegoat need 3+ alive).
+  const unplayableCards = useGameStore((s) => s.actionRequest?.unplayableCards ?? []);
   const { hand, tryals } = useGameStore((s) => s.privateState);
   const { players } = useGameStore((s) => s.publicBoard);
   const myPlayerId = useGameStore((s) => s.session.playerId);
@@ -157,7 +159,16 @@ export function ActionScreen() {
             selectable
             selectedIndex={cardIndex}
             onSelect={setCardIndex}
+            disabledCards={unplayableCards}
           />
+          {unplayableCards.length > 0 && (
+            <p
+              className="text-xs italic text-parchment/50"
+              data-testid="unplayable-hint"
+            >
+              Greyed-out cards need 3+ players.
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               type="button"

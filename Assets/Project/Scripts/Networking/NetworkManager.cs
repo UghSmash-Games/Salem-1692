@@ -40,6 +40,7 @@ namespace Salem.Networking
         public event Action<DeckRearrangeSubmitMsg> OnDeckRearrangeSubmit;
         public event Action<CardPickSubmitMsg> OnCardPickSubmit;
         public event Action<ConfirmSubmitMsg> OnConfirmSubmit;
+        public event Action<TargetSubmitMsg> OnTargetSubmit;
         public event Action<PhaseResolveMsg> OnPhaseResolveEcho;
         public event Action OnRoomClosed;
         public event Action OnConnectedToServer;
@@ -205,6 +206,12 @@ namespace Salem.Networking
             _ = socketClient.Emit("confirm_request", JsonUtility.ToJson(msg));
         }
 
+        public void SendTargetRequest(TargetRequestMsg msg)
+        {
+            if (!GuardConnected("SendTargetRequest")) return;
+            _ = socketClient.Emit("target_request", JsonUtility.ToJson(msg));
+        }
+
         public void SendPhaseResolve(PhaseResolveMsg msg)
         {
             if (!GuardConnected("SendPhaseResolve")) return;
@@ -295,6 +302,13 @@ namespace Salem.Networking
                 var msg = JsonUtility.FromJson<ConfirmSubmitMsg>(json);
                 Debug.Log($"[NetworkManager] Confirm submit from {msg.playerId}: confirmed={msg.confirmed}");
                 OnConfirmSubmit?.Invoke(msg);
+            });
+
+            socketClient.On("target_submit", json =>
+            {
+                var msg = JsonUtility.FromJson<TargetSubmitMsg>(json);
+                Debug.Log($"[NetworkManager] Target submit from {msg.playerId}: target={msg.targetPlayerId}");
+                OnTargetSubmit?.Invoke(msg);
             });
 
             socketClient.On("phase_resolve", json =>

@@ -193,6 +193,21 @@ function registerDispatch(io) {
       }
     });
 
+    // Target request → one specific player ONLY (pick the sub-target of a two-target card,
+    // e.g. Robbery's recipient). Private decision UI — never broadcast.
+    socket.on('target_request', (data) => {
+      if (socket.role !== 'host') return;
+      if (!data || !data.playerId) return;
+
+      const player = getPlayerByPlayerId(socket.roomCode, data.playerId);
+      if (!player) return;
+
+      const targetSocket = io.sockets.sockets.get(player.socketId);
+      if (targetSocket) {
+        targetSocket.emit('target_request', data);
+      }
+    });
+
     // Confirm request → one specific player ONLY (their own optional "may" choice,
     // e.g. Abigail Williams' discard). Private decision UI — never broadcast.
     socket.on('confirm_request', (data) => {
@@ -266,6 +281,11 @@ function registerDispatch(io) {
     socket.on('confirm_submit', (data) => {
       if (socket.role !== 'player') return;
       forwardToHost(io, socket, 'confirm_submit', data);
+    });
+
+    socket.on('target_submit', (data) => {
+      if (socket.role !== 'player') return;
+      forwardToHost(io, socket, 'target_submit', data);
     });
 
     // ─── Disconnect ────────────────────────────────────────────

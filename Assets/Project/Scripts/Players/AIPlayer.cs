@@ -108,8 +108,11 @@ namespace Salem.Players
                 }
             }
             Debug.Log("Playing Card");
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
-            HandManager.RemoveCard(selectedCard);
+            // NOTE: no live caller — the AI runs through AITurnSequencer (TakeTurnOnce). Kept correct
+            // anyway: pass the chosen `secondary` (it was computed above and previously dropped) and
+            // only consume the card if the effect actually ran.
+            if (CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary, secondary))
+                HandManager.RemoveCard(selectedCard);
         }
         #endregion
 

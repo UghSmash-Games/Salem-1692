@@ -8,6 +8,9 @@ interface Props {
   selectable?: boolean;
   selectedIndex?: number | null;
   onSelect?: (index: number) => void;
+  /** Card NAMES that can't be played right now (host-computed, e.g. Robbery/Scapegoat
+   *  with fewer than 3 players alive). Rendered greyed-out and non-selectable. */
+  disabledCards?: string[];
 }
 
 export function HandList({
@@ -15,6 +18,7 @@ export function HandList({
   selectable = false,
   selectedIndex = null,
   onSelect,
+  disabledCards = [],
 }: Props) {
   if (hand.length === 0) {
     return <p className="text-sm italic text-parchment/60">No cards in hand.</p>;
@@ -36,15 +40,20 @@ export function HandList({
             </li>
           );
         }
+        const isDisabled = disabledCards.includes(card);
         return (
           <li key={i}>
             <button
               type="button"
+              disabled={isDisabled}
               onClick={() => onSelect?.(i)}
+              data-disabled={isDisabled || undefined}
               className={`${base} w-full ${
-                isSelected
-                  ? 'border-candle bg-candle/30 text-parchment'
-                  : 'border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
+                isDisabled
+                  ? 'cursor-not-allowed border-parchment/20 bg-ink/20 text-parchment/40'
+                  : isSelected
+                    ? 'border-candle bg-candle/30 text-parchment'
+                    : 'border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
               }`}
             >
               {card}

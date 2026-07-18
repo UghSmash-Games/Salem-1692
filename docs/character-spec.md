@@ -210,21 +210,34 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
     the *initially*-eliminated player still cascades to her (non-Mary) partner.
   - **Both-teams-lose ✅ (GENERAL — guards EVERY matchmaker cascade, not just Mary):**
     `GameManager.CascadeWouldEndBothTeams(intendedTarget, partner)` — a non-mutating hypothetical that
-    returns true only if eliminating the partner would satisfy BOTH win conditions at once (villagers'
-    all-witch-tryals-revealed AND witches' parity). It models the double-kill by treating BOTH the
-    intended target's and the partner's tryals as revealed. Win logic stays centralized in GameManager.
+    returns true only if eliminating the partner would satisfy BOTH win conditions at once: villagers'
+    **all-witch-tryals-revealed** (modelled by treating BOTH the intended target's and the partner's
+    tryals as revealed) AND witches' **`WitchesControl(aliveAfter)`** — i.e. after removing the partner,
+    every remaining alive player is a witch (the partner was the last non-witch). **NOT parity** —
+    Salem has no parity win; the witch half is `nonWitchesAfter == 0`, the same single authority
+    `EvaluateEndGame` uses (see [win-conditions] / CLAUDE.md "Win Conditions (canonical)"). Win logic
+    stays centralized in GameManager.
     - **Verification: MANUAL/code-review only (not live-fire tested)** — same posture as the
-      cascade-orphan edge. The guard is only *reachable* when an alive player is `IsWitch == true` with
-      NO unrevealed Witch tryal (so villagers-win and witches-parity can hold at once). That state only
-      arises from the rulebook's "a player who loses their only witch card remains a witch" rule (a
-      conspiracy swap), preserved by the STICKY `IsWitch` in `Player.DetermineRole`
-      (`if (!IsWitch) IsWitch = hasWitchTryal;`). Manufacturing that state live is highly artificial and
-      the current TestManager harness has no tryal/role/reveal control, so a live-fire test would be more
-      fragile than valuable. A future live-fire test would need a `SetTryalsOnSeat(seat, TryalCard[])`
-      debug method (assign `TryalCards` + `DetermineRole`) to build: intended target `[NotAWitch]`
-      matchmaker-linked to a non-Mary partner holding the last unrevealed `[Witch]`, plus a third seat
-      made a sticky lost-card witch (`SetTryals([Witch])` then `SetTryals([NotAWitch])`) for parity —
+      cascade-orphan edge. **Reachability is UNCHANGED by the parity→`nonWitchesAfter==0` correction:**
+      the guard fires only when, after removing the partner (the last non-witch), every other alive
+      survivor is a witch WITH NO unrevealed Witch tryal — otherwise `wouldVillagersWin` (all witch
+      tryals revealed) can't also hold. Such a survivor is a "sticky lost-card witch": `IsWitch == true`
+      but the witch tryal already revealed/lost, arising from the rulebook's "a player who loses their
+      only witch card remains a witch" rule (a conspiracy swap), preserved by the STICKY `IsWitch` in
+      `Player.DetermineRole` (`if (!IsWitch) IsWitch = hasWitchTryal;`). Manufacturing that state live is
+      highly artificial and the current TestManager harness has no tryal/role/reveal control, so a
+      live-fire test would be more fragile than valuable. A future live-fire test would need a
+      `SetTryalsOnSeat(seat, TryalCard[])` debug method (assign `TryalCards` + `DetermineRole`) to build:
+      intended target `[NotAWitch]`... no — the intended target must hold the **last unrevealed `[Witch]`**
+      (so its reveal is the villagers' winning reveal), matchmaker-linked to a **non-Mary partner who is
+      the last non-witch `[NotAWitch]`**, plus a third seat made a sticky lost-card witch
+      (`SetTryals([Witch])` then `SetTryals([NotAWitch])`) so removing the partner leaves all-witches —
       then Eliminate the intended target and expect `SPARED (both-teams-lose)`.
+    - ⚠️ **CORRECTION LOG:** the earlier version of this entry described the witch half as "parity"
+      (`witchesAfter >= nonWitchesAfter`), matching the then-current (WRONG) `EvaluateEndGame`. Parity was
+      a Werewolf/Mafia import with no rulebook basis; it was removed project-wide. The corrected guard is
+      strictly narrower, so cascades the old parity form wrongly flagged as both-teams-lose (and wrongly
+      SPARED) now correctly eliminate the partner.
   - **Spared partner's card PERSISTS ✅ (rulebook-corrected):** a SPARED partner (Mary or
     both-teams-lose) KEEPS their now-partnerless Matchmaker card — blue cards persist per rulebook; the
     bond is already cleared by `ClearMatch`, leaving them free to re-link if a new Matchmaker is played.
@@ -337,12 +350,59 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   1 card.
 - **Code status:** ✅ TrialService:51 (gated on `fromAccusation`, excludes self).
 
-## 14. Sarah Good ✅
+## 14. Sarah Good ✅ (verified against card text)
 
-- **Ability:** Robbery and Arson cards have no effect on her (discarded).
-- **Code status:** ✅ CardEffectManager:87–88 (Arson/Robbery skipped for her).
+- **Ability (card text):** *"Robbery and arson cards played against you have no effect and are
+  discarded."*
+- **Code status: ✅ VERIFIED on all axes** (`CardEffectManager` `ActionOp.Arson` / `ActionOp.Robbery`,
+  both guarded by `if (!t.HasTownHall(SarahGood))`):
+  - **Both cards** covered; effect is **genuinely inert** (whole effect skipped, not reduced).
+  - **Discarded ✅:** the guard is inside the op; the generic green-card removal
+    (`CardEffectManager` ~265: `Type == Green && Op != Stocks → HandManager.RemoveCard`) runs AFTER
+    `ExecuteActionOp` regardless, and `RemoveCard` → `AddToDiscardPile`. SO authoring confirmed
+    correct (Arson `Type:0`/`Op:7`, Robbery `Type:0`/`Op:9`/`RequiresSecondTarget:1`) — no repeat of
+    the `Op:0` data bug.
+  - **Scoped to "against her" ✅:** the guard tests `t` (target), never `s` — she can still play
+    Robbery/Arson against others.
+  - **Robbery two-target ✅:** `ExecuteActionOp` passes `t` = primary = **victim**,
+    `u` = `action.target` = **recipient**; the op is `t.TransferEntireHandTo(u)`. Immunity fires when
+    she is the VICTIM. When she is the RECIPIENT it correctly does NOT block — the robbery isn't
+    "against her" and she's benefiting.
+  - **Martha copy ✅** via `GetEffectiveTownHallName`.
 - **Edge (rulebook p13, Scapegoat & Robbery):** Robbery never moves the user's own cards;
   disabled at 2 players.
+- **✅ RESOLVED (was a deferred 4a stopgap): the player now CHOOSES the recipient.** The old
+  `ac.target = AITargetingHelper.SelectRandomTarget(p)` one-shot pick is gone. It was a real bug, not
+  just low fidelity: `SelectRandomTarget` excludes only *self*, so it could pick the **victim**,
+  `TargetingPolicy.ValidateSecondary` then rejected the play, `ExecuteCardEffect` early-returned —
+  and `TryPlayCard` discarded the card anyway. Robbery silently did nothing `1/(alive−1)` of the time
+  (33% at 4 players, **100% at 2**). Now: `NetworkInput.RequestTarget` (the `IPlayerInput` seam that
+  was already declared for "sub-target" use and previously stubbed out) prompts the playing player
+  over the new **`target_request`/`target_submit`** events with the host-computed eligible list
+  (never self, never the victim, never eliminated), re-verified host-side. Declining or timing out
+  leaves the card **in hand**. The local/host UI path (`TableLayoutController`) chains a second
+  `BeginTargetSelection`; the AI keeps its retry-and-bail. **Scapegoat shares every one of these
+  fixes** — identical shape, same code path.
+- **✅ Shared-asset mutation fixed:** the recipient is no longer written to `ActionCardSO.target` (a
+  *project asset* — it persisted across plays and would be shared by two copies of the same card).
+  `ExecuteCardEffect(card, target, secondary)` takes it by parameter and threads it to
+  `ExecuteActionOp`. `ExecuteCardEffect` also **returns bool** now, and every caller consumes the card
+  only on `true` — killing the "rejected play still eats the card" bug class generally.
+- **✅ 2-player disable implemented (rulebook p13):** `TargetingPolicy.NeedsThreePlayers` /
+  `ValidatePlayable` is the single source of truth. Two layers: the host refuses the play in
+  `ExecuteCardEffect`, AND `action_request` now carries `unplayableCards` so the phone greys the card
+  out (same host-gated-eligibility pattern as the Tituba/Parris buttons).
+- **⚠ Still deferred:** the **Curse** blue-card choice (auto-discards the first blue card instead of
+  letting the player pick) — unchanged, still its own task.
+- **🐛 Arson card-destruction bug — FIXED (found during the Sarah trace, not a Sarah bug):** the
+  Arson op called `t.ClearHand()`, and `ClearHand` empties the hand **without discarding** — so every
+  Arson permanently destroyed those cards. Because the deck re-forms from the discard pile
+  (`ReshuffleDiscardPile`), burned cards never returned to circulation, shrinking the deck for the
+  rest of the game. Fixed by adding **`Player.BurnHand()`** (discard-every-card → then clear) and
+  pointing Arson at it; `Player.OnElimination`'s no-drafter branch (which already hand-rolled the same
+  discard-then-clear) now reuses it. `Player.ClearHand()` kept for the ownership-already-moved case
+  (`TransferEntireHandTo`) with a doc warning. Robbery was never affected — `TransferEntireHandTo`
+  re-adds each card to the recipient before clearing.
 
 ## 15. Will Grigs ✅
 

@@ -36,6 +36,12 @@ namespace Salem.Players
         /// </summary>
         private const float AbigailConfirmSeconds = 20f;
 
+        /// <summary>
+        /// Window for picking a two-target card's sub-target (Robbery's recipient / Scapegoat's
+        /// destination). Under the 60s Day idle timer so the prompt can't outlive the turn.
+        /// </summary>
+        private const float SubTargetSeconds = 30f;
+
         private readonly Player player;
         private PlayerActionMsg pending;
         private bool hasAction;
@@ -119,9 +125,27 @@ namespace Salem.Players
                     choice.Add("play");
                     actions = choice.ToArray();
                 }
-                nm.SendActionRequest(new ActionRequestMsg { playerId = p.NetworkId, actions = actions });
+                // Cards in hand that can't legally be played right now (Robbery/Scapegoat need 3+
+                // alive — rulebook p13). Computed here alongside `actions`, same host-gated
+                // eligibility pattern as the Tituba/Parris buttons; the phone greys them out. The
+                // host ALSO refuses the play in ExecuteCardEffect — never trust the client.
+                int aliveNow = PlayerService.GetAlivePlayers().Count;
+                var unplayable = (p.HandManager?.Hand ?? new List<Card>())
+                    .OfType<ActionCardSO>()
+                    .Where(c => !Salem.Rules.TargetingPolicy.ValidatePlayable(c.Op, aliveNow, out _))
+                    .Select(c => c.Name)
+                    .Distinct()
+                    .ToArray();
+
+                nm.SendActionRequest(new ActionRequestMsg
+                {
+                    playerId = p.NetworkId,
+                    actions = actions,
+                    unplayableCards = unplayable,
+                });
                 if (VerboseLogging)
-                    Debug.Log($"[NetworkInput] {p.NetworkId} prompted with [{string.Join(",", actions)}].");
+                    Debug.Log($"[NetworkInput] {p.NetworkId} prompted with [{string.Join(",", actions)}]" +
+                        (unplayable.Length > 0 ? $" (unplayable: [{string.Join(",", unplayable)}])" : ""));
 
                 // Wake on the player's action OR if the turn ends externally (e.g. idle timeout).
                 yield return new WaitUntil(() => hasAction || gtm.TurnId != myTurnId);
@@ -202,8 +226,11 @@ namespace Salem.Players
                 }
                 else
                 {
-                    // Play a card. Does NOT end the turn — loop and prompt for more.
-                    if (TryPlayCard(p, msg, gtm)) hasPlayed = true;
+                    // Play a card. Does NOT end the turn — loop and prompt for more. A coroutine
+                    // because two-target cards pause to ask the player who receives the cards.
+                    bool played = false;
+                    yield return PlayCardRoutine(p, msg, gtm, v => played = v);
+                    if (played) hasPlayed = true;
                 }
             }
 
@@ -219,20 +246,31 @@ namespace Salem.Players
             GameTurnManager.Instance?.ResetIdleTimer();     // player acted — refresh inactivity window
         }
 
-        private bool TryPlayCard(Player p, PlayerActionMsg msg, GameTurnManager gtm)
+        /// <summary>
+        /// Play one card for a networked player. A coroutine (not a bool method) because two-target
+        /// cards must PAUSE to ask the player who receives the cards.
+        ///
+        /// Reports played=true only if the effect actually ran. A rejected play NEVER consumes the
+        /// card — that was the Robbery bug: the recipient was auto-picked at random, could equal the
+        /// victim, `ExecuteCardEffect` bailed on validation, and the card was discarded anyway.
+        /// </summary>
+        private IEnumerator PlayCardRoutine(Player p, PlayerActionMsg msg, GameTurnManager gtm,
+                                            System.Action<bool> onPlayed)
         {
             var card = p.HandManager?.Hand?.FirstOrDefault(c => c != null && c.Name == msg.card);
             if (card == null)
             {
                 Debug.LogWarning($"[NetworkInput] '{msg.card}' not in {p.NetworkId} hand " +
                     $"[{string.Join(", ", p.HandManager?.Hand?.Select(c => c?.Name) ?? new string[0])}].");
-                return false;
+                onPlayed?.Invoke(false);
+                yield break;
             }
 
             if (!gtm.TryBeginPlayPhase(p))
             {
                 Debug.LogWarning($"[NetworkInput] TryBeginPlayPhase denied for {p.NetworkId}.");
-                return false;
+                onPlayed?.Invoke(false);
+                yield break;
             }
 
             var target = ResolveTarget(msg.targetPlayerId);
@@ -241,20 +279,56 @@ namespace Salem.Players
             else if (VerboseLogging)
                 Debug.Log($"[NetworkInput] target '{msg.targetPlayerId}' → {(target != null ? target.PlayerNameText : "none")}");
 
-            // Two-target cards (Robbery/Scapegoat): the phone only sends one target.
-            // 4a stopgap — pick the secondary like the AI does.
+            // Two-target cards (Robbery/Scapegoat): the player CHOOSES the recipient. Eligible =
+            // anyone alive who is neither the player nor the victim. The choice is passed to
+            // ExecuteCardEffect by parameter — never written onto the shared card asset.
+            Player secondary = null;
             if (card is ActionCardSO ac && ac.RequiresSecondTarget)
             {
-                ac.target = AITargetingHelper.SelectRandomTarget(p);
+                var primary = target;
+                bool IsEligible(Player x) => x != null && x != p && x != primary && !x.IsEliminated;
+
+                if (!PlayerService.All.Any(IsEligible))
+                {
+                    // e.g. only 2 players alive — nobody can receive. Don't play, don't consume.
+                    Debug.LogWarning($"[NetworkInput] {msg.card}: no eligible recipient — not played (card kept).");
+                    onPlayed?.Invoke(false);
+                    yield break;
+                }
+
+                string promptCode = ac.Op == ActionOp.Robbery ? "robbery_recipient" : "scapegoat_recipient";
+                yield return RequestTarget(p, promptCode, IsEligible, chosen => secondary = chosen);
+
+                if (secondary == null)
+                {
+                    // Declined or timed out — do NOT play and do NOT consume the card.
+                    Debug.Log($"[NetworkInput] {msg.card}: no recipient chosen — not played (card kept).");
+                    onPlayed?.Invoke(false);
+                    yield break;
+                }
             }
 
-            CardEffectManager.Instance.ExecuteCardEffect(card, target);
-            p.HandManager?.RemoveCard(card);
-            if (VerboseLogging)
-                Debug.Log($"[NetworkInput] {p.NetworkId} played '{card.Name}' on " +
-                    $"'{(target != null ? target.PlayerNameText : "none")}'. Hand now: {p.HandManager?.Hand?.Count}.");
-            return true;
+            // Consume ONLY if the effect ran (validation/2-player disable can still refuse).
+            bool executed = CardEffectManager.Instance.ExecuteCardEffect(card, target, secondary);
+            if (executed)
+            {
+                p.HandManager?.RemoveCard(card);
+                if (VerboseLogging)
+                    Debug.Log($"[NetworkInput] {p.NetworkId} played '{card.Name}' on " +
+                        $"'{(target != null ? target.PlayerNameText : "none")}'. Hand now: {p.HandManager?.Hand?.Count}.");
+            }
+            else
+            {
+                Debug.LogWarning($"[NetworkInput] '{card.Name}' was refused — card kept in hand.");
+            }
+
+            onPlayed?.Invoke(executed);
         }
+
+        // The PUBLIC id the board uses for a player: NetworkId for humans, PublicId ("ai0"…) for AI.
+        // Inverse of ResolveTarget; mirrors NetworkStateBroadcaster.PublicIdFor.
+        private static string PublicIdOf(Player p)
+            => p == null ? "" : (!string.IsNullOrEmpty(p.NetworkId) ? p.NetworkId : (p.PublicId ?? ""));
 
         // Resolve a target by the PUBLIC id the board uses: NetworkId for humans,
         // PublicId ("ai0"…) for AI. Mirrors NetworkStateBroadcaster.PublicIdFor.
@@ -265,13 +339,74 @@ namespace Salem.Players
                 pl != null && (pl.NetworkId == publicId || pl.PublicId == publicId));
         }
 
-        // Day turns bundle the target inside player_action, so these aren't used in
-        // 4a. Provided so the interface is complete; wired for secret phases in 4b/4c.
+        /// <summary>
+        /// Ask this player to pick another PLAYER — the sub-target of a two-target card (Robbery's
+        /// recipient, Scapegoat's destination). The host builds the eligible list by running `isValid`
+        /// over every player, sends their PUBLIC ids, and RE-VERIFIES the answer against the same
+        /// predicate (never trust the client). Turn-bound like RequestDeckRearrange: resolves on the
+        /// submit, the host-owned deadline, or a TurnId change.
+        ///
+        /// Reports NULL when nothing valid was chosen (no eligible players, decline, or timeout) — the
+        /// caller must then NOT play the card and NOT consume it.
+        /// </summary>
         public IEnumerator RequestTarget(Player chooser, string prompt, System.Func<Player, bool> isValid, System.Action<Player> onChosen)
         {
-            Debug.LogWarning("[NetworkInput] RequestTarget not implemented for Phase 4a.");
-            onChosen?.Invoke(null);
-            yield break;
+            var nm = NetworkManager.Instance;
+            if (nm == null || string.IsNullOrEmpty(chooser.NetworkId) || isValid == null)
+            {
+                onChosen?.Invoke(null);
+                yield break;
+            }
+
+            var eligible = PlayerService.All.Where(pl => pl != null && isValid(pl)).ToList();
+            if (eligible.Count == 0)
+            {
+                Debug.LogWarning($"[NetworkInput] RequestTarget '{prompt}': no eligible targets.");
+                onChosen?.Invoke(null);
+                yield break;
+            }
+
+            Player chosen = null;
+            bool answered = false;
+
+            void Handler(TargetSubmitMsg msg)
+            {
+                if (answered) return;
+                if (msg == null || msg.playerId != chooser.NetworkId) return;
+                var pick = ResolveTarget(msg.targetPlayerId);
+                // Re-verify host-side: the client may only pick from the eligible set.
+                if (pick == null || !isValid(pick))
+                {
+                    Debug.LogWarning($"[NetworkInput] RequestTarget '{prompt}': rejected ineligible pick '{msg.targetPlayerId}'.");
+                    return; // ignore and keep waiting
+                }
+                chosen = pick;
+                answered = true;
+                GameTurnManager.Instance?.ResetIdleTimer();
+            }
+
+            nm.OnTargetSubmit += Handler;
+
+            nm.SendTargetRequest(new TargetRequestMsg
+            {
+                playerId = chooser.NetworkId,
+                prompt = prompt,
+                targets = eligible.Select(PublicIdOf).ToArray(),
+                seconds = Mathf.Max(1, Mathf.RoundToInt(SubTargetSeconds)),
+            });
+
+            var gtm = GameTurnManager.Instance;
+            int myTurnId = gtm != null ? gtm.TurnId : 0;
+            float deadline = Time.realtimeSinceStartup + SubTargetSeconds;
+
+            yield return new WaitUntil(() =>
+                answered ||
+                Time.realtimeSinceStartup >= deadline ||
+                (gtm != null && gtm.TurnId != myTurnId));
+
+            nm.OnTargetSubmit -= Handler;
+
+            onChosen?.Invoke(chosen); // null on timeout → caller does NOT play/consume the card
         }
 
         public IEnumerator RequestTryal(Player chooser, Player target, System.Action<int> onChosen)

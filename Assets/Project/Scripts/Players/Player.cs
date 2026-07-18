@@ -548,10 +548,33 @@ namespace Salem.Players
         }
 
         // Hand
+        /// <summary>
+        /// Empties the hand WITHOUT discarding — the cards simply cease to exist.
+        /// ⚠ Only correct when ownership has ALREADY moved elsewhere (e.g. TransferEntireHandTo
+        /// re-adds each card to the recipient first). To DESTROY a hand, use <see cref="BurnHand"/>:
+        /// a bare clear permanently removes cards from circulation, because the deck is re-formed
+        /// from the discard pile (DeckManager.ReshuffleDiscardPile) — anything never discarded can
+        /// never come back, shrinking the deck for the rest of the game.
+        /// </summary>
         public void ClearHand()
         {
             HandManager.ClearHand(); // already raises OnHandChanged
         }
+
+        /// <summary>
+        /// Destroy this player's hand the way the rules mean it: every card goes to the DISCARD PILE,
+        /// then the hand is emptied. Cards stay in circulation (the deck re-forms from the discard
+        /// pile), unlike a bare <see cref="ClearHand"/>. Used by Arson and by elimination when no
+        /// John Proctor drafter is alive to claim the hand.
+        /// </summary>
+        public void BurnHand()
+        {
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            foreach (var c in HandManager.GetCards())   // GetCards() returns a copy — safe to clear after
+                if (c != null) dm?.AddToDiscardPile(c);
+            HandManager.ClearHand();
+        }
+
         public void TransferEntireHandTo(Player recipient)
         {
             var cards = HandManager.GetCards();
@@ -749,11 +772,13 @@ namespace Salem.Players
             DetermineRole();
             OnTryalCardsChanged?.Invoke();
 
-            // If this player just became a witch (e.g., via Conspiracy swap),
-            // re-evaluate endgame — witches win if all remaining players are now witches
+            // If this player just became a witch (e.g., via Conspiracy swap), re-evaluate endgame —
+            // witches win if all remaining players are now witches. Pass `this` so that, if this
+            // turning is what ends the game (they were the LAST non-witch), they are recorded as the
+            // loser and excluded from the winning witch team (rulebook: "that player loses").
             if (!wasWitch && IsWitch)
             {
-                GameManager.Instance?.EvaluateEndGame();
+                GameManager.Instance?.EvaluateEndGame(this);
             }
         }
 
@@ -818,9 +843,7 @@ namespace Salem.Players
             else
             {
                 Debug.Log($"[Elimination] {PlayerNameText}'s cards discarded.");
-                foreach (var c in HandManager.GetCards())
-                    if (dm != null) dm.AddToDiscardPile(c);
-                HandManager.ClearHand();
+                BurnHand();   // discard-then-clear (same canonical path Arson uses)
             }
 
             // BLACK CAT + STATUS cards — always discarded, never transferred (not even to John).
