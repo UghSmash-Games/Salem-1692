@@ -34,6 +34,16 @@ const PROMPT_COPY: Record<string, PromptCopy> = {
     yes: 'Discard them',
     no: 'Keep them',
   },
+  // Will Grigs: "You may choose to use alibi cards as if they were witness cards."
+  // Yes = offensive Witness (+7 accusations on the target); No = the normal defensive Alibi
+  // (removes accusations from the target). Opposite effects — the wording must be unambiguous.
+  grigs_alibi_mode: {
+    title: 'Use this Alibi as a Witness?',
+    detail: () =>
+      'Witness adds 7 accusations to your target. A normal Alibi removes accusations from them instead.',
+    yes: 'Use as Witness (+7)',
+    no: 'Use as Alibi (remove)',
+  },
 };
 
 const FALLBACK: PromptCopy = {

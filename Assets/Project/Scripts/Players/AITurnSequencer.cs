@@ -103,10 +103,22 @@ namespace Salem.Players
                 yield break;
             }
 
+            // Will Grigs (AI): "may choose to use alibi cards as if they were witness cards." The AI
+            // has no prompt, so it takes the offensive conversion — the ability's headline use and the
+            // impactful play. Human Grigs is asked via NetworkInput; local play leaves this false
+            // (normal defensive Alibi). Flag is read by CardEffectManager._ops[Alibi].
+            if (chosen is ActionCardSO grigsAc && grigsAc.Op == ActionOp.Alibi
+                && driver.HasTownHall(Salem.Cards.TownhallName.WillGrigs))
+            {
+                driver.GrigsAlibiAsWitness = true;
+            }
+
             // Only consume the card if the effect actually ran (e.g. the 2-player Robbery/Scapegoat
             // disable rejects it) — a rejected play must never eat the card.
             if (CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary))
                 driver.HandManager?.RemoveCard(chosen);
+
+            driver.GrigsAlibiAsWitness = false; // reset the transient mode after the play
 
             if (forceEndTurnOnHuman && driver.IsHuman)
             {

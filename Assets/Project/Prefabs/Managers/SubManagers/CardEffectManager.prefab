@@ -44,3 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7e6373ac48c4c2d449ab9ab0833feafb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  GameManager: {fileID: 0}
+  GamePhaseManager: {fileID: 0}
+  DeckManager: {fileID: 0}
+  tableLayoutController: {fileID: 0}
+  witnessTemplate: {fileID: 11400000, guid: 0f59cb3747f40a849900f3fadeff3a6d, type: 2}

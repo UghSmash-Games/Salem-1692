@@ -85,6 +85,13 @@ namespace Salem.Players
         // within her turn. Only ever set for a NetworkInput seat; AI/local auto-clear instead.
         public bool PendingAbigailDiscardChoice;
 
+        // Will Grigs: the resolved MODE for the Alibi he is currently playing — true = use as a Witness
+        // (+7 persistent), false = normal defensive Alibi. Transient: the input layer sets it right
+        // before ExecuteCardEffect (networked = after a mode prompt; AI = true; local = left false), and
+        // CardEffectManager._ops[Alibi] reads it. Reset to false after the play. Only read when the
+        // source HasTownHall(WillGrigs).
+        [System.NonSerialized] public bool GrigsAlibiAsWitness;
+
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
         public Sprite townHallCardIcon { get; private set; }
@@ -503,32 +510,64 @@ namespace Salem.Players
          public void ApplyAccusation(int bonusAmount, Player accuser = null)
         {
             RecomputeStatusFromStatusCards();
-            // bonusAmount adds accusations beyond what's tracked by physical cards
-            // (e.g., Will Griggs offensive Alibi). Normal card ops pass 0.
+            // bonusAmount adds accusations NOT backed by a physical card. It is TRANSIENT — the next
+            // RecomputeStatusFromStatusCards recomputes purely from status cards and wipes it. Normal
+            // card ops pass 0. Will Grigs' Alibi-as-Witness no longer uses this (it places a real
+            // persistent Witness via CardEffectManager.PlaceWitnessProxy); the only remaining user is
+            // that method's degraded fallback when witnessTemplate isn't wired.
             if (bonusAmount > 0)
                 currentAccusationCount = (byte)Math.Min(255, currentAccusationCount + bonusAmount);
             Debug.Log($"Acc limit:{currentAccusationLimit} Acc count:{currentAccusationCount}");
             CheckAccusations(accuser);
         }
-        public void ApplyAlibi(int removeCount)
+        /// <summary>
+        /// Alibi: "DISCARD UP TO THREE ACCUSATIONS CURRENTLY IN FRONT OF ANOTHER PLAYER."
+        ///
+        /// `accusationBudget` is a POINT budget (3), NOT a card count — "accusations" is the game's
+        /// point unit (Evidence = 3, Witness = 7; see AccusationValueOf). So one Alibi discards either
+        /// up to three Accusation cards, OR a single Evidence card, and can NEVER remove a Witness
+        /// (worth 7, over budget). Against Cotton Mather, Evidence is worth 1, so three of them fit.
+        ///
+        /// Removes highest-value-first among the cards that fit the remaining budget, which is
+        /// point-optimal for a budget of 3 — so letting the player choose could not improve the
+        /// outcome, and no prompt is needed. (Contrast Curse, where WHICH blue card matters and the
+        /// player choice is still deferred.)
+        /// </summary>
+        public void ApplyAlibi(int accusationBudget)
         {
-            // Remove up to N Accusation cards from in front of this player
-            int removed = 0;
             var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-            for (int i = StatusCards.Count - 1; i >= 0 && removed < removeCount; i--)
+            int budget = accusationBudget;
+            bool removedAny = false;
+
+            while (budget > 0)
             {
-                if (StatusCards[i] is ActionCardSO ac && ac.Op == ActionOp.Accusation)
+                // Best card that still fits the remaining budget (highest value first).
+                int bestIndex = -1;
+                int bestValue = 0;
+                for (int i = 0; i < StatusCards.Count; i++)
                 {
-                    dm?.AddToDiscardPile(StatusCards[i]);
-                    StatusCards.RemoveAt(i);
-                    removed++;
+                    int value = AccusationValueOf(StatusCards[i]);
+                    if (value <= 0 || value > budget) continue;   // not an accusation, or over budget
+                    if (value > bestValue)
+                    {
+                        bestValue = value;
+                        bestIndex = i;
+                    }
                 }
+
+                if (bestIndex < 0) break;                          // nothing else fits
+
+                dm?.AddToDiscardPile(StatusCards[bestIndex]);
+                StatusCards.RemoveAt(bestIndex);
+                budget -= bestValue;
+                removedAny = true;
             }
-            if (removed > 0)
+
+            if (removedAny)
                 OnStatusCardsChanged?.Invoke();
             RecomputeStatusFromStatusCards();
             NotifyAccusationChanged();
-        }     
+        }
         public void ApplyStocks(int turns = 1) => RecomputeStatusFromStatusCards();
         
         /// <summary>
@@ -648,18 +687,32 @@ namespace Salem.Players
                 ClearMatch();
 
             // Derive accusation count from red cards in front of this player
-            byte accusationTotal = 0;
+            int accusationTotal = 0;
             foreach (var c in StatusCards)
+                accusationTotal += AccusationValueOf(c);
+            currentAccusationCount = (byte)Math.Min(255, accusationTotal);
+        }
+
+        /// <summary>
+        /// How many ACCUSATIONS a card in front of THIS player is worth. "Accusation" is the game's
+        /// point unit, not a card type — the cards say so themselves: Evidence "WORTH THREE
+        /// ACCUSATIONS", Witness "WORTH SEVEN ACCUSATIONS", Accusation is the base 1. Non-red cards
+        /// are worth 0.
+        ///
+        /// Single source of truth for BOTH the running total (RecomputeStatusFromStatusCards) and
+        /// Alibi's removal budget (ApplyAlibi), so the two can never disagree. Note it is
+        /// player-relative: Cotton Mather devalues Evidence to 1.
+        /// </summary>
+        public int AccusationValueOf(Card c)
+        {
+            if (c == null || c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) return 0;
+            switch (ac.Op)
             {
-                if (c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) continue;
-                switch (ac.Op)
-                {
-                    case ActionOp.Accusation: accusationTotal += 1; break;
-                    case ActionOp.Evidence: accusationTotal += (byte)(HasTownHall(TownhallName.CottonMather) ? 1 : 3); break;
-                    case ActionOp.Witness: accusationTotal += 7; break;
-                }
+                case ActionOp.Accusation: return 1;
+                case ActionOp.Evidence:   return HasTownHall(TownhallName.CottonMather) ? 1 : 3;
+                case ActionOp.Witness:    return 7;
+                default:                  return 0;
             }
-            currentAccusationCount = accusationTotal;
         }
 
         // Matchmaker link (two-way)

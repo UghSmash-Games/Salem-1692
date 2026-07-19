@@ -320,6 +320,13 @@ function registerDispatch(io) {
 /**
  * Forward a player event to the host socket in the same room.
  * Attaches the player's server-assigned playerId to the payload.
+ *
+ * SECURITY — field order is load-bearing: the client's `data` is spread FIRST so the trusted,
+ * server-assigned `playerId` always wins. The reverse order let a client overwrite its own
+ * playerId (e.g. `confirm_submit { confirmed: true, playerId: "<someone-else>" }`), which defeated
+ * the host-side sender checks that compare `msg.playerId` against the expected player — those
+ * checks ARE the authorization for confirm/target/card-pick/deck-rearrange submits. Never move
+ * `playerId` above the spread.
  */
 function forwardToHost(io, socket, event, data) {
   const room = getRoom(socket.roomCode);
@@ -329,8 +336,8 @@ function forwardToHost(io, socket, event, data) {
   if (!hostSocket) return;
 
   hostSocket.emit(event, {
-    playerId: socket.playerId,
     ...(data || {}),
+    playerId: socket.playerId, // trusted id LAST — client cannot override it
   });
 }
 

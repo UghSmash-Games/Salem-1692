@@ -42,6 +42,10 @@ namespace Salem.Players
         /// </summary>
         private const float SubTargetSeconds = 30f;
 
+        /// <summary>Window for Will Grigs' Alibi mode choice (Witness vs normal Alibi). Under the 60s
+        /// Day idle timer so it can't outlive the turn.</summary>
+        private const float GrigsModeSeconds = 20f;
+
         private readonly Player player;
         private PlayerActionMsg pending;
         private bool hasAction;
@@ -79,7 +83,9 @@ namespace Salem.Players
                 if (p.PendingAbigailDiscardChoice)
                 {
                     p.PendingAbigailDiscardChoice = false;   // consume once
-                    bool clearAccusations = true;            // timeout default = clear
+                    // Pre-initialized default: RequestConfirmation fires its callback ONLY on a real
+                    // answer, so if she times out / can't be reached this stays true → clears.
+                    bool clearAccusations = true;
                     var reds = p.StatusCards
                         .Where(c => c != null && c.Type == Card.CardColor.Red)
                         .Select(c => c.Name)
@@ -279,6 +285,25 @@ namespace Salem.Players
             else if (VerboseLogging)
                 Debug.Log($"[NetworkInput] target '{msg.targetPlayerId}' → {(target != null ? target.PlayerNameText : "none")}");
 
+            // Will Grigs "may choose to use alibi cards as if they were witness cards." Target-first:
+            // he already picked the target above; now ask the MODE (Witness offense vs normal Alibi).
+            // No answer (timeout/decline) → CANCEL the play and keep the card (Witness is an opt-in).
+            if (card is ActionCardSO alibiAc && alibiAc.Op == ActionOp.Alibi
+                && p.HasTownHall(Salem.Cards.TownhallName.WillGrigs) && target != null)
+            {
+                bool? mode = null; // stays null if unanswered (RequestConfirmation fires only on answer)
+                yield return RequestConfirmation(p, "grigs_alibi_mode",
+                    System.Array.Empty<string>(), 0, GrigsModeSeconds, v => mode = v);
+
+                if (mode == null)
+                {
+                    Debug.Log($"[NetworkInput] {p.NetworkId} Alibi mode not chosen — not played (card kept).");
+                    onPlayed?.Invoke(false);
+                    yield break;
+                }
+                p.GrigsAlibiAsWitness = mode.Value; // true = Witness (+7), false = normal Alibi
+            }
+
             // Two-target cards (Robbery/Scapegoat): the player CHOOSES the recipient. Eligible =
             // anyone alive who is neither the player nor the victim. The choice is passed to
             // ExecuteCardEffect by parameter — never written onto the shared card asset.
@@ -310,6 +335,7 @@ namespace Salem.Players
 
             // Consume ONLY if the effect ran (validation/2-player disable can still refuse).
             bool executed = CardEffectManager.Instance.ExecuteCardEffect(card, target, secondary);
+            p.GrigsAlibiAsWitness = false; // reset the transient Grigs mode after the play (read in _ops[Alibi])
             if (executed)
             {
                 p.HandManager?.RemoveCard(card);
@@ -570,23 +596,26 @@ namespace Salem.Players
             onIndex?.Invoke(chosen); // -1 on timeout → caller safety-picks
         }
 
-        // A yes/no confirmation for this player's own optional ("may") choice (Abigail's discard).
-        // Turn-bound like RequestDeckRearrange, so it resolves on the answer, the host-owned
-        // deadline, OR a TurnId change (a force-ended turn must not hang this). Single-stage: the
-        // answer IS the confirmation. Defaults to TRUE when there's no network / on timeout — the
-        // choice is near-always beneficial, so an AFK player shouldn't be punished.
+        // A yes/no confirmation for this player's own optional ("may") choice (Abigail's discard,
+        // Will Grigs' Alibi mode). Turn-bound like RequestDeckRearrange: resolves on the answer, the
+        // host-owned deadline, OR a TurnId change (a force-ended turn must not hang this).
+        //
+        // CONTRACT: `onConfirm` fires ONLY on a REAL answer — never on timeout / no-network. The CALLER
+        // owns the default by pre-initializing its own variable:
+        //   • Abigail pre-inits `clearAccusations = true`, so no-answer → stays true → clears (unchanged).
+        //   • Grigs uses a `bool?` that stays null on no-answer → cancels the play (keeps the card).
         public IEnumerator RequestConfirmation(Player p, string promptType, string[] contextItems,
                                                int contextCount, float timeoutSeconds, System.Action<bool> onConfirm)
         {
             var nm = NetworkManager.Instance;
             if (nm == null || string.IsNullOrEmpty(p.NetworkId))
             {
-                onConfirm?.Invoke(true); // nothing to await — take the beneficial default
+                // No channel to ask — do NOT fire; caller keeps its pre-initialized default.
                 yield break;
             }
 
             bool answered = false;
-            bool result = true;
+            bool result = false;
 
             void Handler(ConfirmSubmitMsg msg)
             {
@@ -619,7 +648,7 @@ namespace Salem.Players
 
             nm.OnConfirmSubmit -= Handler;
 
-            onConfirm?.Invoke(result); // unanswered → true (beneficial default)
+            if (answered) onConfirm?.Invoke(result); // fire ONLY on a real answer (see CONTRACT above)
         }
     }
 }

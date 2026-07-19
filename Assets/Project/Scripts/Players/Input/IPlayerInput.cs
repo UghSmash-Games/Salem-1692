@@ -82,8 +82,12 @@ namespace Salem.Players
         /// differ because Evidence=3 / Witness=7). NOT a masked secret phase — Town Hall identity is
         /// PUBLIC, so a holder-only prompt leaks nothing (same class as the Tituba/Parris action
         /// buttons); it is routed to one socket because it is that player's own decision UI.
-        /// Resolves on the player's answer, the host-owned timeout, or the turn ending; reports
-        /// TRUE on timeout (take the near-always-beneficial action rather than punish an AFK player).
+        /// Resolves on the player's answer, the host-owned timeout, or the turn ending.
+        ///
+        /// CONTRACT: `onConfirm` fires ONLY on a REAL answer — never on timeout / no channel. The
+        /// CALLER owns the default by pre-initializing its own variable. This lets each ability pick
+        /// its own no-answer behaviour: Abigail pre-inits `true` (take the beneficial discard), while
+        /// Will Grigs uses a `bool?` that stays null so an unanswered prompt CANCELS the play.
         /// </summary>
         IEnumerator RequestConfirmation(Player chooser, string promptType, string[] contextItems,
                                         int contextCount, float timeoutSeconds, Action<bool> onConfirm);

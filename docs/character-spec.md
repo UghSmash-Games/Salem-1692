@@ -404,11 +404,47 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   (`TransferEntireHandTo`) with a doc warning. Robbery was never affected — `TransferEntireHandTo`
   re-adds each card to the recipient before clearing.
 
-## 15. Will Grigs ✅
+## 15. Will Grigs ✅ (real mode choice + persistent Witness — 2 bugs fixed)
 
-- **Ability:** May use Alibi cards as Witness cards, worth **7** total accusations.
-- **Code status:** ✅ CardEffectManager:72.
-- **Build:** Verify the "worth 7" value when touched.
+- **Ability (card text):** *"You may choose to use alibi cards as if they were witness cards, worth
+  seven total accusations."*
+- **The two modes are OPPOSITE** — normal Alibi *removes* up to 3 accusations from the target
+  (defensive); the Witness conversion *adds* 7 (offensive). That is why "may choose" is a REAL choice.
+- **🐛 BUG 1 FIXED — "may choose" was auto-applied.** The old `_ops[Alibi]` did
+  `if (s.HasTownHall(WillGrigs)) t.ApplyAccusation(7, s)` unconditionally, so Grigs could NEVER use
+  Alibi's normal effect — and it could backfire (targeting an ally to clear them instead dumped 7 on
+  them). Now a **real mode prompt**: `NetworkInput.PlayCardRoutine` asks via the existing
+  **`confirm_request`** (`prompt = "grigs_alibi_mode"`; yes = Witness +7, no = normal Alibi).
+  - **Target-first** (not mode-first): the eligible target set is IDENTICAL for both modes — roles are
+    hidden, so the game cannot filter ally vs enemy — meaning mode-first would gain nothing
+    mechanically while costing an extra round-trip. He picks the target normally, then the mode.
+  - **No answer → CANCEL** (Alibi stays in hand, nothing applied). Witness is an opt-in per the card,
+    and neither mode is a safe auto-default on an already-picked target. This required a
+    `RequestConfirmation` contract change (below).
+  - **AI** takes the Witness conversion (headline use); **local** leaves the flag false → normal Alibi
+    (safe no-op, same posture as Tituba/Parris local).
+- **🐛 BUG 2 FIXED — "worth 7" was TRANSIENT.** `ApplyAccusation(7)` added 7 on top of the recomputed
+  status total, but the Alibi is green (discarded) and no card was placed — so the next
+  `RecomputeStatusFromStatusCards` **wiped the +7**. It only "worked" when it immediately crossed the
+  threshold; against **piety (14) / George Burroughs (8)** it evaporated instead of accumulating, and
+  it never participated in Scapegoat/Curse/Sarah. Now `CardEffectManager.PlaceWitnessProxy` places a
+  **persistent Witness**: `RecalculateAccusations` counts it as **7 across recomputes**, Scapegoat
+  transfers it, Curse correctly ignores it (red, not blue) — because it genuinely IS a Witness card.
+- **Mechanism (why a proxy):** only ONE `Alibi`/`Witness` SO asset exists, referenced many times in the
+  deck, so per-card instance state is impossible (the same shared-asset constraint behind the Robbery
+  `ac.target` bug). So the conversion **clones a runtime Witness** (`Instantiate(witnessTemplate)`,
+  a new `[SerializeField]` on CardEffectManager — **must be wired in the inspector**, else it logs an
+  error and falls back to the old transient +7 rather than silently no-op'ing).
+  - **Deck integrity:** the clone is flagged `Card.IsRuntimeInstance`, and `DeckManager.AddToDiscardPile`
+    **destroys** runtime instances instead of adding them to the discard pile — otherwise
+    `ReshuffleDiscardPile` (`Deck.AddRange(DiscardPile)`) would inflate the deck with phantom Witness
+    cards (the Arson-bug lesson). The played Alibi discards normally and returns to circulation.
+- **`RequestConfirmation` contract change (shared, behaviour-preserving):** it now fires `onConfirm`
+  **only on a real answer** — never on timeout/no-channel — so each caller owns its own no-answer
+  default by pre-initializing. Abigail pre-inits `true` (unchanged: no answer → clears); Grigs uses a
+  `bool?` that stays null → cancel.
+- **Scoping ✅:** the guard tests `s` (the player *playing* the Alibi), so it never fires when an Alibi
+  is played *against* Grigs or by someone else. **Martha ✅** via `GetEffectiveTownHallName`.
 
 ---
 
@@ -420,6 +456,24 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   Asylum (11), Matchmaker (12), Stocks (1), Scapegoat (10), Black Cat (5). This unblocked
   Piety/Danforth-piety, and made Asylum (night immunity) and Matchmaker (link + cascade)
   actually work — all three re-verified in playtest. (Code was correct; data was wrong.)
+- **Alibi is a POINT budget, not a card count ✅ (FIXED).** Card text: *"DISCARD UP TO THREE
+  ACCUSATIONS CURRENTLY IN FRONT OF ANOTHER PLAYER."* "Accusations" is the game's point UNIT — the red
+  cards say so themselves (Evidence *"WORTH THREE ACCUSATIONS"*, Witness *"WORTH SEVEN ACCUSATIONS"*,
+  Accusation = the base 1). So ONE Alibi discards **either up to three Accusation cards OR a single
+  Evidence card**, and can **never** remove a Witness (7 > 3).
+  - **🐛 Was:** `ApplyAlibi` removed only `Op == Accusation` cards, so an **Evidence** card (exactly 3
+    points) could never be removed — a pre-existing general bug, unrelated to Will Grigs. Found while
+    investigating why a Grigs Witness-proxy survived an Alibi (that part was CORRECT — 7 > 3, and the
+    proxy is deliberately indistinguishable from a real Witness).
+  - **Now:** `ApplyAlibi(accusationBudget = 3)` removes highest-value-first among cards that fit the
+    remaining budget — point-optimal for a budget of 3, so a player "which cards" prompt could not
+    improve the result and is deliberately NOT built. (Contrast **Curse**, where which blue card
+    matters — that choice stays deferred.)
+  - **Cotton Mather interaction (confirmed intended):** he devalues Evidence to 1, so an Alibi played
+    on him can strip **three** Evidence cards (3 × 1 = 3). Falls out of the shared value function.
+  - **Single source of truth:** `Player.AccusationValueOf(Card)` — used by BOTH
+    `RecomputeStatusFromStatusCards` (the running total) and `ApplyAlibi` (the removal budget), so the
+    value table can't drift. It is player-relative (the Cotton Mather rule lives inside it).
 - **Piety:** doubles the base threshold (Player.cs:541 ✅; now attaches after the `Op` fix).
   **If a player loses piety while at ≥7 accusations, they immediately lose a tryal; the player
   who removed piety chooses which.** ⚠️ Not found in the accusation code — **verify / build**

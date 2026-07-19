@@ -118,9 +118,11 @@ namespace Salem.Players
             yield break;
         }
 
-        // Local play has no confirm UI — auto-accept, which preserves the pre-prompt behavior (the
-        // choice is near-always beneficial). The opt-out is a phone affordance; building a local-host
-        // yes/no dialog is out of scope, same rationale as RequestDeckRearrange/RequestCardPick.
+        // Local play has no confirm UI — auto-accept. This IS a real answer (not a timeout), so unlike
+        // NetworkInput it does fire the callback. Preserves the pre-prompt behavior for Abigail (the
+        // only local user — Will Grigs' local Alibi never reaches here; it defaults to a normal Alibi
+        // via the unset GrigsAlibiAsWitness flag). Building a local yes/no dialog is out of scope,
+        // same rationale as RequestDeckRearrange/RequestCardPick.
         public IEnumerator RequestConfirmation(Player chooser, string promptType, string[] contextItems,
                                                int contextCount, float timeoutSeconds, Action<bool> onConfirm)
         {

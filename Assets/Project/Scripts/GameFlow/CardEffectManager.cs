@@ -35,6 +35,9 @@ namespace Salem.GameFlow
         [SerializeField] private GamePhaseManager GamePhaseManager;
         [SerializeField] private DeckManager DeckManager;
         [SerializeField] private TableLayoutController tableLayoutController;
+        [SerializeField, Tooltip("Canonical Witness card SO (e.g. 'Witness 1'). Cloned at runtime when " +
+            "Will Grigs plays an Alibi as a Witness. MUST be wired or the conversion is a no-op.")]
+        private ActionCardSO witnessTemplate;
 
         private Player CurrentPlayer;
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
@@ -68,13 +71,16 @@ namespace Salem.GameFlow
                     { ActionOp.Evidence,   (s,t,_,_,_) => t.ApplyAccusation(0, s) },
                     { ActionOp.Witness,    (s,t,_,_,_) => t.ApplyAccusation(0, s) },
                     { ActionOp.Alibi,      (s,t,_,_,_) => {
-                        // Will Griggs: Alibi can be used offensively as a Witness (+7 accusations on target)
-                        if (t != null && s.HasTownHall(TownhallName.WillGrigs))
-                            t.ApplyAccusation(7, s);
-                        else if (t != null)
-                            t.ApplyAlibi(3);
+                        if (t == null) { Debug.LogWarning("[Alibi] No target provided."); return; }
+                        // Will Grigs "may choose to use alibi cards as if they were witness cards."
+                        // The MODE is resolved by the input layer (a networked prompt) into the transient
+                        // s.GrigsAlibiAsWitness flag BEFORE this runs. Witness mode places a PERSISTENT
+                        // Witness proxy (worth 7, survives recomputes); otherwise the normal defensive
+                        // Alibi removes up to 3 accusations from the target.
+                        if (s.HasTownHall(TownhallName.WillGrigs) && s.GrigsAlibiAsWitness)
+                            PlaceWitnessProxy(t, s);
                         else
-                            Debug.LogWarning("[Alibi] No target provided.");
+                            t.ApplyAlibi(3);
                     }},
                     { ActionOp.Stocks,     (s,t,_,_,c) => {
                         // Stocks stays in front of the target until their turn is skipped.
@@ -295,6 +301,35 @@ namespace Salem.GameFlow
 
             GameTurnManager.Instance.NotifyCardPlayed(CurrentPlayer);
             return true;
+        }
+
+        /// <summary>
+        /// Will Grigs' "use this Alibi as a Witness": place a PERSISTENT Witness on the target so it
+        /// behaves exactly like a real Witness card — worth 7 in RecalculateAccusations, transferable by
+        /// Scapegoat, ignored by Curse (red, not blue), etc. A one-shot ApplyAccusation(7) bonus would
+        /// evaporate on the next recompute; a real card does not.
+        ///
+        /// Only ONE Witness SO asset exists (shared across the deck), so we clone a RUNTIME copy
+        /// (IsRuntimeInstance) that DeckManager.AddToDiscardPile destroys instead of recycling. The
+        /// played Alibi is discarded normally by the generic green-card removal and returns to the deck.
+        /// </summary>
+        private void PlaceWitnessProxy(Player target, Player accuser)
+        {
+            if (witnessTemplate == null)
+            {
+                Debug.LogError("[Grigs] witnessTemplate is not wired on CardEffectManager — cannot place " +
+                    "the Witness proxy. Falling back to a transient +7 (will not persist).");
+                target.ApplyAccusation(7, accuser); // degraded fallback so the play isn't a silent no-op
+                return;
+            }
+
+            var proxy = Instantiate(witnessTemplate); // fresh runtime instance, NOT the shared asset
+            proxy.IsRuntimeInstance = true;
+            target.AddStatusCard(proxy);
+            // Recompute from status cards (now includes the +7 Witness) and run the threshold check —
+            // the same path a real Witness play uses (ExecuteActionOp Witness → ApplyAccusation(0)).
+            target.ApplyAccusation(0, accuser);
+            Debug.Log($"[TownHall] Will Grigs ({accuser.PlayerNameText}) played an Alibi as a Witness (+7 persistent) on {target.PlayerNameText}.");
         }
 
         // `secondary` comes from the caller (the playing player's choice), never from action.target —

@@ -300,10 +300,14 @@ Batch these into one sweep once Phase 5 verification is done:
   fix (recipient is a parameter now). Only dead code (`_Archive`, `PerformTurnAction`) references it.
 - **`TargetingPolicy.ValidateSecondary`** — add an `IsEliminated` check for defense-in-depth (currently
   guaranteed only by the caller's eligibility list + `RequestTarget` re-verification).
-- **`forwardToHost` field ordering (server/src/dispatch.js)** — `...(data)` spreads AFTER
-  `playerId: socket.playerId`, so a client can overwrite its own `playerId`. Not a data leak (host
-  re-validates the sender), but a spoofing surface across the whole player→host forward family; put the
-  trusted `playerId` last.
+- ~~**`forwardToHost` field ordering**~~ — **FIXED (promoted out of this list).** See the security note
+  in `server/src/dispatch.js`. The earlier characterization here ("not a data leak, host re-validates
+  the sender") was **wrong**: for the `confirm_submit` / `target_submit` / `card_pick_submit` /
+  `deck_rearrange_submit` family, that host-side `msg.playerId == expected` comparison **is** the only
+  authorization, so an overwritable `playerId` defeated it outright — any player could answer another
+  player's prompt (force Will Grigs' Witness mode, trigger Abigail's discard). Confidentiality was
+  never affected; authorization was. The trusted `playerId` is now spread LAST and a regression test
+  locks it.
 
 ## Testing
 

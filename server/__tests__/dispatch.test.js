@@ -255,6 +255,34 @@ describe('player → host forwarding', () => {
     expect(received.index).toBe(2);
   });
 
+  test('a client CANNOT spoof playerId on a forwarded submit (server id wins)', async () => {
+    // Regression: forwardToHost used to spread client data AFTER playerId, letting a client
+    // overwrite it. The host's sender checks compare msg.playerId to the expected player, so a
+    // spoof would let ANY player answer another player's confirm/target prompt.
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player0 = trackClient(createClient());
+    await waitForConnect(player0);
+    player0.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player0, 'joined'); // p0
+
+    const player1 = trackClient(createClient());
+    await waitForConnect(player1);
+    player1.emit('join_room', { code, displayName: 'Bob' });
+    await waitFor(player1, 'joined'); // p1
+
+    // p1 tries to answer AS p0.
+    player1.emit('confirm_submit', { confirmed: true, playerId: 'p0' });
+    const received = await waitFor(host, 'confirm_submit');
+
+    // The server's own id for the sender must win — not the spoofed one.
+    expect(received.playerId).toBe('p1');
+    expect(received.confirmed).toBe(true);
+  });
+
   test('target_submit is forwarded to host with playerId', async () => {
     const host = trackClient(createClient());
     await waitForConnect(host);

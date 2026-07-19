@@ -41,6 +41,13 @@ namespace Salem.Cards
         public Player target;
         public string LogMessage = "{source} played {card} on {target}."; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
 
+        // True for cards created at runtime via ScriptableObject.Instantiate (e.g. Will Grigs' Alibi
+        // played "as a Witness" places a runtime Witness proxy). These are NOT real deck cards, so they
+        // must be DESTROYED rather than returned to the discard pile — otherwise ReshuffleDiscardPile
+        // (Deck.AddRange(DiscardPile)) would inflate the deck with phantom cards. NonSerialized: only
+        // ever set on runtime copies, never persisted on the shared asset.
+        [System.NonSerialized] public bool IsRuntimeInstance;
+
         // The game's "black cards" (the special draw-and-resolve cards) are Night and Conspiracy.
         // NOTE: they are authored as CardColor.White in the SOs (Black Cat is Blue), so identify them
         // by NAME — the same way CardEffectManager and GameSetup do. Used by Samuel Parris's ability

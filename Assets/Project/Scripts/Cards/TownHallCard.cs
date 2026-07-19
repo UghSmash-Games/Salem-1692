@@ -58,7 +58,7 @@ namespace Salem.Cards
             {
                 TownhallName.SarahGood => "Robbery and Arson cards have no effect on you and are discarded.",
                 TownhallName.JohnProctor => "When a player is eliminated, take all blue cards in front of them and all cards in their hand.",
-                TownhallName.WillGrigs => "You may use Alibi cards as Witness cards, worth 7 total accusations.",
+                TownhallName.WillGrigs => "You may choose to use alibi cards as if they were witness cards, worth seven total accusations.",
                 TownhallName.SamuelParris => "Twice per game, draw up to 2 cards from the discard pile instead of the deck. No Black cards.",
                 TownhallName.GilesCorey => "If you draw 2 red cards on your turn, show the other players and draw a 3rd card.",
                 TownhallName.RebeccaNurse => "Each time a Tryal is revealed on another player (from accusations), draw 1 card.",

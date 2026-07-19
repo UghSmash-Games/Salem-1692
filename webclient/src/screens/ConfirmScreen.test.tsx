@@ -63,6 +63,22 @@ describe('ConfirmScreen', () => {
     expect(useGameStore.getState().confirm).toBeNull();
   });
 
+  it('renders Will Grigs mode copy with both opposite options labelled', () => {
+    // Grigs has no accusation context — the two options are opposite effects, so the labels
+    // must make clear which adds vs removes.
+    renderWith('grigs_alibi_mode', [], 0);
+
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Use this Alibi as a Witness?');
+    expect(screen.getByTestId('confirm-yes')).toHaveTextContent('Use as Witness (+7)');
+    expect(screen.getByTestId('confirm-no')).toHaveTextContent('Use as Alibi (remove)');
+  });
+
+  it('Grigs Yes/No map to the right booleans (Yes = Witness conversion)', () => {
+    renderWith('grigs_alibi_mode', [], 0);
+    fireEvent.click(screen.getByTestId('confirm-yes'));
+    expect(sendSpy).toHaveBeenCalledWith({ confirmed: true });
+  });
+
   it('falls back to generic copy for an unknown prompt code (reusable screen)', () => {
     renderWith('some_future_choice', [], 0);
     expect(screen.getByTestId('confirm-title')).toHaveTextContent('Use your ability?');

@@ -175,6 +175,17 @@ namespace Salem.Deck
                 return;
             }
 
+            // Runtime proxies (e.g. Will Grigs' Alibi-as-Witness) are not real deck cards — destroy
+            // them instead of adding to the discard pile, so ReshuffleDiscardPile can't recycle them
+            // into the deck and inflate the card pool.
+            if (card.IsRuntimeInstance)
+            {
+                // Fully qualified: this file has BOTH `using System;` and `using UnityEngine;`,
+                // so a bare `Object` is ambiguous (CS0104).
+                UnityEngine.Object.Destroy(card);
+                return;
+            }
+
             DiscardPile.Add(card);
         }
 
