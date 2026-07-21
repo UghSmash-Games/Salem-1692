@@ -31,6 +31,23 @@ describe('CardPickScreen', () => {
     expect(screen.getByTestId('card-pick-progress')).toHaveTextContent('Pick 2 of up to 3');
   });
 
+  it('curse_discard reason shows discard copy, not "take"', () => {
+    useGameStore.getState().reset();
+    useGameStore.getState().applyCardPickRequest({
+      cards: ['Asylum', 'Piety'],
+      pickNumber: 1,
+      totalPicks: 1,
+      seconds: 30,
+      allowDone: false,
+      reason: 'curse_discard',
+    });
+    render(<CardPickScreen />);
+    expect(screen.getByRole('heading')).toHaveTextContent('Curse a card');
+    expect(screen.getByTestId('card-pick-progress')).toHaveTextContent('Choose a blue card to discard');
+    // the pool is still tappable by index
+    expect(rowLabels()).toEqual(['Asylum', 'Piety']);
+  });
+
   it('tapping a card submits its index and clears the screen', () => {
     renderWith(['Accusation', 'Alibi', 'Asylum']);
 

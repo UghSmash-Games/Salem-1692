@@ -46,6 +46,10 @@ namespace Salem.Players
         /// Day idle timer so it can't outlive the turn.</summary>
         private const float GrigsModeSeconds = 20f;
 
+        /// <summary>Window for the Curse card-choice (which blue card to strip). Under the 60s Day
+        /// idle timer; no answer → the op's deterministic default resolves the curse anyway.</summary>
+        private const float CurseSeconds = 30f;
+
         private readonly Player player;
         private PlayerActionMsg pending;
         private bool hasAction;
@@ -333,9 +337,27 @@ namespace Salem.Players
                 }
             }
 
+            // Curse: the playing player CHOOSES which blue card to strip from the victim (the Black Cat
+            // is one option, not forced first). Sub-prompt via the existing card_pick event; the chosen
+            // card is threaded to _ops[Curse] on CurseChosenBlueCard. Only prompt when there is a real
+            // choice (>1 blue); 0 or 1 → the op handles it (no prompt). No answer / timeout → the op's
+            // deterministic default is used, so a curse on a valid target still resolves.
+            if (card is ActionCardSO curseAc && curseAc.Op == ActionOp.Curse && target != null)
+            {
+                var pool = target.StatusCards.Where(sc => sc.Type == Card.CardColor.Blue).ToList();
+                if (pool.Count > 1)
+                {
+                    int chosenIdx = -1;
+                    yield return RequestCardPick(p, pool, 1, 1, CurseSeconds, false, "curse_discard", i => chosenIdx = i);
+                    if (chosenIdx >= 0 && chosenIdx < pool.Count)
+                        p.CurseChosenBlueCard = pool[chosenIdx];
+                }
+            }
+
             // Consume ONLY if the effect ran (validation/2-player disable can still refuse).
             bool executed = CardEffectManager.Instance.ExecuteCardEffect(card, target, secondary);
             p.GrigsAlibiAsWitness = false; // reset the transient Grigs mode after the play (read in _ops[Alibi])
+            p.CurseChosenBlueCard = null;  // reset the transient Curse choice after the play (read in _ops[Curse])
             if (executed)
             {
                 p.HandManager?.RemoveCard(card);
@@ -550,7 +572,8 @@ namespace Salem.Players
         }
 
         public IEnumerator RequestCardPick(Player p, IReadOnlyList<Card> pool, int pickNumber,
-                                           int totalPicks, float timeoutSeconds, bool allowDone, System.Action<int> onIndex)
+                                           int totalPicks, float timeoutSeconds, bool allowDone, string reason,
+                                           System.Action<int> onIndex)
         {
             var nm = NetworkManager.Instance;
             if (nm == null || string.IsNullOrEmpty(p.NetworkId) || pool == null || pool.Count == 0)
@@ -583,6 +606,7 @@ namespace Salem.Players
                 totalPicks = totalPicks,
                 seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
                 allowDone = allowDone,
+                reason = reason,
             });
 
             // Resolve on the player's submit or the host-owned deadline. Unlike RequestDeckRearrange,

@@ -70,9 +70,12 @@ namespace Salem.Players
         /// phase — the draft's existence is public; only the card identities are private, so the pool
         /// is routed to this one socket (like RequestDeckRearrange). Resolves on the player's submit or
         /// the timeout; reports the chosen index, or -1 if nothing was submitted (caller safety-picks).
+        /// `reason` is a machine code the phone maps to copy ("proctor_draft"/"parris_discard" = take;
+        /// "curse_discard" = discard an opponent's blue card).
         /// </summary>
         IEnumerator RequestCardPick(Player chooser, IReadOnlyList<Card> pool, int pickNumber,
-                                    int totalPicks, float timeoutSeconds, bool allowDone, Action<int> onIndex);
+                                    int totalPicks, float timeoutSeconds, bool allowDone, string reason,
+                                    Action<int> onIndex);
 
         /// <summary>
         /// A yes/no confirmation for this player's OWN optional ("may") ability choice — currently

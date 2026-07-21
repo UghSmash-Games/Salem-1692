@@ -419,7 +419,7 @@ namespace Salem.GameFlow
                 int chosen = -1;
                 yield return requestingPlayer.Input.RequestCardPick(
                     requestingPlayer, pool, taken + 1, maxPicks, pickTimeout,
-                    allowDone: true, idx => chosen = idx);
+                    allowDone: true, reason: "parris_discard", idx => chosen = idx);
 
                 // -1 = explicit Done/decline OR timeout → stop ("up to 2" semantics: 0, 1, or 2).
                 if (chosen < 0 || chosen >= pool.Count) break;

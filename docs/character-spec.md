@@ -468,16 +468,28 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   - **Now:** `ApplyAlibi(accusationBudget = 3)` removes highest-value-first among cards that fit the
     remaining budget — point-optimal for a budget of 3, so a player "which cards" prompt could not
     improve the result and is deliberately NOT built. (Contrast **Curse**, where which blue card
-    matters — that choice stays deferred.)
+    matters — that choice is now BUILT via `card_pick`, Phase 5 close-out; see the Curse note below.)
   - **Cotton Mather interaction (confirmed intended):** he devalues Evidence to 1, so an Alibi played
     on him can strip **three** Evidence cards (3 × 1 = 3). Falls out of the shared value function.
   - **Single source of truth:** `Player.AccusationValueOf(Card)` — used by BOTH
     `RecomputeStatusFromStatusCards` (the running total) and `ApplyAlibi` (the removal budget), so the
     value table can't drift. It is player-relative (the Cotton Mather rule lives inside it).
 - **Piety:** doubles the base threshold (Player.cs:541 ✅; now attaches after the `Op` fix).
-  **If a player loses piety while at ≥7 accusations, they immediately lose a tryal; the player
-  who removed piety chooses which.** ⚠️ Not found in the accusation code — **verify / build**
-  alongside Danforth/Burroughs.
+  **If a player loses piety while at ≥ threshold, they immediately lose a tryal; the player
+  who removed piety chooses which.** ✅ **BUILT (Phase 5 close-out).** `Player.TriggerPietyLossReveal(remover)`
+  is a DEDICATED trigger (NOT a re-entry into `CheckAccusations`, so it skips Danforth's −1 and Abigail's
+  discard — neither belongs to a piety-loss reveal). Called from the `_ops[Curse]` handler **only when the
+  removed blue card was Piety**, after `RecomputeStatusFromStatusCards` has dropped the limit back to the
+  un-doubled base (7, or 8 for George Burroughs). Guard: `count >= currentAccusationLimit` and an unrevealed
+  tryal exists. Reuses the normal reveal path — discards reds (accusations don't carry), then
+  `OnAccusationRevealNeeded.Invoke(victim, remover)` (local human picks / **random fallback for AI &
+  networked**) → `RevealTryalCard(fromAccusation:true)` (Rebecca Nurse + multiple-witch-card + win-check
+  reused). Fires uniformly for AI/local/networked Curse. Curse is the only real trigger — Scapegoat's
+  `TransferAllStatusesTo` moves the reds away too, leaving the loser at 0.
+  - ⚠️ The **networked remover's which-tryal CHOICE** is still random (falls to the same
+    `HandleAccusationRevealChoice` gap as the normal accusation reveal — a synchronous event that can't
+    `yield`). Deliberately NOT forked here; it's the single shared follow-up to solve "networked player
+    picks which tryal" once, generally.
 - **Matchmaker:** cannot receive a 2nd (✅ #7 — `ActionOp.Matchmaker` handler refuses the play if the
   target already `HasStatus("Matchmaker")`; general, any player); if one linked player is night-killed
   both die even if the other confessed or was saved (✅ `PlayerService.Eliminate`, Phase 5: cascade
@@ -492,15 +504,21 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   player"* (rulebook p12: blue cards stay "until moved or discarded by another card such as
   scapegoat or curse"). Targets any blue card — Asylum / Piety / Matchmaker — **and the Black
   Cat** (rulebook p12: after dawn the black cat "can be discarded by a curse card"). ✅
-  `CardEffectManager` `ActionOp.Curse` handler (discards a blue status card; black cat
-  special-cased). Stocks is a **green** card, so it is correctly NOT curse-targetable.
-  **It does NOT modify accusation thresholds** — the earlier "curse −1 threshold" was a phantom
-  and has been removed from the code + spec.
-  - ⚠️ **Deferred fidelity item (own task):** the handler auto-discards the *first* blue card it
-    finds (and forces the black cat first if held), rather than letting the curse-player CHOOSE
-    which blue card. The rulebook implies the player picks. Needs **networked player-choice
-    input** (the `IPlayerInput` pattern) — its own task, likely pairing with the deferred
-    accusation-reveal tryal-choice. Do NOT build now.
+  `CardEffectManager` `ActionOp.Curse` handler. Stocks is a **green** card, so it is correctly NOT
+  curse-targetable. **It does NOT modify accusation thresholds** — the earlier "curse −1 threshold" was a
+  phantom and has been removed from the code + spec.
+  - ✅ **Player-choice BUILT (Phase 5 close-out).** The handler no longer auto-picks the first blue /
+    force-first the Black Cat. A **networked** curse-player CHOOSES which blue card via the existing
+    `card_pick_request`/`card_pick_submit` event (reused, NOT `target_request` — that is player-selection;
+    `card_pick` is index-into-a-card-list). The pool = the victim's Blue status cards **+ the Black Cat as
+    a normal option** (it is a Blue card). Threaded to `_ops[Curse]` on the transient
+    `Player.CurseChosenBlueCard` (mirrors `GrigsAlibiAsWitness`); set in `NetworkInput.PlayCardRoutine`
+    (prompt only when >1 blue), reset after the play. The `card_pick_request` now carries a `reason`
+    machine code (`"curse_discard"` vs `"proctor_draft"`/`"parris_discard"`) so the phone shows "Curse a
+    card / choose a blue card to discard" instead of "Take a card". **AI/local** use a deterministic
+    default (`CardEffectManager.PickDefaultCurseTarget`): Piety when stripping it forces the immediate
+    reveal (max tempo — see `Player.PietyRemovalWouldReveal`), else Asylum, else Matchmaker, else first
+    blue. Black Cat still routes through `RemoveBlackCat` for its bookkeeping when chosen.
 
 ## Build priority (per `/add-character` skill)
 

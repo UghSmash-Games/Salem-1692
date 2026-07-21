@@ -94,14 +94,18 @@ The host (Unity) emits these events. The server routes them to the correct recip
 
 ### `card_pick_request`
 - **Direction:** host → server → **one specific player**
-- **Recipients:** single player socket matching `playerId` (a John Proctor / Martha drafter)
+- **Recipients:** single player socket matching `playerId` (a John Proctor / Martha drafter, a Samuel
+  Parris discard-pick, or a Curse card-choice)
 - **NEVER sent to:** host, mirrors, other players
-- **Payload:** `{ playerId: string, cards: string[], pickNumber: number, totalPicks: number, seconds: number }`
-- **Note:** `cards` is an eliminated player's hand (card labels) — private information (the draft pool),
-  routed to exactly one socket, never broadcast. `pickNumber`/`totalPicks` are display hints
-  ("pick N of up to 3"); `seconds` is the pick window the phone renders as a countdown. This is NOT a
-  masked secret phase — the draft's existence is public; only the card identities are private (same
-  class as `deck_rearrange_request`). The public `game_state_update` never exposes hand contents.
+- **Payload:** `{ playerId: string, cards: string[], pickNumber: number, totalPicks: number, seconds: number, allowDone?: boolean, reason?: string }`
+- **Note:** `cards` is a private card pool (an eliminated player's hand, the filtered discard pile, or a
+  victim's blue cards) — routed to exactly one socket, never broadcast. `pickNumber`/`totalPicks` are
+  display hints ("pick N of up to 3"); `seconds` is the pick window the phone renders as a countdown.
+  `allowDone` (Parris "up to N") shows a Done button that submits index -1. `reason` is a machine code the
+  phone maps to copy — `"proctor_draft"`/`"parris_discard"` (taking a card) vs `"curse_discard"`
+  (discarding an opponent's blue card, incl. the Black Cat as an option). This is NOT a masked secret
+  phase — the pick's existence is public; only the card identities are private (same class as
+  `deck_rearrange_request`). The public `game_state_update` never exposes hand/blue-card contents.
 
 ### `target_request`
 - **Direction:** host → server → **one specific player**

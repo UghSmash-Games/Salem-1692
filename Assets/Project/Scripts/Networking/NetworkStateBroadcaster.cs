@@ -38,6 +38,10 @@ namespace Salem.Networking
         {
             PlayerService.OnPlayerEliminated += HandleEliminated;
             CardEffectManager.OnCardPlayed += HandleCardPlayed;
+            // Reveal → immediate re-broadcast so a role change from a tryal reveal (e.g. a revealed
+            // constable losing the "Constable" tag) propagates AT the reveal, not on the next incidental
+            // broadcast. Both are static events, subscribed/unsubscribed with the pair above.
+            Player.TryalCardRevealed += HandleTryalRevealed;
         }
 
         private void Start()
@@ -57,6 +61,7 @@ namespace Salem.Networking
         {
             PlayerService.OnPlayerEliminated -= HandleEliminated;
             CardEffectManager.OnCardPlayed -= HandleCardPlayed;
+            Player.TryalCardRevealed -= HandleTryalRevealed;
         }
 
         private void OnDestroy()
@@ -78,6 +83,7 @@ namespace Salem.Networking
         private void HandlePhaseChanged(GamePhase _) => BroadcastAll();
         private void HandleEliminated(Player _, EliminationCause __) => BroadcastAll();
         private void HandleCardPlayed(string _) => BroadcastAll();
+        private void HandleTryalRevealed(Player _, TryalCard __) => BroadcastAll();
 
         // ─── Broadcast ────────────────────────────────────────────
 

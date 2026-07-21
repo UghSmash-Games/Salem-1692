@@ -105,6 +105,9 @@ export interface CardPickSlice {
   seconds: number;
   /** When true, a "Done" button lets the picker stop early (submits index -1). */
   allowDone: boolean;
+  /** Machine code for WHAT this pick is ("proctor_draft"/"parris_discard" = take; "curse_discard" =
+   *  discard an opponent's blue card). Drives the screen copy; absent → generic take. */
+  reason?: string;
 }
 
 export interface ConfirmSlice {
@@ -351,6 +354,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         totalPicks: data.totalPicks ?? 3,
         seconds: data.seconds ?? 45,
         allowDone: data.allowDone ?? false,
+        reason: data.reason,
       },
       prompt: null,
       actionRequest: null,

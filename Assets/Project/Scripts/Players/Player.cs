@@ -92,13 +92,26 @@ namespace Salem.Players
         // source HasTownHall(WillGrigs).
         [System.NonSerialized] public bool GrigsAlibiAsWitness;
 
+        // Curse: the resolved BLUE card the CURRENT Curse play should discard from the victim.
+        // Transient: the input layer sets it right before ExecuteCardEffect (networked = after a
+        // card_pick prompt; AI/local = left null → the op picks a deterministic default), and
+        // CardEffectManager._ops[Curse] reads it. Reset to null after the play.
+        [System.NonSerialized] public Card CurseChosenBlueCard;
+
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
         public Sprite townHallCardIcon { get; private set; }
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public bool IsWitch { get; private set; }  // Now determined dynamically
-        public bool IsConstable => TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable);
+        // Reveal-aware: once the (single) constable tryal is REVEALED — by any means (accusation, night
+        // kill, confession, the piety-loss reveal) — the constable role is no longer used in the game
+        // (rulebook p12). Because there is exactly one constable card at every player count (GameSetup
+        // TryalDistribution), "I hold an UNREVEALED constable tryal" is equivalent to the global rule.
+        // This one property is the single source of truth for BOTH the night gavel-prompt eligibility
+        // (GamePhaseManager constable_save round) AND the phone "Constable" tag (NetworkStateBroadcaster).
+        public bool IsConstable => TryalCards.Any(card =>
+            !card.IsRevealed && card.TryalCardType == TryalCardType.Constable);
         public bool IsEliminated;
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
@@ -997,6 +1010,55 @@ namespace Salem.Players
         private void NotifyAccusationChanged()
         {
             AccusationCountChanged?.Invoke(this, currentAccusationCount, currentAccusationLimit);
+        }
+
+        /// <summary>
+        /// True if stripping this player's Piety right now would immediately force a tryal reveal:
+        /// they hold Piety, are at/over their UN-doubled base threshold (7, or 8 for George Burroughs),
+        /// and still have a tryal to lose. Used by the Curse default/AI heuristic to prefer removing
+        /// Piety for tempo, and it is the precondition <see cref="TriggerPietyLossReveal"/> re-checks.
+        /// </summary>
+        public bool PietyRemovalWouldReveal()
+        {
+            return HasStatus("Piety")
+                && currentAccusationCount >= baseAccusationLimit
+                && GetRandomUnrevealedTryalIndex(Rng) != null;
+        }
+
+        /// <summary>
+        /// Rulebook p13: if a player loses Piety while at/above their reveal threshold, they IMMEDIATELY
+        /// reveal a tryal and the player who REMOVED the Piety (<paramref name="remover"/>) chooses which.
+        /// This is a DEDICATED trigger, NOT a re-entry into <see cref="CheckAccusations"/> — a piety-loss
+        /// reveal is not an accusation, so it must not pull in Danforth's −1 or Abigail's discard branch.
+        /// Call AFTER Piety has been removed and <see cref="RecomputeStatusFromStatusCards"/> has run, so
+        /// <c>currentAccusationLimit</c> is already back to the un-doubled base. The reveal routes through
+        /// the SAME path as the normal accusation reveal (the <see cref="OnAccusationRevealNeeded"/>
+        /// chooser → local human picks / random fallback; <see cref="RevealTryalCard"/> with
+        /// <c>fromAccusation:true</c>), so Rebecca Nurse, the multiple-witch-card rule, and win-checks are
+        /// all reused. Networked removers currently fall to the random fallback — the same shared gap as
+        /// the normal accusation reveal (see HandleAccusationRevealChoice).
+        /// </summary>
+        public void TriggerPietyLossReveal(Player remover)
+        {
+            if (currentAccusationCount < currentAccusationLimit) return;
+            if (GetRandomUnrevealedTryalIndex(Rng) == null) return; // no unrevealed tryal to lose
+
+            AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
+
+            // Accusations do not carry over after a tryal is revealed (general rule) — mirror
+            // CheckAccusations: discard the reds first, then reveal.
+            DiscardRedStatusCards();
+            NotifyAccusationChanged();
+
+            if (OnAccusationRevealNeeded != null && remover != null)
+            {
+                OnAccusationRevealNeeded.Invoke(this, remover);
+            }
+            else
+            {
+                int? idx = GetRandomUnrevealedTryalIndex(Rng);
+                if (idx.HasValue) RevealTryalCard(idx.Value, fromAccusation: true);
+            }
         }
         #endregion
     }

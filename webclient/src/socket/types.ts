@@ -121,6 +121,10 @@ export interface CardPickRequestPayload {
   /** When true, the picker may decline / stop early (an "up to N" pick, e.g. Parris) — a Done button
    *  that submits index -1 is shown. False/absent for a mandatory pick (John's draft). */
   allowDone?: boolean;
+  /** Machine code for WHAT this pick is, so the phone can phrase it correctly:
+   *  "proctor_draft" / "parris_discard" (taking a card) vs "curse_discard" (discarding an opponent's
+   *  blue card). Absent → treated as a generic take. */
+  reason?: string;
 }
 
 /** A yes/no confirmation for this player's OWN optional ("may") ability choice

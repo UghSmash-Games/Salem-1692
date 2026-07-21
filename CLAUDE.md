@@ -277,13 +277,43 @@ revealing a tryal), but a human William Phipps cannot fake-confess through the m
 confess window yet — adding a fake-confess control only to that holder's phone is a
 masking-design question that belongs with the Town Hall character work.
 
+## Phase 6 — Ghost Mode: SUPERSEDED (decision: NOT building)
+
+**The 2-3 player tabletop "ghost" variant (dev guide Phase 6, rulebook pp.16-17) will NOT be
+built.** It is fully superseded by the **existing Phase 4a AI-fill lobby** (`NetworkGameCoordinator`:
+`fillWithAI` + `targetPlayerCount`, floor `minPlayers = 4`), which already serves 2-3 human groups by
+giving them a normal 4+ player game with **real AI participants** (`AITurnSequencer` — full hand, real
+turns, holds tryal/town-hall cards, eliminable). An AI seat is the OPPOSITE of a rulebook "ghost"
+(which has no hand and no agency).
+
+**Why this is a complete replacement, not a gap.** Every ghost-variant rule is either (1) machinery to
+*compensate for a placeholder with no agency* (ghost turns, view-ghost-tryal action, frame-card night
+targeting for ghost-witches, abilities-off, matchmaker removed) — all moot when a real AI fills the seat;
+or (2) a consequence of the *total participant count being 2-3* (tryal-loss-instead-of-elimination,
+constable self-save, "any elimination = witch win", single witch card). Category (2) also evaporates
+because AI fill raises the count to a normal 4+, so the standard ruleset (already built + verified through
+Phase 5) applies unchanged. No residual rule requires "3 humans + AI to 5" to differ from a normal
+5-player game.
+
+**Three caveats (recorded so the decision is honest):**
+- **It's a product/experience call, not a rules gap.** Ghost mode is a *different* game (deduction against
+  known-mindless placeholders + the frame-card ritual). AI fill is a normal game with bots. Dropping ghost
+  mode forfeits that specific tabletop experience — a deliberate scope choice, not a missing feature.
+- **AI quality is the real lever for small-group fun.** A 2-human + 3-AI game is only good if the AI plays
+  a credible social-deduction game (bluffing, accusation, night decisions). That's an
+  `AIPlayer`/`AITurnSequencer` investment, NOT a ruleset one — and it's the thing worth spending on if
+  small groups matter.
+- **`constableCanSelfProtect` is now confirmed dead code** (its only intended purpose was the ghost-variant
+  self-save exception) — moved to the cleanup sweep below.
+
 ## Deferred — orphaned `[SerializeField]` cleanup
 
 A later serialization-safe sweep should remove these now-unused inspector fields on
 `GamePhaseManager` (left in place for now so removal doesn't disturb scene/prefab
 serialization): `constablePrompt`, `witchPrompt`, `dawnBlackCatPrompt`,
-`constableCanSelfProtect` (also the intended toggle for the Phase 6 ghost-variant
-self-protect exception), and `confessionChoiceUI` (orphaned in 4c when the local
+`constableCanSelfProtect` (was reserved for the Phase 6 ghost-variant self-protect
+exception — now **CONFIRMED DEAD**: ghost mode is not being built, see "Phase 6 — Ghost
+Mode: SUPERSEDED" above), and `confessionChoiceUI` (orphaned in 4c when the local
 `ExecuteConfessionRound` was replaced by the networked `RunConfessWindow`).
 
 ## Deferred — dead-code + hardening cleanup pass (end-of-Phase-5, not urgent)

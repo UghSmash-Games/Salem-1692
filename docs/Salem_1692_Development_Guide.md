@@ -616,6 +616,15 @@ Before merging and moving to Phase 6, your reviewer should confirm:
 
 ## Phase 6 — 2-3 Player Ghost Mode
 
+> ⛔ **SUPERSEDED — NOT BEING BUILT (decision 2026-07-20).** This tabletop ghost variant is fully
+> replaced by the existing Phase 4a AI-fill lobby (`fillWithAI` + `targetPlayerCount`, `minPlayers = 4`):
+> 2-3 human groups get a normal 4+ player game with real AI participants — richer than placeholder
+> ghosts, with zero new rules code. Every rule below is either ghost-placeholder compensation (moot when
+> a real AI fills the seat) or a low-total-count adaptation (moot once AI fill raises the count to a normal
+> 4+). See CLAUDE.md → "Phase 6 — Ghost Mode: SUPERSEDED" for the full rationale and caveats (it's a
+> product/experience call, not a rules gap; AI quality is the real lever for small-group fun). The section
+> below is retained for historical reference only.
+
 Implement after core multiplayer is stable. Self-contained variant:
 
 - Add 1–2 ghost player slots (automated, no human behind them)

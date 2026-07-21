@@ -22,7 +22,12 @@ export function CardPickScreen() {
   const totalPicks = useGameStore((s) => s.cardPick?.totalPicks ?? 3);
   const seconds = useGameStore((s) => s.cardPick?.seconds ?? 45);
   const allowDone = useGameStore((s) => s.cardPick?.allowDone ?? false);
+  const reason = useGameStore((s) => s.cardPick?.reason);
   const clearCardPick = useGameStore((s) => s.clearCardPick);
+
+  // Copy per pick context. Curse discards an OPPONENT'S blue card (not a take); John/Parris take.
+  const isCurse = reason === 'curse_discard';
+  const heading = isCurse ? 'Curse a card' : 'Take a card';
 
   const [secondsLeft, setSecondsLeft] = useState(seconds);
   const resolvedRef = useRef(false);
@@ -55,13 +60,19 @@ export function CardPickScreen() {
   return (
     <div className="flex min-h-dvh flex-col gap-4 bg-ink px-6 py-8">
       <header className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-parchment">Take a card</h2>
+        <h2 className="text-xl font-semibold text-parchment">{heading}</h2>
         <RoleIndicator />
       </header>
 
-      <p className="text-center text-sm text-parchment/70" data-testid="card-pick-progress">
-        Pick {pickNumber} of up to {totalPicks}
-      </p>
+      {isCurse ? (
+        <p className="text-center text-sm text-parchment/70" data-testid="card-pick-progress">
+          Choose a blue card to discard
+        </p>
+      ) : (
+        <p className="text-center text-sm text-parchment/70" data-testid="card-pick-progress">
+          Pick {pickNumber} of up to {totalPicks}
+        </p>
+      )}
       <p className="text-center text-sm text-parchment/70" data-testid="card-pick-countdown">
         {secondsLeft}s
       </p>

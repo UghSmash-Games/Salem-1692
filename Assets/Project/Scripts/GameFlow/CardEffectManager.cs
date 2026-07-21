@@ -96,30 +96,47 @@ namespace Salem.GameFlow
                     { ActionOp.Arson,      (s,t,_,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.BurnHand(); } },
                     { ActionOp.Robbery,    (s,t,u,_,_) => { if (!t.HasTownHall(TownhallName.SarahGood)) t.TransferEntireHandTo(u); } },
                     { ActionOp.Scapegoat,  (s,t,u,_,_) => t.TransferAllStatusesTo(u) },
-                    { ActionOp.Curse,      (s,t,_,_,c) =>
+                    { ActionOp.Curse,      (s,t,_,_,_) =>
                         {
-                            // Discard one Blue status card from the target
-                            if (t.IsBlackCatHolder)
+                            // Curse discards ONE blue card from the victim. The Black Cat is one option
+                            // among the blue cards (it is a Blue status card), NOT forced first. A
+                            // networked player CHOOSES via a card_pick sub-prompt (threaded on
+                            // s.CurseChosenBlueCard); AI/local fall to a deterministic default.
+                            Card chosen = s.CurseChosenBlueCard;
+                            bool chosenValid = chosen != null
+                                && chosen.Type == Card.CardColor.Blue
+                                && t.StatusCards.Contains(chosen);
+                            if (!chosenValid)
+                                chosen = PickDefaultCurseTarget(t);
+
+                            if (chosen == null)
+                            {
+                                Debug.Log($"[Curse] {t.PlayerNameText} has no Blue cards to discard.");
+                                return;
+                            }
+
+                            bool wasPiety = chosen.Name == "Piety";
+
+                            // Black Cat needs its dedicated bookkeeping (blackCatCard / IsBlackCatHolder);
+                            // every other blue is a plain status removal.
+                            if (chosen.Name == "Black Cat" && t.IsBlackCatHolder)
                             {
                                 var removed = t.RemoveBlackCat(true);
-                                if (removed != null)
-                                    DeckManager?.AddToDiscardPile(removed);
+                                if (removed != null) DeckManager?.AddToDiscardPile(removed);
+                                Debug.Log($"[Curse] Removed Black Cat from {t.PlayerNameText}.");
                             }
                             else
                             {
-                                var blueStatus = t.StatusCards.Find(sc => sc.Type == Card.CardColor.Blue);
-                                if (blueStatus != null)
-                                {
-                                    t.RemoveStatusCard(blueStatus);
-                                    t.RecomputeStatusFromStatusCards();
-                                    DeckManager?.AddToDiscardPile(blueStatus);
-                                    Debug.Log($"[Curse] Removed {blueStatus.Name} from {t.PlayerNameText}.");
-                                }
-                                else
-                                {
-                                    Debug.Log($"[Curse] {t.PlayerNameText} has no Blue cards to discard.");
-                                }
+                                t.RemoveStatusCard(chosen);
+                                t.RecomputeStatusFromStatusCards();
+                                DeckManager?.AddToDiscardPile(chosen);
+                                Debug.Log($"[Curse] Removed {chosen.Name} from {t.PlayerNameText}.");
                             }
+
+                            // Rulebook p13: losing Piety at/over threshold forces an immediate reveal,
+                            // chosen by the remover (s). Fires uniformly for AI/local/networked Curse.
+                            if (wasPiety)
+                                t.TriggerPietyLossReveal(s);
                         }
                     },
                     { ActionOp.Asylum,     (s,t,_,_,c) => s.PlayStatusCardOnTarget(c, t) },
@@ -334,6 +351,30 @@ namespace Salem.GameFlow
 
         // `secondary` comes from the caller (the playing player's choice), never from action.target —
         // that field is a shared asset and writing to it leaked state between plays.
+        /// <summary>
+        /// Deterministic blue-card pick for a Curse when the player did not explicitly choose (AI, local
+        /// host, or a timed-out/declined networked prompt). Priority: Piety when stripping it forces an
+        /// immediate reveal (max tempo — see <see cref="Player.PietyRemovalWouldReveal"/>), then Asylum
+        /// (removes night protection), then Matchmaker, then whatever is first (Black Cat falls out here
+        /// if it is the only blue). Uses List.FindAll/Find — no LINQ dependency.
+        /// </summary>
+        private Card PickDefaultCurseTarget(Player t)
+        {
+            var blues = t.StatusCards.FindAll(c => c.Type == Card.CardColor.Blue);
+            if (blues.Count == 0) return null;
+
+            if (t.PietyRemovalWouldReveal())
+            {
+                var piety = blues.Find(c => c.Name == "Piety");
+                if (piety != null) return piety;
+            }
+            var asylum = blues.Find(c => c.Name == "Asylum");
+            if (asylum != null) return asylum;
+            var matchmaker = blues.Find(c => c.Name == "Matchmaker");
+            if (matchmaker != null) return matchmaker;
+            return blues[0];
+        }
+
         private void ExecuteActionOp(ActionCardSO action, Player target, Player secondary)
         {
             //Debug.Log(action.Op.ToString() );

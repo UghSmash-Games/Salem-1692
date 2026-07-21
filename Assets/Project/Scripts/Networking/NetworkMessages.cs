@@ -209,6 +209,9 @@ namespace Salem.Networking
         // When true the picker may decline / stop early (an "up to N" pick, e.g. Samuel Parris) — the
         // phone shows a "Done" button that submits index -1. False for a mandatory pick (John's draft).
         public bool allowDone;
+        // Machine code for WHAT this pick is, so the phone phrases it correctly: "proctor_draft" /
+        // "parris_discard" (taking a card) vs "curse_discard" (discarding an opponent's blue card).
+        public string reason;
     }
 
     // Ask ONE player to pick another PLAYER — the sub-target of a two-target card (Robbery's
