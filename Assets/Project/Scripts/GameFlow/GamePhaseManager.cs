@@ -46,10 +46,6 @@ namespace Salem.GameFlow
         [SerializeField] private DeckManager DeckManager;
         [SerializeField] private float aiDecisionDelay = 0.25f;
         [SerializeField] private bool witchesCanTargetWitches = false;
-        [SerializeField] private bool constableCanSelfProtect = false;
-        [SerializeField] private string constablePrompt = "Choose a player to protect";
-        [SerializeField] private string witchPrompt = "Choose a player to eliminate";
-        [SerializeField] private string dawnBlackCatPrompt = "Witches choose who receives the Black Cat";
         [SerializeField] private float confessionAiChance = 0.15f;
         [SerializeField] private string confessionPrompt = "Confess? Reveal a Tryal to protect yourself.";
 
@@ -69,9 +65,6 @@ namespace Salem.GameFlow
         // reveal at that shared wall-clock moment (per the /reveal-tryal skill).
         [SerializeField] private float revealLeadSeconds = 3f;
         [SerializeField] private TableLayoutController tableLayoutController;
-        // ORPHANED (4c): unused since RunConfessWindow replaced the local ExecuteConfessionRound.
-        // Left in place for the deferred serialization-safe orphan-field sweep (see CLAUDE.md).
-        [SerializeField] private ConfessionChoiceUI confessionChoiceUI;
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
         /// <summary>True once witches have been revealed to each other at dawn.

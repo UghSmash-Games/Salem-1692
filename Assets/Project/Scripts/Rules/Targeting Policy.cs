@@ -35,6 +35,10 @@ namespace Salem.Rules
         public static bool ValidateSecondary(Player source, Player primary, Player secondary, ActionOp op, out string reason)
         {
             if (secondary == null) { reason = "Second target required."; return false; }
+            // Defense-in-depth: an eliminated player can never be a recipient. In practice the host
+            // builds the eligible list excluding eliminated players and RequestTarget re-verifies, but
+            // guard here too so no future caller can slip an eliminated recipient past validation.
+            if (secondary.IsEliminated) { reason = "Recipient is no longer in the game."; return false; }
             if (secondary == source && !AllowsSelf(op)) { reason = "You cannot select yourself as recipient."; return false; }
             if (secondary == primary) { reason = "Recipient must be different from the victim."; return false; }
             reason = null; return true;

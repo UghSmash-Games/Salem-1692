@@ -31,7 +31,7 @@ using UnityEngine;
 namespace Salem.Players
 {
     [RequireComponent(typeof(HandManager))]
-    public class Player : MonoBehaviour, IPlayerController
+    public class Player : MonoBehaviour
     {
         #region Vars
         [Header("Control")]
@@ -408,116 +408,7 @@ namespace Salem.Players
         }
         #endregion
 
-        #region IPlayerController Implementation
-        public virtual Card SelectCard()
-        {
-            if (HandManager != null && HandManager.Hand.Count > 0)
-            {
-                return HandManager.Hand[0];
-            }
-
-            return null;
-        }
-
-        public virtual void PerformTurnAction(ActionCardSO selectedCard)
-        {
-            if (selectedCard == null)
-            {
-                return;
-            }
-
-            if (CardEffectManager.Instance == null)
-            {
-                Debug.LogError("CardEffectManager.Instance is null!");
-                return;
-            }
-
-            Player primary = selectedCard.RequiresTarget ? selectedCard.target : null;
-            Player secondary = selectedCard.RequiresSecondTarget ? selectedCard.target : null;
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
-            HandManager?.RemoveCard(selectedCard);
-        }
-        #endregion
-
         #region Helper Functions
-        //Called in Hand Manager.
-        //leave for backwards compatibiltiy as of 8/31/25
-        public virtual void ApplyCardEffect(Card card)
-        {
-            switch (card.Type)
-            {
-                case Card.CardColor.Green:
-                    //played then discarded
-                    switch (card.name)
-                    {
-                        case "Arson":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
-                            HandManager.ClearHand();
-                            break;
-                        case "Robbery":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
-                            //card.target.HandManager.AddCard(HandManager.GetCards());
-                            HandManager.ClearHand();
-                            break;
-                        case "Alibi":
-                            currentAccusationCount -= 3;
-                            if (currentAccusationCount < 0) { currentAccusationCount = 0; }
-                            NotifyAccusationChanged();
-                            break;
-                        case "Stocks":
-                            skipTurn = true;
-                            break;
-                        case "Scapegoat":
-                            card.target.StatusCards.AddRange(StatusCards);
-                            StatusCards.Clear();
-                            break;
-                    }
-                    break;
-                case Card.CardColor.Blue:
-                    // Remain in play
-                    switch (card.name)
-                    {
-                        case "Piety":
-                            currentAccusationLimit = (byte)(baseAccusationLimit * 2);
-                            break;
-                        case "Asylum":
-                            hasAsylum = true;
-                            break;
-                        case "Matchmaker":
-                            //the target of the card will be the other player that has the matchmaker card
-                            MatchedPlayer = card.target;
-                            if (MatchedPlayer != null)
-                            {
-                                MatchedPlayer.MatchedPlayer = this; //create a 2 way link between the 2 players in the case either die
-                            }
-                            break;
-                    }
-                    break;
-                case Card.CardColor.Red:
-                    //played, then check for tryal reveal
-                    switch (card.name)
-                    {
-                        case "Accusations":
-                            currentAccusationCount++;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Evidence":
-                            currentAccusationCount += 3;
-                            if (PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Witness":
-                            currentAccusationCount += 7;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                    }
-                    break;
-            }
-        }
-
         //Called in CardEffectManager
         // Accusations & turn effects
          public void ApplyAccusation(int bonusAmount, Player accuser = null)
@@ -597,20 +488,6 @@ namespace Salem.Players
             dm?.AddToDiscardPile(card);
             OnStatusCardsChanged?.Invoke();
             RecomputeStatusFromStatusCards();
-        }
-
-        // Hand
-        /// <summary>
-        /// Empties the hand WITHOUT discarding — the cards simply cease to exist.
-        /// ⚠ Only correct when ownership has ALREADY moved elsewhere (e.g. TransferEntireHandTo
-        /// re-adds each card to the recipient first). To DESTROY a hand, use <see cref="BurnHand"/>:
-        /// a bare clear permanently removes cards from circulation, because the deck is re-formed
-        /// from the discard pile (DeckManager.ReshuffleDiscardPile) — anything never discarded can
-        /// never come back, shrinking the deck for the rest of the game.
-        /// </summary>
-        public void ClearHand()
-        {
-            HandManager.ClearHand(); // already raises OnHandChanged
         }
 
         /// <summary>

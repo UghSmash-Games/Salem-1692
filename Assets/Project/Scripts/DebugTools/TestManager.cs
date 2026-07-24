@@ -1,4 +1,9 @@
 /*
+* ⚠ TEMP — DEBUG SCAFFOLDING (Phase 5). Not shipped. This harness (ContextMenu launchers, forced
+*   setups, dispatcher/seat dump helpers) exists ONLY to exercise game logic until a real Unity
+*   play-mode test harness exists. REMOVE this file — together with GameSetup.DEBUG_forcedTownHall —
+*   once that harness lands. Kept deliberately for now; see CLAUDE.md "TEMP scaffolding".
+*
 * AUTHOR: Ron Bresett
 * REFERENCES:
 * NOTES:

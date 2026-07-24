@@ -306,30 +306,35 @@ Phase 5) applies unchanged. No residual rule requires "3 humans + AI to 5" to di
 - **`constableCanSelfProtect` is now confirmed dead code** (its only intended purpose was the ghost-variant
   self-save exception) — moved to the cleanup sweep below.
 
-## Deferred — orphaned `[SerializeField]` cleanup
+## Cleanup sweep (roadmap item B) — DONE (2026-07-20)
 
-A later serialization-safe sweep should remove these now-unused inspector fields on
-`GamePhaseManager` (left in place for now so removal doesn't disturb scene/prefab
-serialization): `constablePrompt`, `witchPrompt`, `dawnBlackCatPrompt`,
-`constableCanSelfProtect` (was reserved for the Phase 6 ghost-variant self-protect
-exception — now **CONFIRMED DEAD**: ghost mode is not being built, see "Phase 6 — Ghost
-Mode: SUPERSEDED" above), and `confessionChoiceUI` (orphaned in 4c when the local
-`ExecuteConfessionRound` was replaced by the networked `RunConfessWindow`).
+The end-of-Phase-5 dead-code / orphan-field sweep landed. **All Unity C#, verified by dead-reference
+grep + region-balance + a clean webclient/server test run (79 + 49 green — no JS touched).** What changed:
 
-## Deferred — dead-code + hardening cleanup pass (end-of-Phase-5, not urgent)
+- **5 orphaned `GamePhaseManager` `[SerializeField]`s removed** — `constablePrompt`, `witchPrompt`,
+  `dawnBlackCatPrompt`, `constableCanSelfProtect` (was the dead ghost-variant self-save toggle),
+  `confessionChoiceUI` (orphaned in 4c). They were declared-but-never-read. ⚠️ The stale serialized
+  values still sit in `GameManager.prefab` + two scenes (`propertyPath: confessionChoiceUI` etc.) — this
+  is HARMLESS: Unity ignores unknown propertyPaths and drops them on the next scene/prefab save. Left
+  as-is rather than hand-editing YAML (risky).
+- **Vestigial `IPlayerController` interface DELETED** — it was implemented only by `Player`, never used
+  as a type anywhere (no polymorphic call site). Removed `IPlayerController.cs`, `Player.SelectCard`,
+  `Player.PerformTurnAction`, `Player`'s `: IPlayerController`, and the three dead `AIPlayer` overrides
+  (`ApplyCardEffect`/`SelectCard`/`PerformTurnAction` — the AI runs via `AITurnSequencer`, not these).
+- **`Player.ApplyCardEffect` + `AIPlayer.ApplyCardEffect` DELETED** — dead legacy switch with the broken
+  `PlayerNameText == "Cotton Mather"/"Sarah Good"` name-checks.
+- **`Player.ClearHand` DELETED** — caller-less (live paths use `BurnHand` / `HandManager.ClearHand`).
+- **`Card.target` field DELETED** — and its LAST referencer, the dead `_Archive/PlayerInputUI.cs:151`
+  `ac.target = secondary` line. **KEY LESSON: `_Archive/` COMPILES** (no `.asmdef`, no `#if` guards → it's
+  part of `Assembly-CSharp`), so "only `_Archive` references it" did NOT mean safe-to-remove — the archive
+  line had to go too. `{target}` in `Card.LogMessage` is filled from a PARAMETER in `CardLogFormatter`,
+  not the field, so removal was safe.
+- **`TargetingPolicy.ValidateSecondary`** — ADDED the `secondary.IsEliminated` defense-in-depth guard.
 
-Batch these into one sweep once Phase 5 verification is done:
+**Kept, deliberately (TEMP scaffolding, per standing rule — remove when a Unity play-mode harness exists):**
+`TestManager.cs` (now has a prominent `⚠ TEMP — DEBUG SCAFFOLDING` header) and
+`GameSetup.DEBUG_forcedTownHall` (already clearly `[Header("TEMP …")]`-marked).
 
-- **`Player.PerformTurnAction` (Player.cs:~402‑419)** — dead (AI runs via `AITurnSequencer`); still uses
-  the old `.target`/unconditional-`RemoveCard` pattern. Delete.
-- **`Player.ApplyCardEffect` (Player.cs:~358)** — dead legacy; has the broken `PlayerNameText ==
-  "Cotton Mather"/"Sarah Good"` name-checks and its own Arson bare-clear. Delete.
-- **`Player.ClearHand`** — now caller-less (live paths use `BurnHand` / `HandManager.ClearHand`
-  directly); kept as a documented primitive. Remove if still unused at cleanup.
-- **`Card.target` field (Card.cs:41)** — no live reader/writer after the Robbery/Scapegoat SO-mutation
-  fix (recipient is a parameter now). Only dead code (`_Archive`, `PerformTurnAction`) references it.
-- **`TargetingPolicy.ValidateSecondary`** — add an `IsEliminated` check for defense-in-depth (currently
-  guaranteed only by the caller's eligibility list + `RequestTarget` re-verification).
 - ~~**`forwardToHost` field ordering**~~ — **FIXED (promoted out of this list).** See the security note
   in `server/src/dispatch.js`. The earlier characterization here ("not a data leak, host re-validates
   the sender") was **wrong**: for the `confirm_submit` / `target_submit` / `card_pick_submit` /

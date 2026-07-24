@@ -38,8 +38,10 @@ namespace Salem.Cards
         public Sprite HiddenCardImage;
         public Sprite RevealedCardImage;
         public bool IsPlayed;
-        public Player target;
-        public string LogMessage = "{source} played {card} on {target}."; //secondary target when the card is played, used to make matchmaker, robbery and scapegoat work
+        // {target} is filled from the resolved target PASSED to CardLogFormatter, not from any field on
+        // the card — the old shared-asset `target` field was removed (it leaked state between plays;
+        // recipients are threaded by parameter through ExecuteCardEffect).
+        public string LogMessage = "{source} played {card} on {target}.";
 
         // True for cards created at runtime via ScriptableObject.Instantiate (e.g. Will Grigs' Alibi
         // played "as a Witness" places a runtime Witness proxy). These are NOT real deck cards, so they
