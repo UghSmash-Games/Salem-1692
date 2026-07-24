@@ -267,10 +267,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // secret phase (the phase genuinely ended). A routine board refresh during a
       // secret phase — including the phase-entry update — must NOT wipe a freshly
       // set prompt. That race was dropping every phone off the SecretPhaseScreen.
-      const secretPhaseEnded =
-        !!s.prompt &&
-        newPhase != null &&
-        !SECRET_PHASE_NAMES.has(newPhase.toLowerCase());
+      const inSecretPhase =
+        newPhase != null && SECRET_PHASE_NAMES.has(newPhase.toLowerCase());
+      const secretPhaseEnded = !!s.prompt && newPhase != null && !inSecretPhase;
+
+      // actionRequest is Day-only. Clear it ONLY when it can no longer be valid — the turn moved to
+      // another player, or we entered a secret (night/dawn) phase. Clearing it on EVERY board tick
+      // (the old 4a behavior) rested on the assumption that the host "always re-sends after a board
+      // tick"; it does not — it re-sends once per turn-loop iteration. So any unrelated broadcast
+      // (the flurry of eliminations/reveals during a John Proctor draft) wiped a LIVE turn prompt and
+      // stranded the phone on idle until the turn timer fired. Same race, same shape, as the prompt
+      // guard above.
+      const turnMovedAway =
+        data.whoseTurn != null && data.whoseTurn !== s.session.playerId;
+      const dropAction = inSecretPhase || turnMovedAway;
 
       return {
         publicBoard: {
@@ -284,7 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         // is Day-only and is always re-sent after a board tick if the turn
         // continues, so clearing it on every update remains safe (4a behavior).
         ...(secretPhaseEnded ? { prompt: null } : {}),
-        actionRequest: null,
+        ...(dropAction ? { actionRequest: null } : {}),
       };
     }),
 
@@ -327,7 +337,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // After a rearrange, the host re-prompts the turn action — leave the
       // rearrange screen for the action screen.
       deckRearrange: null,
-      cardPick: null,
+      // NOTE: cardPick is deliberately NOT cleared here. A John/Martha draft can still be open when
+      // the drafter's own turn begins (someone was eliminated just before it), and the selector gives
+      // cardPick precedence over actionRequest for exactly that case. Clearing it here would defeat
+      // that precedence and yank the half-finished draft off the phone. The stored actionRequest just
+      // waits behind the draft; when the draft resolves (clearCardPick) the action screen appears.
       confirm: null,
       targetRequest: null,
     }),
@@ -357,7 +371,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         reason: data.reason,
       },
       prompt: null,
-      actionRequest: null,
+      // NOTE: actionRequest is deliberately NOT cleared here — the mirror of the guard in
+      // applyActionRequest. A draft can fire DURING the drafter's own turn (their card play
+      // eliminated someone), and the turn prompt must survive underneath it so the action screen
+      // returns when the draft resolves. Clearing it here stranded the phone on the idle screen
+      // until the host's turn timer fired.
       deckRearrange: null,
       confirm: null,
       targetRequest: null,

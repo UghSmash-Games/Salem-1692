@@ -49,29 +49,41 @@ namespace Salem.Characters
 
             var taken = new Dictionary<Player, int>();
             foreach (var d in drafters) taken[d] = 0;
+            // A drafter who voluntarily stops early (the "up to three" Done button) is parked here so the
+            // alternation SKIPS them while the OTHER drafter keeps picking. Card text: "choose UP TO three
+            // cards to take" — taking fewer is a real, rulebook-granted choice (same shape as Samuel
+            // Parris' "up to 2").
+            var stopped = new HashSet<Player>();
 
-            // Alternate one pick at a time, John first, until the pool empties or everyone has 3.
+            // Alternate one pick at a time, John first, until the pool empties or every drafter has either
+            // reached 3 or chosen to stop.
             int turn = 0;
-            while (pool.Count > 0 && drafters.Any(d => taken[d] < MaxPicksEach))
+            while (pool.Count > 0 && drafters.Any(d => taken[d] < MaxPicksEach && !stopped.Contains(d)))
             {
                 var drafter = drafters[turn % drafters.Count];
                 turn++;
-                if (taken[drafter] >= MaxPicksEach) continue; // full — pass to the other drafter
+                if (taken[drafter] >= MaxPicksEach || stopped.Contains(drafter)) continue; // done — pass
 
-                int idx = -1;
+                int idx = 0;
                 if (drafter is AIPlayer)
                 {
-                    idx = 0; // AI drafters take the top of the pool (no network round-trip)
+                    idx = 0; // AI drafters always take the top (cards are pure advantage — never decline)
                 }
                 else
                 {
+                    int picked = -1;
                     yield return drafter.Input.RequestCardPick(
                         drafter, pool, taken[drafter] + 1, MaxPicksEach, PickTimeoutSeconds,
-                        allowDone: false, // John's draft has no early-decline UI (a known minor "up to 3" gap)
+                        allowDone: true, // "up to three" — the Done button lets a human drafter stop early
                         reason: "proctor_draft",
-                        chosen => idx = chosen);
+                        chosen => picked = chosen);
+
+                    // Negative = Done (-1 from the Done button) OR no submit before the timeout. For an
+                    // "up to N" pick both mean "this drafter takes no more" (same semantics as Parris);
+                    // the draft still resolves and the other drafter keeps going.
+                    if (picked < 0) { stopped.Add(drafter); continue; }
+                    idx = picked < pool.Count ? picked : 0; // defensive: out-of-range → take the top
                 }
-                if (idx < 0 || idx >= pool.Count) idx = 0; // timeout / bad index → safety-pick the top
 
                 var card = pool[idx];
                 pool.RemoveAt(idx);

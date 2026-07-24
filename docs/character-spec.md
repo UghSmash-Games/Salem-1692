@@ -159,12 +159,18 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   AI drafters auto-pick). Single-John and John+Martha split both go through the same coroutine.
 - **Build:** Done in Group B. (This is where the **event-dispatcher / `ICharacterAbility`**
   foundation was introduced, per #6.)
-- **⚠️ Known minor gap (deliberately NOT fixed):** John's "up to 3" currently cannot **voluntarily
-  decline early** — his draft loop only stops when the pool is exhausted or the 3-cap is hit, so he
-  effectively takes `min(3, pool)`. Choosing to take *fewer* is rules-allowed but rarely desirable
-  (cards are an advantage). The "Done/decline" affordance built for Samuel Parris (#12, `allowDone` on
-  `RequestCardPick` + a Done button on `CardPickScreen`) could be extended to John's draft to close this,
-  but it's out of scope for now. Recorded here so it isn't silently dropped.
+- **✅ "Take fewer than 3" — BUILT (Phase 5 close-out).** The physical card reads *"whenever a player
+  dies, choose **up to three** cards to take from their hand and discard the rest."* "Up to three" grants
+  a real voluntary decline (a cap that permits taking fewer), the SAME shape as Samuel Parris' "up to 2" —
+  so it is rulebook-granted, not gratuitous optionality. Built by reusing Parris' machinery: John's
+  non-AI picks now pass `allowDone: true` on `RequestCardPick`, so `CardPickScreen` shows the **Done**
+  button. A negative index (Done `-1` OR pick-window timeout) parks that drafter in a `stopped` set — the
+  alternation SKIPS them while the OTHER drafter (a John+Martha split) keeps picking; the draft still
+  resolves and leftovers discard. AI drafters never decline (cards are pure advantage → always take the
+  top). **⚠️ Deliberate behavior change:** a human John who lets the pick window TIME OUT now stops (takes
+  what he has) instead of the old auto-safety-pick of the top card — matching Parris' "up to N" timeout
+  semantics. (An idle/disconnected John therefore drafts fewer; acceptable — "no response" = "took what I
+  have.")
 
 ## 6. Martha Corey ✅ (inheritance — dispatcher foundation lives here)
 

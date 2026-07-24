@@ -562,6 +562,22 @@ namespace Salem.GameFlow
             }
             else if  then code below*/
 
+            // A prior elimination's John Proctor draft is an ASYNC card_pick sitting on the drafter's
+            // phone. If this turn's action_request went out while that draft is still open, it would
+            // land on top of the half-finished pick menu. Wait for the dispatcher's draft queue to
+            // drain first (it always resolves — pick, Done, or the 45s window), so the draft completes
+            // and THEN the turn prompt is sent. The inactivity timer is paused across the wait (the
+            // draft has its own deadline) and restarted after, so the player gets a full fresh window
+            // for their actual turn instead of burning it while drafting.
+            var dispatcher = Salem.Characters.CharacterAbilityDispatcher.Instance;
+            if (dispatcher != null && dispatcher.IsDraftRunning)
+            {
+                suppressIdleTimer = true;
+                yield return new WaitUntil(() => !dispatcher.IsDraftRunning);
+                suppressIdleTimer = false;
+                ResetIdleTimer();
+            }
+
             // AI runs its own sequencer; every other seat (local-UI or network)
             // routes through its IPlayerInput. Both drive the same turn API.
             if (current is AIPlayer ai)
