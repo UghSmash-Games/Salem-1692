@@ -6881,7 +6881,7 @@ MonoBehaviour:
   content: {fileID: 2021071839}
   roomCodeText: {fileID: 1346728571}
   roomCodePlaceholder: ----
-  baseUrl: http://192.168.1.155:5173/
+  baseUrl: http://192.168.1.155:5173
   joinUrlFormat: '{0}/join'
   displayUrlFormat: '{0}/display'
   joinUrlText: {fileID: 271115749}
