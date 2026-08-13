@@ -360,7 +360,16 @@ namespace Salem.Players
             p.CurseChosenBlueCard = null;  // reset the transient Curse choice after the play (read in _ops[Curse])
             if (executed)
             {
-                p.HandManager?.RemoveCard(card);
+                // ⚠ DO NOT remove the card from hand here. ExecuteCardEffect ALREADY consumed it —
+                // TakeCard for Red/Blue/Stocks (transferred to the target's status cards) and
+                // RemoveCard for Green (sent to the discard). A refusal returns false BEFORE any of
+                // that, so there is nothing to clean up either way.
+                //
+                // Removing again ATE A SECOND CARD: the deck holds many references to the SAME
+                // ScriptableObject (one Accusation.asset, referenced repeatedly), so List.Remove
+                // matches by reference and strips another identical card from the hand — and
+                // discards it. Playing one Accusation while holding two cost the player both, and
+                // the persistent card wrongly appeared on top of the discard pile.
                 if (VerboseLogging)
                     Debug.Log($"[NetworkInput] {p.NetworkId} played '{card.Name}' on " +
                         $"'{(target != null ? target.PlayerNameText : "none")}'. Hand now: {p.HandManager?.Hand?.Count}.");

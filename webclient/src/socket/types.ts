@@ -27,9 +27,33 @@ export interface PublicPlayer {
   playerId: string;
   displayName: string;
   accusations: number;
+  /** Reveal threshold (base 7 / 8 George → ×2 Piety; NOT Danforth-adjusted). For an accusation-progress
+   *  meter (count vs limit). Optional for contract parity with the host display. */
+  accusationLimit?: number;
   eliminated: boolean;
-  /** Public blue cards in front of them (names only), e.g. ["Asylum"]. */
+  /** Public BLUE/persistent cards in front of them (names only), e.g. ["Asylum"], plus "Black Cat".
+   *  Red accusation cards are in `accusationCards` — one list internally, split on the wire so the
+   *  UI never needs card-colour (a rules concept) to render them. */
   statusCards?: string[];
+  /** Public RED accusation cards in front of them, e.g. ["Evidence", "Accusation"]. Public by the
+   *  card rules (played face-up); previously carried inside `statusCards`, not a new disclosure. */
+  accusationCards?: string[];
+  /** PRINTED Town Hall character display name, or null/empty when none. Town Hall identity is PUBLIC
+   *  (dealt face-up, read aloud at setup). Card identity ONLY — never charges or ability eligibility.
+   *  Not Martha Corey's copied name. Goes empty on elimination; cache the last non-empty value. */
+  townHall?: string | null;
+  /** COUNT of tryal cards held (revealed + unrevealed). No identities. Tabletop-visible.
+   *  Unrevealed count is (tryalTotal - revealedTryals.length) — never sent as its own field. */
+  tryalTotal?: number;
+  /** Labels of ALREADY-REVEALED tryals only, in canonical sorted order — deliberately POSITION-FREE.
+   *  ⚠ Never widen to a positional shape (placeholders for face-down slots, {label,index}, or a
+   *  public mirror of the private TryalCardView's faceUp flag): tryals are APPENDED on receipt, so
+   *  slot position would let a Conspiracy giver pin a card they know onto a specific face-down slot. */
+  revealedTryals?: string[];
+  /** COUNT of cards held. Hand SIZE is openly countable at a physical table; hand CONTENTS are
+   *  private and arrive only in PrivateStatePayload.hand.
+   *  ⚠ Must stay a number — widening this to string[] would be a total leak. */
+  handCount?: number;
 }
 
 export interface GameStateUpdatePayload {
@@ -39,6 +63,44 @@ export interface GameStateUpdatePayload {
   /** Public deck/discard counts (Unity-defined, optional). */
   deckCount?: number;
   discardCount?: number;
+  /** Name of the TOP discard card, or null when the pile is empty. Public — the discard pile is
+   *  face-up at a table. TOP CARD ONLY: the ordered pile would leak play history and expose
+   *  Samuel Parris' discard-draw pool. */
+  topDiscard?: string | null;
+}
+
+/** The CLOSED vocabulary of loggable events. Mirrors Unity's `GameEventKind`.
+ *  ⛔ Never extend this with a secret-phase kind (night votes, constable saves, witch identities,
+ *  black-cat placement, or a confession before it resolves). The closed set IS the privacy
+ *  mechanism: the log cannot describe a secret action because no kind can express one. */
+export type GameEventKind =
+  | 'game_started'
+  | 'phase_changed'
+  | 'card_played'
+  | 'tryal_revealed'
+  | 'player_eliminated'
+  | 'double_witch_revealed'
+  | 'confession_revealed'
+  | 'gavel_placed'
+  | 'game_over';
+
+/** One entry in the public "What Has Passed" log. Broadcast to all players + mirrors.
+ *  PUBLIC DATA ONLY — ids and short enumerable labels, never prose. The RENDERER turns this into a
+ *  sentence, which is why no free-text field exists here and none may be added. */
+export interface GameEventPayload {
+  kind: GameEventKind;
+  /** Public id of whoever acted, or null (e.g. phase_changed has no actor). */
+  actorId?: string | null;
+  /** Public id of whoever the event happened to, or null. */
+  targetId?: string | null;
+  /** Public card label, or null. Same visibility class as statusCards. */
+  cardName?: string | null;
+  /** SHORT enumerable detail whose meaning depends on `kind` — a tryal label, a phase name, an
+   *  "n/limit" counter, a winner. Never a sentence. */
+  value?: string | null;
+  /** Epoch milliseconds stamped by the host. Format in the CLIENT's local time — a preformatted
+   *  "19:04" would bake in the host's timezone and break a mirror in another region. */
+  atMs: number;
 }
 
 /** A tryal card as shown to its owner. faceUp cards have been revealed publicly. */

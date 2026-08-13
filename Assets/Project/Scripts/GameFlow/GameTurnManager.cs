@@ -181,7 +181,10 @@ namespace Salem.GameFlow
 
             currentPlayer = players[CurrentPlayerIndex];
 
-            TableLayoutController.SetCurrentTurn(currentPlayer);
+            // Null-conditional: the legacy local table is retired in Networked_Game (the host screen
+            // renders from HostDisplay via the public wire contract instead), so this reference is
+            // deliberately empty there. Sandbox_Testing still wires it.
+            if (TableLayoutController != null) TableLayoutController.SetCurrentTurn(currentPlayer);
             //Debug.Log($"Starting turn for {currentPlayer.PlayerNameText}");
 
             // Stocks: if this player has a Stocks card, skip their turn and consume one

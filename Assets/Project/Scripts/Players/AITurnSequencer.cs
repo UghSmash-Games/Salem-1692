@@ -113,10 +113,15 @@ namespace Salem.Players
                 driver.GrigsAlibiAsWitness = true;
             }
 
-            // Only consume the card if the effect actually ran (e.g. the 2-player Robbery/Scapegoat
-            // disable rejects it) — a rejected play must never eat the card.
-            if (CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary))
-                driver.HandManager?.RemoveCard(chosen);
+            // ExecuteCardEffect OWNS consumption: TakeCard for Red/Blue/Stocks (transferred to the
+            // target's status cards) and RemoveCard for Green (sent to the discard). A rejected play
+            // (e.g. the 2-player Robbery/Scapegoat disable) returns false BEFORE consuming, so the
+            // card is never eaten either way.
+            //
+            // ⚠ Do NOT add a RemoveCard here. The deck holds many references to the SAME
+            // ScriptableObject, so a second List.Remove strips ANOTHER identical card from the hand
+            // and discards it — playing one Accusation while holding two cost the AI both.
+            CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary);
 
             driver.GrigsAlibiAsWitness = false; // reset the transient mode after the play
 

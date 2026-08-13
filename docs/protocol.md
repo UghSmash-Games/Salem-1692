@@ -155,10 +155,40 @@ The host (Unity) emits these events. The server routes them to the correct recip
   `game_state_update.statusCards` (public card names) and `elimination_result`. This is NOT a
   masked secret phase; the reveal's existence and content are public by the card rules.
 
+### `game_event`
+- **Direction:** host → server → **all players + all mirrors**
+- **Recipients:** all players, all mirrors (NOT echoed to the host — it renders from its own send-event)
+- **Payload:** `{ kind: string, actorId: string|null, targetId: string|null, cardName: string|null, value: string|null, atMs: number }`
+- **Note:** One entry in the public "What Has Passed" event log.
+  `kind` comes from a **CLOSED vocabulary** (Unity `GameEventKind`): `game_started`, `phase_changed`,
+  `card_played`, `tryal_revealed`, `player_eliminated`, `double_witch_revealed`,
+  `confession_revealed`, `gavel_placed`, `game_over`.
+  **This enum IS the privacy mechanism.** The wire carries no prose — only a kind, public player ids,
+  a public card name, and a SHORT enumerable `value` (a tryal label, a phase name, an `n/limit`
+  counter, a winner). The **renderer** turns that into a sentence. Because there is no kind for a
+  secret action, the log cannot describe one — it cannot say "Alice voted for Bob" because no such
+  kind exists, not because a call site remembered to be careful.
+  ⛔ **NEVER** add a kind for secret-phase content (night votes, constable saves, witch identities,
+  black-cat placement, or a confession *before* it resolves), and **NEVER** add a free-text field —
+  one would turn every call site into a leak. `confession_revealed` fires only at the synchronized
+  `revealAt`, when the flip is public by the rulebook, so the masked confess-window timing is
+  preserved. `gavel_placed` likewise fires only at `revealAt` and carries the RECIPIENT in
+  `targetId` with `actorId` **null** — the rulebook has the token placed in front of a player before
+  eyes open (p11), so who was protected is public, but who protected them is not.
+  `atMs` is epoch milliseconds stamped by the host; each client formats it in **its own local time**.
+  A preformatted `"19:04"` would bake in the host's timezone and break a mirror in another region —
+  same principle as `phase_resolve.revealAt`.
+
 ### `elimination_result`
 - **Direction:** host → server → **all clients in room**
 - **Recipients:** all players, all mirrors
 - **Payload:** `{ playerId: string, eliminated: boolean, savedBy: string|null }`
+- **Note:** `savedBy` is a **LABEL** — `"constable"` | `"confession"` | `""` — and is set from
+  `NightResolver.NightOutcome.SavedByLabel`. It is **NEVER a playerId**.
+  ⛔ **Do not "improve" it into one.** Naming the saver would publish the **CONSTABLE'S SECRET
+  IDENTITY** on a channel that reaches every player and every mirror — the same class of leak as
+  putting a role on `game_state_update`. A confession has no saver to name in any case. Renderers
+  must map the label to copy ("saved by the constable"), not look it up as a player.
 
 ### `game_over`
 - **Direction:** host → server → **all clients in room**
@@ -247,6 +277,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `confirm_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
 | `public_reveal` | ✅ (originates) | ❌ | ❌ |
+| `game_event` | ✅ (originates) | ❌ | ❌ |
 | `elimination_result` | ✅ (originates) | ❌ | ❌ |
 | `game_over` | ✅ (originates) | ❌ | ❌ |
 | `player_action` | ❌ | ✅ | ❌ |
@@ -266,5 +297,5 @@ These rules are enforced at the server dispatch layer:
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
 3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, **`confirm_request`**, and **`target_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
-4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `elimination_result`, `game_over`, `room_closed`.
+4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `game_event`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

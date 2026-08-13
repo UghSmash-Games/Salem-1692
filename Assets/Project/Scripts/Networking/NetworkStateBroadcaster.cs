@@ -14,9 +14,24 @@ namespace Salem.Networking
     /// Subscribes to game events; the game systems never call networking directly.
     ///
     /// PRIVACY (enforced here):
-    ///  • game_state_update is PUBLIC — built only from public fields
-    ///    (names, accusation counts, eliminated status, public status cards).
-    ///    It NEVER contains tryals, role, or hands.
+    ///  • game_state_update is PUBLIC — built only from public fields (names, accusation counts +
+    ///    the red cards behind them, eliminated status, public blue status cards, printed Town Hall
+    ///    identity, tryal COUNT, the labels of ALREADY-REVEALED tryals, hand COUNT, and the top
+    ///    discard card's name).
+    ///    It NEVER contains UNREVEALED tryal identities, role, or hand CONTENTS.
+    ///
+    ///    ⚠ STRUCTURAL NOTE — the public builder DOES read private-adjacent collections:
+    ///    Player.TryalCards (tryalTotal + revealedTryals), Player.HandManager (handCount), and the
+    ///    discard pile (topDiscard). Before Phase 7 it read none of them, so the public path was
+    ///    structurally incapable of leaking them; it is now merely *correct*. The server relays
+    ///    game_state_update verbatim (server/src/dispatch.js, host-role gate only, no field
+    ///    filtering), so there is NO server-side backstop — these helpers ARE the enforcement:
+    ///      • <see cref="BuildRevealedTryalLabels"/> — the single .Where(IsRevealed)
+    ///      • <see cref="BuildPublicHandCount"/>    — returns an int, never card names
+    ///      • <see cref="BuildPublicTopDiscard"/>   — returns ONE name, never the pile
+    ///    Each is deliberately narrow and greppable. Do not inline them, do not widen their return
+    ///    types, and do not add a second access path. The contract test in
+    ///    server/__tests__/public-payload-contract.test.js is the permanent regression guard.
     ///  • private_state is built per-player and sent addressed to that player's
     ///    NetworkId; the server routes it to that one socket. One message per
     ///    player — never a broadcast. AI seats (no NetworkId) get no private_state.
@@ -26,6 +41,14 @@ namespace Salem.Networking
         [SerializeField] private GamePhaseManager gamePhaseManager;
         [SerializeField] private GameTurnManager gameTurnManager;
         [SerializeField] private DeckManager deckManager;
+
+        /// <summary>
+        /// Fired with the PUBLIC board DTO every time it is broadcast — the exact same object sent to
+        /// phones and mirrors. The host TV display (Salem.UI.HostDisplay) subscribes to this so it renders
+        /// from the public contract ONLY, never from Player models. This is the Phase-7 masking boundary:
+        /// a subscriber physically cannot see private data through this channel.
+        /// </summary>
+        public static event System.Action<GameStateUpdateMsg> OnPublicState;
 
         private void Awake()
         {
@@ -100,8 +123,10 @@ namespace Salem.Networking
             var nm = NetworkManager.Instance;
             if (nm == null || !nm.IsConnected) return;
 
-            // 1) Public board → everyone.
-            nm.SendGameStateUpdate(BuildGameStateUpdate());
+            // 1) Public board → everyone, AND to the host's own display via OnPublicState (same DTO).
+            var publicState = BuildGameStateUpdate();
+            nm.SendGameStateUpdate(publicState);
+            OnPublicState?.Invoke(publicState);
 
             // 2) Private state → each remote player individually (by NetworkId).
             SendPrivateStates();
@@ -138,8 +163,14 @@ namespace Salem.Networking
                     playerId = PublicIdFor(p),
                     displayName = p.PlayerNameText,
                     accusations = p.currentAccusationCount,
+                    accusationLimit = p.currentAccusationLimit, // base→piety×2 threshold (public; not Danforth-adjusted)
                     eliminated = p.IsEliminated,
                     statusCards = BuildPublicStatusCards(p),
+                    accusationCards = BuildPublicAccusationCards(p),
+                    townHall = BuildPublicTownHall(p),
+                    tryalTotal = p.TryalCards != null ? p.TryalCards.Count : 0,
+                    revealedTryals = BuildRevealedTryalLabels(p),
+                    handCount = BuildPublicHandCount(p),
                 });
             }
 
@@ -154,19 +185,111 @@ namespace Salem.Networking
                 players = players.ToArray(),
                 deckCount = deckManager != null ? deckManager.DeckCount : 0,
                 discardCount = deckManager != null ? deckManager.DiscardCount : 0,
+                topDiscard = BuildPublicTopDiscard(),
             };
         }
 
-        // Public blue/status cards in front of a player (names only) + Black Cat.
+        // Public BLUE/persistent cards in front of a player (names only) + Black Cat.
+        // Red accusation cards share the same Player.StatusCards list but are split out into
+        // BuildPublicAccusationCards — same information as before the split, two clean fields.
         private static string[] BuildPublicStatusCards(Player p)
         {
             var names = new List<string>();
             if (p.StatusCards != null)
             {
-                names.AddRange(p.StatusCards.Where(c => c != null).Select(c => c.Name));
+                names.AddRange(p.StatusCards
+                    .Where(c => c != null && c.Type != Card.CardColor.Red)
+                    .Select(c => c.Name));
             }
-            if (p.IsBlackCatHolder) names.Add("Black Cat");
+            // Safety net for a holder whose card somehow isn't in StatusCards — but DE-DUPLICATED.
+            // Player.AssignBlackCat already puts the card INTO StatusCards, and it is Blue, so the
+            // sweep above normally emits it. Adding unconditionally listed "Black Cat" twice, which
+            // showed as two effect badges and a bogus "×2" stack on the host seat.
+            if (p.IsBlackCatHolder && !names.Contains("Black Cat")) names.Add("Black Cat");
             return names.ToArray();
+        }
+
+        // Public RED accusation cards in front of a player (names only).
+        // Public by the card rules — accusations are played face-up on the table, and the aggregate
+        // `accusations` int has always been broadcast. These names were already going out inside
+        // statusCards before the split; this is a re-shape, not a new disclosure.
+        private static string[] BuildPublicAccusationCards(Player p)
+        {
+            if (p.StatusCards == null) return System.Array.Empty<string>();
+            return p.StatusCards
+                .Where(c => c != null && c.Type == Card.CardColor.Red)
+                .Select(c => c.Name)
+                .ToArray();
+        }
+
+        // Printed Town Hall identity (PUBLIC — dealt face-up, read aloud at setup).
+        // Reads the ASSIGNED card only. It must NEVER be filled from the ≤7-player "deal two, keep
+        // one" draft pool (GameSetup) — the DISCARDED option is not public.
+        // Deliberately the PRINTED name, not GetEffectiveTownHallName(): Martha Corey's copy is a
+        // live derivation from already-public inputs (seat order, alive status, printed cards), so
+        // clients can derive it, while the printed fact is what the table actually sees.
+        private static string BuildPublicTownHall(Player p)
+        {
+            return p.townhallCard != null ? p.townhallCard.Name : null;
+        }
+
+        /// <summary>
+        /// THE single place the PUBLIC broadcast path is allowed to touch <c>Player.TryalCards</c>.
+        ///
+        /// Filters to revealed FIRST, then maps to labels, so an unrevealed card is never projected
+        /// to its identity at all — there is no intermediate collection holding hidden labels to be
+        /// accidentally serialized. Result is sorted into a CANONICAL order so the array carries no
+        /// positional information about the player's face-down cards (see the NEVER-change warning
+        /// on PublicPlayerMsg.revealedTryals).
+        ///
+        /// ⚠ Do not inline this, do not add an overload that returns unrevealed cards, and do not
+        /// widen it to return TryalCard objects. It is intentionally greppable: this method plus the
+        /// `tryalTotal` count are the only public reads of TryalCards in the codebase.
+        /// </summary>
+        private static string[] BuildRevealedTryalLabels(Player p)
+        {
+            if (p.TryalCards == null) return System.Array.Empty<string>();
+            var labels = p.TryalCards
+                .Where(t => t != null && t.IsRevealed)
+                .Select(t => LabelFor(t.TryalCardType))
+                .ToList();
+            labels.Sort(System.StringComparer.Ordinal); // canonical, position-free
+            return labels.ToArray();
+        }
+
+        /// <summary>
+        /// THE single place the PUBLIC broadcast path is allowed to touch <c>Player.HandManager</c>.
+        ///
+        /// Returns a COUNT and nothing else. Hand size is openly countable at a physical table; hand
+        /// contents are private and belong to <see cref="BuildPrivateState"/> alone.
+        ///
+        /// ⚠ Same discipline as <see cref="BuildRevealedTryalLabels"/>: do not inline this, and never
+        /// change the return type to anything that can carry card identities. The <c>int</c> return
+        /// is the guard — a leak here would require changing the signature, which is reviewable.
+        /// </summary>
+        private static int BuildPublicHandCount(Player p)
+        {
+            if (p.HandManager == null || p.HandManager.Hand == null) return 0;
+            return p.HandManager.Hand.Count;
+        }
+
+        /// <summary>
+        /// Name of the TOP discard card, or null when the pile is empty. The discard pile is face-up
+        /// at a physical table, so its top card is public.
+        ///
+        /// ⚠ TOP CARD ONLY. Never return the pile — the ordered contents would leak play history
+        /// beyond what the table can see, and would hand Samuel Parris' discard-draw pool to every
+        /// client. "Top" is the LAST element: AddToDiscardPile appends, and DrawFromDiscardPile reads
+        /// from the end.
+        /// </summary>
+        private string BuildPublicTopDiscard()
+        {
+            if (deckManager == null) return null;
+
+            var pile = deckManager.GetDiscardPileCards();
+            if (pile == null || pile.Count == 0) return null;
+
+            return pile[pile.Count - 1]?.Name;
         }
 
         // ─── Private message (sent ONLY to its owner by NetworkId) ─
@@ -218,7 +341,9 @@ namespace Salem.Networking
 
         // Public display id: NetworkId for human seats, synthetic PublicId for AI.
         // Used ONLY in the public message; private_state still routes by NetworkId.
-        private static string PublicIdFor(Player p)
+        // Public so GameEventEmitter uses the SAME id mapping — two implementations could drift and
+        // silently make log entries reference seats the board doesn't have.
+        public static string PublicIdFor(Player p)
         {
             if (p == null) return "";
             return !string.IsNullOrEmpty(p.NetworkId) ? p.NetworkId : (p.PublicId ?? "");

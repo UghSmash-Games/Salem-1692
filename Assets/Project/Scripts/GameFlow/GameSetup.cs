@@ -104,8 +104,15 @@ namespace Salem.Gameplay.Setup
         {
             //Debug.Log($"[GameSetup] Running SetupNewGame");
             SetupTryalCards(players);
-            tableLayoutController.BuildTable(players);
-            
+
+            // Null-conditional: the legacy local table is retired in Networked_Game (the host screen
+            // renders from HostDisplay via the public wire contract), so this reference is
+            // deliberately empty there. Sandbox_Testing still wires it and builds the boards.
+            // NOTE: this must NOT abort setup — the Town Hall deal and play deck below are game
+            // logic, not UI, and every client depends on them.
+            if (tableLayoutController != null) tableLayoutController.BuildTable(players);
+
+
             yield return SetupTownhallCards(players);
             SetupPlayDeck(players);
         }

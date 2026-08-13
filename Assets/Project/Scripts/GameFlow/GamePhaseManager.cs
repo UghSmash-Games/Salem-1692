@@ -92,6 +92,33 @@ namespace Salem.GameFlow
         }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
         public event PhaseChangeHandler OnPhaseChange;
+
+        /// <summary>
+        /// A confessor's tryal has just been flipped, AT the synchronized revealAt.
+        ///
+        /// Distinct from Player.TryalCardRevealed, which says a card turned but not WHY. Consumers
+        /// (the host reveal overlay, the public event log) need to distinguish "confessed and was
+        /// spared" from "was killed and exposed" — and inferring it from "targetId isn't the
+        /// victim" would silently break the day EmitSynchronizedReveal is reused for accusation or
+        /// conspiracy reveals, which its own docblock anticipates.
+        ///
+        /// PUBLIC by the rulebook: a confession flip is shown to the table. It fires at revealAt,
+        /// never during the masked confess window, so it cannot leak who confessed early.
+        /// </summary>
+        public static event System.Action<Player, TryalCard> OnConfessionRevealed;
+
+        /// <summary>
+        /// The constable's gavel token has been placed, announced AT the synchronized revealAt.
+        ///
+        /// PUBLIC by the rulebook. The moderator script (p11) has the token physically "put in
+        /// front of the player who the constable points to" and THEN everyone opens their eyes, and
+        /// p8 lists it beside confession and asylum as one of the three visible reasons a player
+        /// survives the night. It is therefore visible whether or not the witches targeted them.
+        ///
+        /// ⛔ Carries the RECIPIENT only. Never the constable — that identity is secret, and the
+        /// physical token does not reveal who placed it either. Emitted with actorId null.
+        /// </summary>
+        public static event System.Action<Player> OnGavelPlaced;
         public KeyCode DebugAdvancePhaseKey = KeyCode.P;
 
         private GameSetup GameSetup;
@@ -554,7 +581,7 @@ namespace Salem.GameFlow
             // the elimination flip together, in sync across host + mirrors (phase_resolve).
             // Win conditions are checked BEFORE the animation inside EmitSynchronizedReveal.
             var outcome = NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
-            yield return RevealNightOutcome(outcome, pendingConfessions);
+            yield return RevealNightOutcome(outcome, pendingConfessions, plan.ConstableTarget);
         }
 
         /// <summary>
@@ -566,11 +593,14 @@ namespace Salem.GameFlow
         /// result. With no victim and no confessions, nothing reveals.
         /// </summary>
         private IEnumerator RevealNightOutcome(NightResolver.NightOutcome outcome,
-                                               Dictionary<Player, int> pendingConfessions)
+                                               Dictionary<Player, int> pendingConfessions,
+                                               Player gavelTarget)
         {
             bool hasConfessions = pendingConfessions != null && pendingConfessions.Count > 0;
 
-            if (outcome.Victim == null && !hasConfessions)
+            // A gavel placed on an UNTARGETED player still has to be announced — the token is
+            // visible once eyes open — so it alone is enough to warrant a synchronized reveal.
+            if (outcome.Victim == null && !hasConfessions && gavelTarget == null)
             {
                 GameManager.Instance?.EvaluateEndGame();
                 yield break;
@@ -587,15 +617,31 @@ namespace Salem.GameFlow
                     var cp = kv.Key; int idx = kv.Value;
                     if (cp != null && idx >= 0 && idx < cp.TryalCards.Count &&
                         cp.TryalCards[idx] != null && !cp.TryalCards[idx].IsRevealed)
+                    {
+                        var card = cp.TryalCards[idx];
                         cp.RevealTryalCard(idx);
+
+                        // Announce it AS A CONFESSION. RevealTryalCard already fired the generic
+                        // tryal_revealed; this says WHY, which the generic event cannot express.
+                        // Fires at revealAt — the flip is public by the rulebook at that moment, so
+                        // the masked confess-window timing is untouched.
+                        OnConfessionRevealed?.Invoke(cp, card);
+                    }
                 }
+            }
+
+            // Announced at revealAt, when eyes open and the token becomes visible — never during
+            // the constable's secret round, which would leak the save while it still matters.
+            void AnnounceGavel()
+            {
+                if (gavelTarget != null) OnGavelPlaced?.Invoke(gavelTarget);
             }
 
             if (outcome.Victim != null && outcome.Eliminated)
             {
                 var victim = outcome.Victim;
                 yield return EmitSynchronizedReveal(
-                    applyReveal: () => { RevealConfessions(); ApplyNightKill(victim); },
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); ApplyNightKill(victim); },
                     elimination: new EliminationResultMsg { playerId = PublicIdOf(victim), eliminated = true, savedBy = "" });
             }
             else if (outcome.Victim != null)
@@ -603,7 +649,7 @@ namespace Salem.GameFlow
                 // Targeted but saved (constable / confession). Still flip confessed tryals
                 // and announce the outcome in sync.
                 yield return EmitSynchronizedReveal(
-                    applyReveal: RevealConfessions,
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); },
                     elimination: new EliminationResultMsg
                     {
                         playerId = PublicIdOf(outcome.Victim),
@@ -614,7 +660,8 @@ namespace Salem.GameFlow
             else
             {
                 // No victim, but confessions happened — reveal them publicly in sync.
-                yield return EmitSynchronizedReveal(applyReveal: RevealConfessions, elimination: null);
+                yield return EmitSynchronizedReveal(
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); }, elimination: null);
             }
         }
 

@@ -1,0 +1,150 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d7f044467bb251419d0c9926c16754a, type: 3}
+  m_Name: HostCardSpriteRegistry
+  m_EditorClassIdentifier: 
+  cardBack: {fileID: 21300000, guid: a3061c95ea42e864c974740814e954b2, type: 3}
+  entries:
+  - label: Abigail Williams
+    sprite: {fileID: 360187739049842669, guid: 9ab550bae86abc14c837f4f8e5f69156, type: 3}
+    description: If you place the final accusation on a tryal, you may discard all
+      accusations in front of you.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Accusation
+    sprite: {fileID: 6500315174530356579, guid: 92945da9ffe5fef47bdc9c3bf2d21434, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Alibi
+    sprite: {fileID: -7220711262705116633, guid: 6a01ea4d9ae71d94f9f11a2511a2e518, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Anne Putnam
+    sprite: {fileID: -7688039926450947287, guid: 44e5439b40999a444a43f5cbed3c896a, type: 3}
+    description: At the end of your turn, draw two cards for each tryal card you
+      revealed during your turn.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Arson
+    sprite: {fileID: 6656842718856498535, guid: c972f4a6861487a49b93a8152a444c40, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Asylum
+    sprite: {fileID: 7093145446897808993, guid: 43ed99c574777ca48ac2b2dd6f193e82, type: 3}
+    description: Recipient cannot be eliminated during the night
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Black Cat
+    sprite: {fileID: 1198703447431812753, guid: db4865affcf2319459728c23428d51b3, type: 3}
+    description: Its holder reveals a tryal when conspiracy is drawn
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Constable
+    sprite: {fileID: 21300000, guid: 1688ebbd56e47e34286e3110ff1dd6a1, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Cotton Mather
+    sprite: {fileID: 4517934172043164133, guid: 6c77ed3dfc34d4f47bcc28dbf45c62c4, type: 3}
+    description: Evidence cards played against you are worth only 1 accusation.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Curse
+    sprite: {fileID: -5655927028324287619, guid: 0b6bca9e43f569a439621606ebd0d5a9, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Evidence
+    sprite: {fileID: -1253571219821158028, guid: 952db37b9b03c3a43a4796dec00503ea, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: George Burroughs
+    sprite: {fileID: 5685341028308765632, guid: 2681499ab070a8e4c9eaac486e591966, type: 3}
+    description: 8 total accusations must be played against you to reveal a Tryal.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Giles Corey
+    sprite: {fileID: -4048703291902219468, guid: 84d5034453e710a4baf3645c7f3e52f0, type: 3}
+    description: If you draw 2 red cards on your turn, show the other players and
+      draw a 3rd card.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: John Proctor
+    sprite: {fileID: 1284216619983507826, guid: 2a0cfdde61b484b4e8c1e68cc4a1d63a, type: 3}
+    description: When a player is eliminated, take all blue cards in front of them
+      and all cards in their hand.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Martha Corey
+    sprite: {fileID: 699576528662589918, guid: c9a381ea13f9199449c50d3493e49066, type: 3}
+    description: You have the same ability as the first living player to your right.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Mary Warren
+    sprite: {fileID: 4557740153877582163, guid: e4fcf3fb83a610c408ed920bbcebd952, type: 3}
+    description: You are immune to the ill effects of Matchmaker and Black Cat.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Matchmaker
+    sprite: {fileID: -4270100993138209059, guid: e905cc5ce85e00b4c9d3e172f146a945, type: 3}
+    description: If one linked player is eliminated, both are
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Not A Witch
+    sprite: {fileID: 21300000, guid: 73ddd731e2d2e1542929156cd6486c7a, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Piety
+    sprite: {fileID: -1566652955878112714, guid: bf7b8500192c2954f9a6e493e45ec0fd, type: 3}
+    description: Doubles the accusations needed to reveal a tryal
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Rebecca Nurse
+    sprite: {fileID: -4926091400924112911, guid: e75ffddc4ba8bce4d942d3e9f03e0128, type: 3}
+    description: Each time a Tryal is revealed on another player (from accusations),
+      draw 1 card.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Robbery
+    sprite: {fileID: 765174467315769199, guid: 98a10a10942ef0b40b1ae394eadca9d8, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Samuel Parris
+    sprite: {fileID: -3858886279285835928, guid: a416c706371ac3342961b50b221be30d, type: 3}
+    description: Twice per game, draw up to 2 cards from the discard pile instead
+      of the deck. No Black cards.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Sarah Good
+    sprite: {fileID: -2767702592324726748, guid: 4631d487ec50fe14cb7565589048c5cd, type: 3}
+    description: Robbery and Arson cards have no effect on you and are discarded.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Scapegoat
+    sprite: {fileID: 5184375383222143722, guid: d07705692b775b24092d3575127c085e, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Stocks
+    sprite: {fileID: -6460681411058318010, guid: 0236c556a278abf469cc12015c87b984, type: 3}
+    description: Skips this player's next turn
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Thomas Danforth
+    sprite: {fileID: -2340475472156105306, guid: f28b6338b194b2c4b83705734e83e3fb, type: 3}
+    description: When you accuse, the threshold is reduced by 1 (6th accusation triggers
+      reveal).
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Tituba
+    sprite: {fileID: -3839529658055775178, guid: 685ae3d9810caab4cb60f8a34bf1916b, type: 3}
+    description: Once per game, on your turn before drawing, rearrange the deck for
+      60 seconds.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Will Griggs
+    sprite: {fileID: 3889235269648740336, guid: 58db848fb182b5345a3b36f02344c6c5, type: 3}
+    description: You may choose to use alibi cards as if they were witness cards,
+      worth seven total accusations.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: William Phipps
+    sprite: {fileID: 3670171428419047502, guid: 1a251fd9f09c849449d855c020f7ce28, type: 3}
+    description: Once per game, you may confess without revealing one of your Tryal
+      cards.
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Witch
+    sprite: {fileID: 21300000, guid: ee63614415fa1a442b31b54e9db8a54b, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}
+  - label: Witness
+    sprite: {fileID: 6880529960334143787, guid: e496ad99df96b5a4ba3e03124cec5228, type: 3}
+    description: 
+    accent: {r: 0, g: 0, b: 0, a: 0}

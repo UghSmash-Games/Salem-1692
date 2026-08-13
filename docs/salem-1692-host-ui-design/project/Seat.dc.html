@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>@keyframes emberPulse{0%,100%{opacity:.62}50%{opacity:1}}</style></helmet>
+<div onClick="{{ seat.onSelect }}" style="cursor:pointer;position:relative;padding:11px 12px 12px;border-radius:10px;border:1px solid rgba(232,220,192,.14);background:rgba(232,220,192,.04);display:flex;flex-direction:column;gap:9px;color:#e8dcc0;user-select:none" style-hover="border-color:rgba(201,138,63,.55)">
+
+<sc-if value="{{ seat.isSelected }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:-1px;border-radius:10px;border:1px solid #c98a3f;box-shadow:0 0 0 3px rgba(201,138,63,.14),0 10px 26px rgba(0,0,0,.5);pointer-events:none"></div>
+</sc-if>
+
+<sc-if value="{{ seat.isTurn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:-3px;border-radius:12px;border:2px solid #e6b268;box-shadow:0 0 0 4px rgba(230,178,104,.16),0 0 26px 6px rgba(230,178,104,.42),inset 0 0 22px rgba(230,178,104,.14);animation:emberPulse 2.4s ease-in-out infinite;pointer-events:none"></div>
+</sc-if>
+
+<sc-if value="{{ seat.hasEffects }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:-8px;left:10px;display:flex;gap:4px">
+<sc-for list="{{ seat.effects }}" as="fx" hint-placeholder-count="1">
+<div style="padding:3px 7px;border-radius:999px;background:{{ fx.color }};color:#f0e6cd;font:600 8px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em">{{ fx.name }}</div>
+</sc-for>
+</div>
+</sc-if>
+
+<div style="display:flex;gap:4px;min-height:1px">
+<sc-for list="{{ seat.played }}" as="c" hint-placeholder-count="5">
+<sc-if value="{{ c.filled }}" hint-placeholder-val="{{ true }}">
+<div style="position:relative;flex:1;aspect-ratio:5/7;border-radius:4px;background-image:{{ c.bg }};background-size:cover;background-position:center;box-shadow:0 2px 6px rgba(0,0,0,.5)">
+<sc-if value="{{ c.stacked }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;border-radius:4px;box-shadow:2px -2px 0 -1px rgba(232,220,192,.35),4px -4px 0 -2px rgba(232,220,192,.2);pointer-events:none"></div>
+<div style="position:absolute;bottom:-4px;right:-4px;min-width:19px;height:19px;padding:0 4px;border-radius:999px;background:#a8231b;color:#f7efdd;font:700 11px/19px ui-monospace,Menlo,monospace;text-align:center;box-shadow:0 0 0 2px #17130f,0 2px 6px rgba(0,0,0,.6)">{{ c.count }}</div>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ c.empty }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;aspect-ratio:5/7;border-radius:4px;border:1px dashed rgba(232,220,192,.15);background:rgba(0,0,0,.18)"></div>
+</sc-if>
+</sc-for>
+</div>
+
+<div style="display:flex;align-items:flex-start;gap:10px">
+<div style="flex:none;width:calc((100% - 16px)/5);aspect-ratio:5/7;border-radius:4px;overflow:hidden;background-image:url('assets/char-sarah-good.png');background-size:cover;background-position:center;box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 0 0 1px rgba(232,220,192,.25)"></div>
+<div style="min-width:0;flex:1;padding-top:2px">
+<div style="font-family:'IM Fell English SC',Georgia,serif;font-size:14px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ seat.name }}</div>
+<div style="font:400 9px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(232,220,192,.42)">{{ seat.hand }} · {{ seat.progress }}</div>
+<div style="font:400 9px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:rgba(232,220,192,.42)">Accusations {{ seat.accusations }}/7</div>
+</div>
+</div>
+
+<div style="display:flex;gap:4px">
+<sc-for list="{{ seat.tryals }}" as="t" hint-placeholder-count="5">
+<div onClick="{{ t.onFlip }}" style="flex:1;aspect-ratio:5/7;border-radius:4px;position:relative;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.5)">
+<sc-if value="{{ t.hidden }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;background-image:url('assets/tryal-back.png');background-size:cover;background-position:center" style-hover="filter:brightness(1.2)"></div>
+</sc-if>
+<sc-if value="{{ t.revealed }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ t.isWitch }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background-image:url('assets/witch-card.png');background-size:cover;background-position:center;border:2px solid #a8231b;border-radius:4px;box-shadow:0 0 0 2px rgba(168,35,27,.45),0 0 12px rgba(168,35,27,.75)"></div>
+<div style="position:absolute;top:2px;right:2px;width:9px;height:9px;background:#a8231b;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(240,230,205,.85)"></div>
+</sc-if>
+<sc-if value="{{ t.notWitch }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;background-image:url('assets/not-witch-card.png');background-size:cover;background-position:center;border:2px solid #3f5a46;border-radius:4px;filter:saturate(.7) brightness(.92)"></div>
+</sc-if>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<sc-if value="{{ seat.dead }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;border-radius:10px;background:rgba(8,6,5,.82);display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden">
+<div style="position:absolute;inset:-2px;border-radius:10px;border:2px solid rgba(168,35,27,.75)"></div>
+<div style="position:absolute;width:140%;height:2px;background:rgba(168,35,27,.5);transform:rotate(-24deg)"></div>
+<div style="position:absolute;width:140%;height:2px;background:rgba(168,35,27,.5);transform:rotate(24deg)"></div>
+<div style="font-family:'IM Fell English SC',Georgia,serif;font-size:30px;line-height:1;letter-spacing:.16em;color:#e0463a;text-shadow:0 0 18px rgba(168,35,27,.8),0 2px 3px rgba(0,0,0,.9);transform:rotate(-9deg) scale(1.02);border:4px double #a8231b;padding:7px 16px;border-radius:5px;background:rgba(20,6,4,.72);box-shadow:0 0 0 2px rgba(20,6,4,.6),0 0 34px rgba(168,35,27,.45)">HANGED</div>
+</div>
+</sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:200,&quot;height&quot;:150},&quot;seat&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}"></script>
+</body>
+</html>

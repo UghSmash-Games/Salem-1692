@@ -212,22 +212,43 @@ namespace Salem.Networking
             _ = socketClient.Emit("target_request", JsonUtility.ToJson(msg));
         }
 
+        // Host-facing echoes of the outgoing PUBLIC dramatic-beat messages. The host TV display
+        // (Salem.UI.HostDisplay) subscribes to these so it renders the SAME payloads sent to phones/mirrors
+        // — in particular public_reveal is NOT echoed to the host over the socket, so this is the host's
+        // only signal for it. Carry only public data (a timestamp / already-public DTOs).
+        public static event System.Action<long> OnPhaseResolveSent;
+        public static event System.Action<EliminationResultMsg> OnEliminationResultSent;
+        public static event System.Action<PublicRevealMsg> OnPublicRevealSent;
+        public static event System.Action<GameEventMsg> OnGameEventSent;
+
         public void SendPhaseResolve(PhaseResolveMsg msg)
         {
             if (!GuardConnected("SendPhaseResolve")) return;
             _ = socketClient.Emit("phase_resolve", JsonUtility.ToJson(msg));
+            OnPhaseResolveSent?.Invoke(msg.revealAt);
         }
 
         public void SendPublicReveal(PublicRevealMsg msg)
         {
             if (!GuardConnected("SendPublicReveal")) return;
             _ = socketClient.Emit("public_reveal", JsonUtility.ToJson(msg));
+            OnPublicRevealSent?.Invoke(msg);
+        }
+
+        // Public event-log entry. Like public_reveal, this is NOT echoed back to the host by the
+        // server, so the send-event is the host display's only signal.
+        public void SendGameEvent(GameEventMsg msg)
+        {
+            if (!GuardConnected("SendGameEvent")) return;
+            _ = socketClient.Emit("game_event", JsonUtility.ToJson(msg));
+            OnGameEventSent?.Invoke(msg);
         }
 
         public void SendEliminationResult(EliminationResultMsg msg)
         {
             if (!GuardConnected("SendEliminationResult")) return;
             _ = socketClient.Emit("elimination_result", JsonUtility.ToJson(msg));
+            OnEliminationResultSent?.Invoke(msg);
         }
 
         public void SendGameOver(GameOverMsg msg)

@@ -24,13 +24,35 @@ describe('generateRoomCode', () => {
     expect(code).toMatch(/^[A-Z]{4}$/);
   });
 
-  test('generates unique codes across many calls', () => {
+  test('never returns a code that collides with a LIVE room', () => {
+    // The real invariant. generateRoomCode() loops on `while (rooms.has(code))`, so a code can
+    // never duplicate an ACTIVE room — that is what makes join-by-code unambiguous.
+    //
+    // ⚠ The previous version of this test called generateRoomCode() 100 times WITHOUT creating
+    // rooms, so the dedup loop never engaged and it was really asserting "100 random draws are all
+    // distinct". With 24^4 = 331,776 codes that is only ~98.5% likely
+    // (birthday paradox: 1 - e^(-100*99/(2*331776)) ≈ 1.48%), so it failed roughly 1 run in 67.
+    // Creating the rooms is what actually exercises the guarantee.
     const codes = new Set();
-    for (let i = 0; i < 100; i++) {
-      codes.add(generateRoomCode());
+    for (let i = 0; i < 200; i++) {
+      const code = createRoom(`host-socket-${i}`);
+      expect(code).toMatch(/^[A-Z]{4}$/);
+      expect(codes.has(code)).toBe(false); // deterministic: live rooms are never reused
+      codes.add(code);
     }
-    // With 24^4 = 331,776 possible codes, 100 should all be unique
-    expect(codes.size).toBe(100);
+    expect(codes.size).toBe(200);
+  });
+
+  test('reuses a code only after that room is gone', () => {
+    // Complement to the above: the dedup set is LIVE rooms, not all-time history. A code freed by
+    // a closed room is legitimately available again — otherwise the 331,776-code space would leak
+    // over a long-running server.
+    const code = createRoom('host-a');
+    removeSocket('host-a');           // host leaving destroys the room
+    expect(getRoom(code)).toBeUndefined();
+
+    // The freed code is now allowed to come back; nothing asserts that it WILL (it is random).
+    expect(() => createRoom('host-b')).not.toThrow();
   });
 });
 

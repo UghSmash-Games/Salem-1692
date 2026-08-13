@@ -30,7 +30,13 @@ namespace Salem.GameFlow
     public class CardEffectManager : MonoBehaviour
     {
         public static CardEffectManager Instance { get; private set; }
+        // Pre-formatted prose, for the LOCAL debug log (CardLogManager) only.
         public static event Action<string> OnCardPlayed;
+
+        // Structured (source, card, target) for consumers that must NOT receive prose — notably the
+        // networked event log, whose whole privacy guarantee is that no free text crosses the wire.
+        // Same moment, same data, unformatted. See GameEventKind in NetworkMessages.
+        public static event Action<Player, Card, Player> OnCardPlayedDetail;
         [SerializeField] private GameManager GameManager;
         [SerializeField] private GamePhaseManager GamePhaseManager;
         [SerializeField] private DeckManager DeckManager;
@@ -315,6 +321,7 @@ namespace Salem.GameFlow
 
             // Raise event for CardLogManager to listen to
             OnCardPlayed?.Invoke(CardLogFormatter.Format(CurrentPlayer, card, target));
+            OnCardPlayedDetail?.Invoke(CurrentPlayer, card, target);
 
             GameTurnManager.Instance.NotifyCardPlayed(CurrentPlayer);
             return true;

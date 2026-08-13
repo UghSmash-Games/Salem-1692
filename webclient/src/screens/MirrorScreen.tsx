@@ -21,9 +21,20 @@ export function MirrorScreen() {
   );
   const roomCode = useGameStore((s) => s.session.roomCode);
   const gameOver = useGameStore((s) => s.gameOver);
+  const reveal = useGameStore((s) => s.reveal);
 
   // Reuse the player game-over screen — it shows only public/revealed data.
-  if (gameOver) return <GameOverScreen />;
+  //
+  // ⚠ WAIT FOR THE REVEAL TO FINISH FIRST. At revealAt the host sends elimination_result and
+  // game_over back-to-back in the same synchronous block, so switching on `gameOver` alone
+  // unmounted <RevealOverlay/> after ~one network hop — the mirror room saw a fifth of a second
+  // of the beat while the host room watched the full linger. That is the biggest reveal in the
+  // game (the kill that ends it) and the exact desync phase_resolve exists to prevent.
+  //
+  // RevealOverlay clears `reveal` once its linger elapses, so gating on it keeps both rooms on
+  // the same schedule. When a game ends with no reveal in flight (e.g. the last witch tryal
+  // turned by accusation), `reveal` is already null and this shows immediately, as before.
+  if (gameOver && !reveal) return <GameOverScreen />;
 
   return (
     <div className="relative flex min-h-dvh flex-col gap-6 bg-ink px-6 py-8">

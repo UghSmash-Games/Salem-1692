@@ -1,7 +1,7 @@
 /**
  * Public board summary. Shows only public information about every player:
- * accusation counts, eliminated status, blue (status) cards in front of them,
- * and whose turn it is. NEVER shows tryal card faces or roles.
+ * accusation counts, eliminated status, the red accusation + blue status cards
+ * in front of them, and whose turn it is. NEVER shows tryal card faces or roles.
  */
 
 import type { PublicPlayer } from '../socket/types';
@@ -26,6 +26,13 @@ export function BoardSummary({ players, whoseTurn, myPlayerId }: Props) {
       {players.map((p) => {
         const isTurn = p.playerId === whoseTurn;
         const isMe = p.playerId === myPlayerId;
+        // Red accusation cards and blue status cards arrive as two fields but are one physical
+        // pile in front of the player, so they render as one list. Same CONTENT as before the wire
+        // split; ordering is now grouped (reds, then blues) rather than interleaved by play order.
+        const cardsInFront = [
+          ...(p.accusationCards ?? []),
+          ...(p.statusCards ?? []),
+        ];
         return (
           <li
             key={p.playerId}
@@ -43,8 +50,8 @@ export function BoardSummary({ players, whoseTurn, myPlayerId }: Props) {
               )}
             </span>
             <span className="flex items-center gap-2 text-xs text-parchment/80">
-              {p.statusCards && p.statusCards.length > 0 && (
-                <span className="text-moss">{p.statusCards.join(', ')}</span>
+              {cardsInFront.length > 0 && (
+                <span className="text-moss">{cardsInFront.join(', ')}</span>
               )}
               <span title="accusations">⚖ {p.accusations}</span>
             </span>

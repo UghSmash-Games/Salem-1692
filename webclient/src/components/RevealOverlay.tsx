@@ -11,7 +11,34 @@ import { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { useSynchronizedReveal } from '../hooks/useSynchronizedReveal';
 
-const REVEALED_LINGER_MS = 4000;
+/**
+ * How long the outcome stays up after the reveal.
+ * ⚠ MUST match HostRevealOverlay.lingerSeconds in Unity (Assets/Project/Scripts/UI/HostDisplay).
+ * If these drift, one screen clears the reveal while the other is still showing it — the exact
+ * desync the phase_resolve pattern exists to prevent.
+ */
+const REVEALED_LINGER_MS = 6000;
+
+/**
+ * `savedBy` is a LABEL from NightResolver ("constable" | "confession" | ""), NOT a playerId.
+ *
+ * This previously ran it through nameFor(), a player lookup that always failed and fell through to
+ * printing the raw label — it read correctly by accident. Mapping it explicitly makes the contract
+ * visible.
+ *
+ * The label form is deliberate and must stay: naming the saver would publish the CONSTABLE'S SECRET
+ * IDENTITY to every player and mirror. See docs/protocol.md → elimination_result.
+ */
+function savedByPhrase(savedBy: string | null | undefined): string {
+  switch (savedBy) {
+    case 'constable':
+      return 'saved by the constable';
+    case 'confession':
+      return 'saved by confession';
+    default:
+      return 'spared';
+  }
+}
 
 export function RevealOverlay() {
   const { phase, secondsRemaining } = useSynchronizedReveal();
@@ -65,10 +92,7 @@ export function RevealOverlay() {
               <>
                 <div className="text-6xl">🛡️</div>
                 <h2 className="text-3xl font-bold text-candle">
-                  {nameFor(lastElimination.playerId)} was saved
-                  {lastElimination.savedBy
-                    ? ` by ${nameFor(lastElimination.savedBy)}`
-                    : ''}
+                  {nameFor(lastElimination.playerId)} was {savedByPhrase(lastElimination.savedBy)}
                 </h2>
               </>
             )

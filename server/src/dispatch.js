@@ -239,6 +239,16 @@ function registerDispatch(io) {
       socket.to(socket.roomCode).emit('public_reveal', data);
     });
 
+    // Public event-log entry ("What Has Passed") → all players + all mirrors.
+    // Carries a closed-vocabulary `kind`, public player ids, a public card name and a short
+    // enumerable `value` — never prose, and never secret-phase content (the Unity-side
+    // GameEventKind enum has no kind that could express one). Not echoed to the host, which
+    // renders from its own send-event.
+    socket.on('game_event', (data) => {
+      if (socket.role !== 'host') return;
+      socket.to(socket.roomCode).emit('game_event', data);
+    });
+
     // Elimination result → ALL clients in room
     socket.on('elimination_result', (data) => {
       if (socket.role !== 'host') return;
