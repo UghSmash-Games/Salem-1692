@@ -12,11 +12,14 @@ namespace Salem.UI.HostDisplay
     /// NEVER reads game-logic models. This is the by-construction Phase-7 masking boundary — private
     /// data has no path onto the host canvas.
     ///
-    /// STAGE 7a wires the public game-state → roster. Later stages add:
-    ///   7c — night/dawn overlay (from GameStateUpdateMsg.phase),
-    ///   7d — reveal overlay (from NetworkManager.OnPhaseResolveSent + OnEliminationResultSent),
-    ///   7e — public-reveal toast (from NetworkManager.OnPublicRevealSent).
-    /// The controller already owns those subscriptions so the sub-views just get handed their DTO.
+    /// STAGE 7a wires the public game-state → roster; 7c the night/dawn overlay (from
+    /// GameStateUpdateMsg.phase), 7d the synchronized reveal overlay (NetworkManager.OnPhaseResolveSent
+    /// + OnEliminationResultSent), 7e the public-reveal toast (NetworkManager.OnPublicRevealSent).
+    ///
+    /// Two feeds, deliberately: this controller owns the PUBLIC-STATE fan-out (Render(state) below),
+    /// while the overlays subscribe to their own host send-events — those fire at moments the periodic
+    /// state broadcast cannot express. Render() still reaches them, but only to refresh the id→name
+    /// map so they can name a PLAYER instead of echoing a raw id.
     /// </summary>
     public class HostDisplayController : MonoBehaviour
     {
@@ -28,6 +31,12 @@ namespace Salem.UI.HostDisplay
         [SerializeField] private HostInEffectPanel inEffect; // persistent cards currently in play
         [SerializeField] private HostPhaseOverlay phaseOverlay; // 7c — hides the board during dawn/night
         [SerializeField] private HostRevealOverlay revealOverlay; // 7d — synchronized tryal reveal
+        [SerializeField] private HostPublicRevealToast publicRevealToast; // 7e — "X shows Y & Z"
+
+        // NOTE: HostLobbyPanel is deliberately NOT wired here. It drives itself entirely from
+        // NetworkGameCoordinator's lobby events (room code / roster / game-started) and consumes no
+        // public state, so a serialized reference would be an orphaned field of exactly the kind the
+        // roadmap-B cleanup sweep removed. It lives as its own GameObject under HostDisplay.
 
         private void OnEnable()
         {
@@ -52,6 +61,8 @@ namespace Salem.UI.HostDisplay
             if (phaseOverlay != null) phaseOverlay.Render(state);
             // The reveal overlay schedules off phase_resolve; this only feeds it the id→name map.
             if (revealOverlay != null) revealOverlay.Render(state);
+            // Likewise the toast — it fires on public_reveal, and needs the map to name the actor.
+            if (publicRevealToast != null) publicRevealToast.Render(state);
         }
     }
 }

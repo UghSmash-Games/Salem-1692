@@ -10,6 +10,7 @@
 import { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { useSynchronizedReveal } from '../hooks/useSynchronizedReveal';
+import { describeGameEvent } from './gameEventCopy';
 
 /**
  * How long the outcome stays up after the reveal.
@@ -44,6 +45,7 @@ export function RevealOverlay() {
   const { phase, secondsRemaining } = useSynchronizedReveal();
   const lastElimination = useGameStore((s) => s.lastElimination);
   const players = useGameStore((s) => s.publicBoard.players);
+  const revealEvents = useGameStore((s) => s.revealEvents);
   const clearReveal = useGameStore((s) => s.clearReveal);
 
   // Once revealed, linger briefly so viewers see the outcome, then dismiss.
@@ -57,6 +59,16 @@ export function RevealOverlay() {
 
   const nameFor = (playerId: string | null | undefined) =>
     players.find((p) => p.playerId === playerId)?.displayName ?? playerId ?? '';
+
+  // What turned during THIS beat, for reveals that carry no outcome. Only the two kinds that
+  // describe a flip — a phase_changed or card_played that happened to land in the window is not
+  // part of the reveal and would read as noise mid-drama.
+  const beatLines = revealEvents
+    .filter(
+      (e) => e.kind === 'tryal_revealed' || e.kind === 'confession_revealed',
+    )
+    .map((e) => describeGameEvent(e, nameFor))
+    .filter((l): l is string => !!l);
 
   return (
     <div
@@ -96,6 +108,23 @@ export function RevealOverlay() {
                 </h2>
               </>
             )
+          ) : beatLines.length > 0 ? (
+            // No elimination_result — an accusation or piety-loss flip, or a confession-only
+            // night. Say what actually turned instead of a generic line: these reveals are the
+            // most common in the game, and "The deed is done" over a turned Tryal implies a death
+            // that did not happen. Composed from the events of THIS beat via the same closed-kind
+            // renderer the log uses.
+            <div className="flex flex-col items-center gap-2">
+              {beatLines.map((line, i) => (
+                <h2
+                  key={i}
+                  className="text-2xl font-bold text-parchment"
+                  data-testid="reveal-beat-line"
+                >
+                  {line}
+                </h2>
+              ))}
+            </div>
           ) : (
             <h2 className="text-3xl font-bold text-parchment">The deed is done</h2>
           )}

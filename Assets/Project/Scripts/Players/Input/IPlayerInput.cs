@@ -32,10 +32,29 @@ namespace Salem.Players
         IEnumerator RequestTarget(Player chooser, string prompt, Func<Player, bool> isValid, Action<Player> onChosen);
 
         /// <summary>
-        /// Ask the player to pick a tryal index on a target player. Local wraps
-        /// TableLayoutController.BeginTryalSelection.
+        /// Ask the player to pick WHICH face-down tryal to flip on <paramref name="target"/> — the
+        /// accuser at the accusation threshold, the Curse player on a piety-loss reveal, or the
+        /// conspiracy drawer on the black-cat holder. Local wraps
+        /// TableLayoutController.BeginTryalSelection; network sends a tryal_pick_request.
+        ///
+        /// `reason` is a machine code the phone maps to copy ("accusation_reveal" /
+        /// "piety_loss_reveal" / "conspiracy_reveal"). `timeoutSeconds` is the host-owned window.
+        ///
+        /// CONTRACT: reports a REAL index into <c>target.TryalCards</c>, or -1 only when the target
+        /// has no face-down tryal at all. Unlike RequestConfirmation, a no-answer does NOT cancel:
+        /// the reveal is a MANDATORY rules consequence once the threshold is crossed, so the network
+        /// implementation substitutes a RANDOM face-down tryal on timeout rather than returning -1.
+        ///
+        /// ⚠ `abortOnTurnChange` MUST be false for anything that runs OUTSIDE a turn. Conspiracy is
+        /// the case that matters: HandleConspiracyCardDrawn starts a DETACHED coroutine while the
+        /// drawer is still drawing, and a Draw-2 ends the turn immediately — so TurnId bumps while
+        /// the prompt is still out. With the guard on, every conspiracy prompt would abort within a
+        /// frame and silently fall back to random, which is exactly the bug this seam exists to fix.
+        /// Pass true only for prompts owned by the current turn (the accusation / piety-loss pick,
+        /// drained by NetworkInput.RunTurn), where a force-ended turn SHOULD cancel the wait.
         /// </summary>
-        IEnumerator RequestTryal(Player chooser, Player target, Action<int> onChosen);
+        IEnumerator RequestTryal(Player chooser, Player target, string reason,
+                                 float timeoutSeconds, bool abortOnTurnChange, Action<int> onChosen);
 
         /// <summary>
         /// Deliver a masked secret-phase prompt (dawn/night) and await this player's

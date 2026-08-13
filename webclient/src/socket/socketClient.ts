@@ -21,6 +21,7 @@ import type {
   CardPickSubmitPayload,
   ConfirmSubmitPayload,
   TargetSubmitPayload,
+  TryalPickSubmitPayload,
 } from './types';
 
 const SERVER_URL =
@@ -84,4 +85,8 @@ export function sendConfirm(payload: ConfirmSubmitPayload): void {
 /** Submit the chosen sub-target of a two-target card (Robbery/Scapegoat recipient). */
 export function sendTargetSubmit(payload: TargetSubmitPayload): void {
   socket.emit(CLIENT_TO_SERVER.TARGET_SUBMIT, payload);
+}
+
+export function sendTryalPickSubmit(payload: TryalPickSubmitPayload): void {
+  socket.emit(CLIENT_TO_SERVER.TRYAL_PICK_SUBMIT, payload);
 }

@@ -162,6 +162,25 @@ export interface TargetRequestPayload {
   seconds: number;
 }
 
+/** Pick WHICH face-down tryal turns on another player (server → this one player only) — the
+ *  accuser at the threshold, the Curse player on a piety-loss reveal, or the conspiracy drawer.
+ *
+ *  🔴 DELIBERATELY CARRIES NO CARD DATA. Only a COUNT of face-down tryals: the chooser is picking
+ *  blind among identical backs, exactly as at a physical table. The answer is an ORDINAL into that
+ *  face-down subset; only the host knows which real tryal slot it maps to.
+ *  ⛔ Never add labels here, and never expect real slot indices — tryals are appended on receipt,
+ *  so a real index would let a Conspiracy giver pin a card they passed to an exact slot. */
+export interface TryalPickRequestPayload {
+  /** Whose tryals are being flipped — a PUBLIC player id; resolve to a name via the public board. */
+  targetPlayerId: string;
+  /** How many face-down tryals they may choose between (render this many identical backs). */
+  count: number;
+  /** The window in seconds — shown as a countdown. */
+  seconds: number;
+  /** Machine code: "accusation_reveal" | "piety_loss_reveal" | "conspiracy_reveal". */
+  reason: string;
+}
+
 /** Tituba's deck-rearrange prompt (server → this one player only). */
 export interface DeckRearrangeRequestPayload {
   /** Full deck labels, top→bottom (the cards she may reorder). */
@@ -284,4 +303,10 @@ export interface ConfirmSubmitPayload {
 /** The chosen sub-target (this player → host). Single-stage; the host re-validates the id. */
 export interface TargetSubmitPayload {
   targetPlayerId: string;
+}
+
+/** Answer to a TryalPickRequestPayload. `ordinal` indexes the FACE-DOWN subset the host described
+ *  (0..count-1) — NOT a real tryal slot. The host owns that mapping and re-validates the range. */
+export interface TryalPickSubmitPayload {
+  ordinal: number;
 }

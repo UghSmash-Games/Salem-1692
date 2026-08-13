@@ -47,6 +47,7 @@ namespace Salem.Networking
             TrialService.OnDoubleWitchRevealed += HandleDoubleWitch;
             GamePhaseManager.OnConfessionRevealed += HandleConfessionRevealed;
             GamePhaseManager.OnGavelPlaced += HandleGavelPlaced;
+            GamePhaseManager.OnGameStarted += HandleGameStarted;
 
             if (gamePhaseManager != null) gamePhaseManager.OnPhaseChange += HandlePhaseChange;
             if (gameManager != null) gameManager.OnGameEnded += HandleGameEnded;
@@ -60,12 +61,20 @@ namespace Salem.Networking
             TrialService.OnDoubleWitchRevealed -= HandleDoubleWitch;
             GamePhaseManager.OnConfessionRevealed -= HandleConfessionRevealed;
             GamePhaseManager.OnGavelPlaced -= HandleGavelPlaced;
+            GamePhaseManager.OnGameStarted -= HandleGameStarted;
 
             if (gamePhaseManager != null) gamePhaseManager.OnPhaseChange -= HandlePhaseChange;
             if (gameManager != null) gameManager.OnGameEnded -= HandleGameEnded;
         }
 
         // ─── Handlers ──────────────────────────────────────────────
+
+        private void HandleGameStarted()
+        {
+            // No actor, no target, no value. The deal itself is the news; WHAT was dealt is the
+            // game's central secret. The renderer supplies a fixed line.
+            Emit(GameEventKind.GameStarted);
+        }
 
         private void HandleCardPlayed(Player source, Card card, Player target)
         {

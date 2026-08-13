@@ -60,6 +60,17 @@ namespace Salem.GameFlow
         [SerializeField] private float constableTimeout = 30f;
         [SerializeField] private float confessTimeout = 20f;   // used by the Item 4 confess rework
 
+        // Conspiracy step 1: how long the DRAWER has to choose which of the black-cat holder's
+        // face-down tryals turns. NOT a secret-phase window — conspiracy is a public event and only
+        // one player is being asked — but it sits here with the other host-owned deadlines. No
+        // answer → a random face-down tryal turns (the reveal is mandatory).
+        [SerializeField] private float ConspiracyTryalPickSeconds = 25f;
+
+        // Conspiracy step 2: the shared window for the SIMULTANEOUS pass. One value for everyone —
+        // a per-player window would make the phase resolve in submission order and stop being
+        // simultaneous. No answer → that player takes a random face-down card from their left.
+        [SerializeField] private float ConspiracyPassSeconds = 30f;
+
         // Lead time for synchronized reveals: the host emits phase_resolve with a
         // revealAt this many seconds in the future, then host + mirrors animate the
         // reveal at that shared wall-clock moment (per the /reveal-tryal skill).
@@ -119,6 +130,22 @@ namespace Salem.GameFlow
         /// physical token does not reveal who placed it either. Emitted with actorId null.
         /// </summary>
         public static event System.Action<Player> OnGavelPlaced;
+
+        /// <summary>
+        /// Setup is complete: tryals dealt, Town Hall cards assigned, deck built. Fires ONCE, after
+        /// GameSetup.SetupNewGame and GameTurnManager.Initialize, immediately BEFORE the change to
+        /// Dawn — so the log opens with "The table is set" and only then "Dawn breaks over Salem".
+        ///
+        /// Carries NOTHING. That is deliberate and load-bearing: setup is the moment witch and
+        /// constable tryals are dealt, so any argument here would be an argument about who got what.
+        /// The renderer's copy is a fixed string, and a parameterless event cannot be "improved"
+        /// into a leak by a later call site.
+        ///
+        /// Distinct from a phase_changed on Setup: that phase renders as null (dropped) because the
+        /// interesting fact is the DEAL COMPLETING, not the phase being entered.
+        /// </summary>
+        public static event System.Action OnGameStarted;
+
         public KeyCode DebugAdvancePhaseKey = KeyCode.P;
 
         private GameSetup GameSetup;
@@ -251,6 +278,11 @@ namespace Salem.GameFlow
         {
             yield return GameSetup.SetupNewGame(PlayerService.All);
             GameTurnManager.Initialize();
+
+            // The deal is done and the board is in its opening state. Announced BEFORE the Dawn
+            // change so the log reads in chronological order.
+            OnGameStarted?.Invoke();
+
             yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
         }
 
@@ -379,21 +411,52 @@ namespace Salem.GameFlow
 
                 if (unrevealed.Count > 0)
                 {
-                    if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
+                    // CHOOSE first, FLIP later. Only the flip is deferred to the shared revealAt —
+                    // the drawer's decision happens before the countdown starts, so no screen is
+                    // waiting on a human while the clock runs.
+                    int chosenIndex = -1;
+
+                    if (drawer != null && drawer.Input is NetworkInput)
+                    {
+                        // Rulebook p6: "the person who drew conspiracy reveals one tryal card
+                        // belonging to the player with the black cat" — the DRAWER's choice.
+                        // Awaited INLINE rather than via the PendingTryalRevealTarget flag the
+                        // accusation path uses: conspiracy resolves AFTER the drawer's turn has
+                        // ended, so NetworkInput.RunTurn would never drain the flag. This is already
+                        // a coroutine, so it can simply wait.
+                        // abortOnTurnChange: FALSE — conspiracy runs on a detached coroutine AFTER
+                        // the drawer's turn ended, so the TurnId guard would abort this instantly.
+                        yield return drawer.Input.RequestTryal(
+                            drawer, blackCatHolder, "conspiracy_reveal",
+                            ConspiracyTryalPickSeconds, false, idx => chosenIndex = idx);
+                    }
+                    else if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
                     {
                         bool done = false;
                         tableLayoutController.BeginTryalSelection(blackCatHolder, idx =>
                         {
-                            blackCatHolder.RevealTryalCard(idx);
+                            chosenIndex = idx;
                             done = true;
                         });
                         yield return new WaitUntil(() => done);
                     }
                     else
                     {
+                        // AI (or no drawer): random, as before.
                         yield return new WaitForSeconds(aiDecisionDelay);
-                        int pick = unrevealed[rng.NextInt(0, unrevealed.Count)];
-                        blackCatHolder.RevealTryalCard(pick);
+                        chosenIndex = unrevealed[rng.NextInt(0, unrevealed.Count)];
+                    }
+
+                    // Synchronized flip: host, mirrors and phones turn the card on the same
+                    // wall-clock beat instead of it popping into board state. No elimination —
+                    // a conspiracy reveal turns one card and kills no one.
+                    if (chosenIndex >= 0)
+                    {
+                        var holder = blackCatHolder;
+                        int revealIndex = chosenIndex;
+                        yield return EmitSynchronizedReveal(
+                            applyReveal: () => holder.RevealTryalCard(revealIndex),
+                            elimination: null);
                     }
 
                     // Anne Putnam: she just caused a tryal to be revealed on ANOTHER player.
@@ -416,29 +479,17 @@ namespace Salem.GameFlow
                 Debug.Log("[Conspiracy] No Black Cat in play — skipping Tryal reveal step.");
             }
 
-            // Step 2: Clockwise Tryal pass — each player takes one unrevealed Tryal from the player to their left
+            // ⚠ RE-READ the alive set: step 1's reveal can ELIMINATE the black-cat holder (it was
+            // their last witch card), and the list captured at the top of this routine would still
+            // include them — they would both give and receive a card while dead.
+            alivePlayers = PlayerService.GetAlivePlayers();
+
+            // Step 2: the simultaneous pass — rulebook p6: "All players SIMULTANEOUSLY CHOOSE a
+            // face-down (unrevealed) tryal card from the player on their left and add it to their own
+            // set." Every player picks; each is the source for exactly one taker (their right).
             if (alivePlayers.Count >= 2)
             {
-                // Build the pass: each player takes from the player to their left (previous index, wrapping)
-                var passedCards = new TryalCard[alivePlayers.Count];
-                for (int i = 0; i < alivePlayers.Count; i++)
-                {
-                    int leftIdx = (i - 1 + alivePlayers.Count) % alivePlayers.Count;
-                    var leftPlayer = alivePlayers[leftIdx];
-                    int? tryalIdx = leftPlayer.GetRandomUnrevealedTryalIndex(rng);
-                    if (tryalIdx.HasValue)
-                        passedCards[i] = leftPlayer.RemoveTryalAt(tryalIdx.Value);
-                }
-
-                // Distribute received cards
-                for (int i = 0; i < alivePlayers.Count; i++)
-                {
-                    if (passedCards[i] != null)
-                    {
-                        Debug.Log($"[Conspiracy] {alivePlayers[i].PlayerNameText} received a {passedCards[i].TryalCardType} from their left (private).");
-                        alivePlayers[i].AddTryalCardAndNotify(passedCards[i]);
-                    }
-                }
+                yield return RunConspiracyPass(alivePlayers, rng);
             }
 
             // Step 3: Rearrange face-down Tryals (auto-shuffle for now)
@@ -679,6 +730,139 @@ namespace Salem.GameFlow
         /// The night routine awaits this coroutine, so nothing acts on the game between
         /// (1) and (3). Reusable for confession reveals (Item 4) and accusation/conspiracy.
         /// </summary>
+        /// <summary>
+        /// Conspiracy step 2 (rulebook p6): "All players SIMULTANEOUSLY choose a face-down
+        /// (unrevealed) tryal card from the player on their left and add it to their own set."
+        ///
+        /// 🔴 SIMULTANEOUS IS THE RULE, AND IT IS STRUCTURAL HERE. Every prompt goes out in the same
+        /// frame, on one shared deadline, and NOTHING moves until every answer is in. Resolving each
+        /// pick as it arrives would break the rulebook (a player could take from a neighbour whose
+        /// row had already changed) and would leak order of play.
+        ///
+        /// ATOMICITY: all takes are computed first, then applied — removals for every source, then
+        /// additions for every taker. Each player is the source for EXACTLY ONE taker (the player to
+        /// their right), so one card leaves each row and the captured indices stay valid across the
+        /// removal pass. Adding first would let a just-received card be passed onward in the same
+        /// round.
+        ///
+        /// MASKING: unlike the night vote there is no `acting` subset to hide — EVERY player picks,
+        /// so submission timing cannot separate anyone by role. The prompts are structurally
+        /// identical (same event, same shape, same window); only the neighbour and their face-down
+        /// COUNT differ, and that count is already publicly derivable from the board
+        /// (tryalTotal − revealedTryals). The chooser picks blind, exactly as at a table.
+        ///
+        /// The card's identity is revealed only to the RECEIVER, via AddTryalCardAndNotify's private
+        /// state — the giver learns nothing, and no public event names the card.
+        /// </summary>
+        private IEnumerator RunConspiracyPass(List<Player> alivePlayers, IRng rng)
+        {
+            int n = alivePlayers.Count;
+            var chosen = new int[n];        // real TryalCards index on the LEFT neighbour, per taker
+            var pending = new bool[n];
+            for (int i = 0; i < n; i++) chosen[i] = -1;
+
+            // Fire every prompt in the SAME frame so the window is genuinely shared.
+            for (int i = 0; i < n; i++)
+            {
+                int taker = i;
+                var takerPlayer = alivePlayers[i];
+                var leftPlayer = alivePlayers[(i - 1 + n) % n];
+                pending[taker] = true;
+                StartCoroutine(AskConspiracyPick(takerPlayer, leftPlayer, rng, idx =>
+                {
+                    chosen[taker] = idx;
+                    pending[taker] = false;
+                }));
+            }
+
+            // One shared deadline. Every RequestTryal carries the same window, so this resolves when
+            // the slowest answer lands or that window expires — never per-player.
+            float deadline = Time.realtimeSinceStartup + ConspiracyPassSeconds + 2f;
+            yield return new WaitUntil(() =>
+                System.Array.TrueForAll(pending, p => !p) || Time.realtimeSinceStartup >= deadline);
+
+            // ── Apply, atomically ──
+            var passedCards = new TryalCard[n];
+            for (int i = 0; i < n; i++)
+            {
+                if (chosen[i] < 0) continue;                     // left neighbour had nothing face-down
+                var leftPlayer = alivePlayers[(i - 1 + n) % n];
+                if (chosen[i] >= leftPlayer.TryalCards.Count) continue;   // defensive
+                passedCards[i] = leftPlayer.RemoveTryalAt(chosen[i]);
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                if (passedCards[i] == null) continue;
+                Debug.Log($"[Conspiracy] {alivePlayers[i].PlayerNameText} received a {passedCards[i].TryalCardType} from their left (private).");
+                alivePlayers[i].AddTryalCardAndNotify(passedCards[i]);
+            }
+        }
+
+        /// <summary>
+        /// One player's half of the simultaneous pass. Networked humans are prompted; AI and local
+        /// seats resolve immediately at random, exactly as the whole step did before.
+        /// `abortOnTurnChange: false` — conspiracy runs outside any turn.
+        /// </summary>
+        private IEnumerator AskConspiracyPick(Player taker, Player leftPlayer, IRng rng,
+                                              System.Action<int> onChosen)
+        {
+            if (taker == null || leftPlayer == null) { onChosen?.Invoke(-1); yield break; }
+
+            if (taker.Input is NetworkInput && taker.IsConnected)
+            {
+                yield return taker.Input.RequestTryal(taker, leftPlayer, "conspiracy_pass",
+                                                      ConspiracyPassSeconds, false, onChosen);
+                yield break;
+            }
+
+            int? idx = leftPlayer.GetRandomUnrevealedTryalIndex(rng);
+            onChosen?.Invoke(idx ?? -1);
+        }
+
+        /// <summary>
+        /// Turn ONE tryal as a synchronized dramatic beat — the accusation-threshold and piety-loss
+        /// reveals. Await this from a coroutine; use <see cref="RevealTryalSynchronized"/> from a
+        /// synchronous call site.
+        ///
+        /// WHY IT EXISTS: these two paths used to call RevealTryalCard directly, so the card simply
+        /// appeared in board state with no beat on the host and no beat on any mirror. Night and
+        /// conspiracy reveals had one; these did not, which is the half of the Phase-7 checkpoint's
+        /// "dramatic and synchronized" line that was missing.
+        ///
+        /// `elimination: null` DELIBERATELY. Unlike a night kill, elimination here is a CONSEQUENCE
+        /// discovered while applying the reveal (the turned card was their last Witch), not something
+        /// known beforehand — so there is no outcome to announce up front. The death still reaches
+        /// every screen: `applyReveal` runs inside the shared beat, the public broadcast at revealAt
+        /// carries the eliminated flag, and `player_eliminated` still fires into the event log.
+        ///
+        /// OFFLINE IS UNCHANGED: EmitSynchronizedReveal applies immediately when not networked, so a
+        /// local/AI-only game behaves exactly as it did before this existed.
+        /// </summary>
+        public IEnumerator RevealTryalSynchronizedRoutine(Player owner, int index)
+        {
+            if (owner == null || index < 0 || index >= owner.TryalCards.Count) yield break;
+            if (owner.TryalCards[index] == null || owner.TryalCards[index].IsRevealed) yield break;
+
+            yield return EmitSynchronizedReveal(
+                applyReveal: () => owner.RevealTryalCard(index, fromAccusation: true),
+                elimination: null);
+        }
+
+        /// <summary>
+        /// Fire-and-forget form of <see cref="RevealTryalSynchronizedRoutine"/>, for the SYNCHRONOUS
+        /// reveal call sites (a local human's table pick, an AI's pick) that cannot yield.
+        ///
+        /// Self-driving on purpose — it starts its own coroutine rather than queueing work for
+        /// someone else to drain. A queue nobody drained would silently swallow a MANDATORY reveal,
+        /// which is a far worse failure than a reveal landing a beat late.
+        /// </summary>
+        public void RevealTryalSynchronized(Player owner, int index)
+        {
+            if (!isActiveAndEnabled) return;
+            StartCoroutine(RevealTryalSynchronizedRoutine(owner, index));
+        }
+
         private IEnumerator EmitSynchronizedReveal(System.Action applyReveal, EliminationResultMsg elimination)
         {
             var nm = NetworkManager.Instance;

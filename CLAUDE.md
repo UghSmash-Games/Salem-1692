@@ -44,6 +44,21 @@ cd webclient && npm test
 **The server enforces roles.** A mirror that sends `player_action` is silently ignored.
 Never rely on the client to self-police.
 
+**MIRROR PARITY (product requirement, not polish).** The mirror must eventually be an EXACT visual
+copy of the host screen. Its purpose is that a player who cannot see the host TV can connect a device
+as `display` and play from their phone seeing **exactly** what the people sitting at the host screen
+see. So any public information the host renders and the mirror does not is an **information asymmetry
+between players** — a fairness bug in a social deduction game, not a cosmetic gap.
+- **Currently NOT met.** `MirrorScreen` is the Phase-3 simplified board (`BoardSummary` + deck
+  summary + overlays + event log); the Phase-7 host redesign (ring, seats, Meeting House, IN EFFECT,
+  header) was built in Unity only. Deferred to a later phase by decision, with the debt inventoried
+  in `docs/phase-7-host-seat-design.md`.
+- **No protocol work is needed** — the mirror ALREADY receives every field the host renders
+  (`townHall`, `tryalTotal`, `revealedTryals`, `accusationCards`, `statusCards`, `accusationLimit`,
+  `handCount`, `topDiscard`). The gap is entirely rendering.
+- ⚠️ **Do not widen the gap.** Any NEW host-screen element showing public game information must
+  either be added to the mirror too, or explicitly logged as parity debt in that inventory.
+
 **The `acting` flag** — during secret phases (dawn/night), every player receives an
 identical `secret_phase_prompt`. Witches/constable get `acting: true`; all others get
 `acting: false`. The host processes submissions only from `acting: true` players.
@@ -124,13 +139,66 @@ Unity is solely responsible for ensuring it never contains private player data
 
 ## Known Bugs in Unity Alpha
 
-Verified against active code 2026-06-13. The original alpha bug list was mostly
-stale — only the dawn witch-reveal remains. Still broken:
+Re-verified against active code 2026-08-13: **both remaining entries were stale and are now
+struck.** Nothing from the original alpha bug list is still open.
 
-- Dawn does NOT reveal witches to each other — `//TODO` stub in
-  `GamePhaseManager.StartDawnPhase` (GamePhaseManager.cs:175). (Black Cat
-  placement IS implemented; dawn does NOT skip to Day.)
-- Tituba's deck rearrange is stubbed to a plain shuffle (GameTurnManager.cs).
+- ~~Dawn does NOT reveal witches to each other.~~ **FIXED in 4b.** `GamePhaseManager.WitchesRevealed`
+  is set during the dawn routine, and `NetworkStateBroadcaster` sends `fellowWitches` on
+  `private_state` gated on it — routed per-socket, never broadcast.
+- ~~Tituba's deck rearrange is stubbed to a plain shuffle.~~ **FIXED in Phase 5.** `GameTurnManager`
+  drives a real reorder over `IPlayerInput.RequestDeckRearrange` with a host-owned 60s window.
+
+**CONSPIRACY — both player CHOICES are now REAL (rulebook p6). Both were automated; both are built.**
+
+1. ~~Step 2 is a random pass, not a choice.~~ **DONE.** `RunConspiracyPass` prompts EVERY alive player
+   (`reason: "conspiracy_pass"`) in the SAME frame on ONE shared window, and **moves no card until
+   every answer is in or the window expires**. Resolving picks as they arrive would break the
+   rulebook — a player could take from a neighbour whose row had already changed — and leak order of
+   play. Apply is atomic and ordered: all removals, then all additions (adding first would let a
+   just-received card be passed onward in the same round). Each player is the source for exactly one
+   taker, so one card leaves each row and the captured indices stay valid.
+   - **NOT built as a masked secret phase, deliberately.** There is no `acting` subset here — EVERY
+     player picks — so submission timing cannot separate anyone by role, which is the only thing the
+     `acting`-flag machinery exists to hide. Prompts are structurally identical; only the neighbour
+     and their face-down COUNT differ, and that count is already publicly derivable from the board
+     (`tryalTotal − revealedTryals`). The taken card's identity reaches only the RECEIVER, via
+     `AddTryalCardAndNotify`'s private state.
+   - The alive set is **re-read before step 2**: step 1's reveal can eliminate the black-cat holder
+     (their last witch card), and the list captured at the top of `ConspiracyRoutine` would still
+     include them — they would give and receive a card while dead.
+   - Win conditions are covered without a new call: `AddTryalCardAndNotify` already runs
+     `EvaluateEndGame(this)` when a player *becomes* a witch, which is the only way the pass can end
+     the game (and it correctly records that player as the LOSER).
+2. ~~Step 1's drawer choice is random for a NETWORKED drawer.~~ **DONE** — see below.
+
+**"Networked player picks which tryal" — SOLVED (was the shared blocker).** All three reveal paths
+(accusation threshold, piety-loss, conspiracy step 1) now let a networked chooser pick, over the
+`tryal_pick_request`/`tryal_pick_submit` event and the previously-stubbed
+`NetworkInput.RequestTryal` — the ONE implementation, per the "solve it once" rule.
+
+- **The synchronous-event problem was side-stepped, not restructured.** `HandleAccusationRevealChoice`
+  still cannot `yield` (it runs inside `ExecuteCardEffect`), so for a `NetworkInput` chooser it sets
+  `Player.PendingTryalRevealTarget`/`…Reason` and `NetworkInput.RunTurn` drains it at the top of its
+  next loop tick — **exactly** the `PendingAbigailDiscardChoice` pattern, and for the same reason.
+  Resolving it inside the turn matters more here than for Abigail: the reveal feeds win conditions,
+  so it must not land after the turn has moved on.
+- **Conspiracy step 1 does NOT use the pending flag** — it runs in a coroutine AFTER the drawer's turn
+  ended, so `RunTurn` would never drain it. It awaits `RequestTryal` directly.
+- 🔴 **The chooser picks BLIND and the wire shape enforces it.** `tryal_pick_request` carries a COUNT
+  of face-down tryals — no labels, **no slot positions** — and the answer is an ORDINAL into that
+  subset; only the host maps ordinal → real `TryalCards` index. Real indices would let a Conspiracy
+  giver pin a card they just passed to an exact slot (tryals are APPENDED), the same reasoning that
+  keeps `revealedTryals` position-free. Conspiracy step 3's re-shuffle is what makes even an ordinal
+  safe — if that shuffle is ever removed, revisit this.
+- ⚠️ **No answer does NOT cancel** (unlike `target_request`): the reveal is a mandatory rules
+  consequence, so a timeout flips a RANDOM face-down tryal. AI and local-host choosers are unchanged
+  (random / the table's own tryal selection).
+- 🐛 **`abortOnTurnChange` exists because of a real bug.** `RequestTryal` inherited `RequestTarget`'s
+  "bail if `TurnId` changed" guard. That is correct for a prompt owned by the current turn, but
+  `HandleConspiracyCardDrawn` starts a **DETACHED** coroutine while the drawer is still drawing — and
+  a Draw-2 ends the turn immediately — so every conspiracy prompt aborted within a frame and fell
+  back to random, silently defeating the feature. The guard is now opt-in: **true** only for the
+  accusation/piety pick drained by `NetworkInput.RunTurn`, **false** for both conspiracy prompts.
 
 Already fixed (do NOT re-budget in Phase 4): asylum is checked at resolution
 (NightResolver.cs:50); the matchmaker cascade is central and fires from night
@@ -348,6 +416,27 @@ grep + region-balance + a clean webclient/server test run (79 + 49 green — no 
 
 Run server tests before any PR: `cd server && npm test`
 Run webclient tests before any PR: `cd webclient && npm test`
+
+⚠️ **On this dev machine, plain `npm test` fails with an out-of-memory / `VirtualAlloc failed`
+crash in BOTH suites.** It is NOT a code failure. Jest and Vitest each default to a pool of
+spawned WORKER PROCESSES, and on this box every child Node process dies at ~15MB
+(`Zone Allocation failed`, `Re-embedded builtins: set permissions`) while the parent allocates
+fine. Run without child processes instead:
+
+```
+cd server && npx jest --runInBand
+cd webclient && node ./node_modules/vitest/vitest.mjs run --pool=threads --poolOptions.threads.singleThread
+```
+
+Worker THREADS share the parent's memory space and work; `--pool=forks` is still a child process
+and still fails. **Run the two suites in SEPARATE shells** — chained back-to-back in one shell the
+second one OOMs from the first's leftover pressure. Invoke vitest through `node ...vitest.mjs`
+rather than `npx`: the `npx.ps1` shim intermittently throws a NullReferenceException here.
+Both suites are green this way (server 76, webclient 82). Suspected cause: Node 25.x (current/odd-numbered) vs jest 29 / vitest 2.1 —
+an LTS Node would likely restore plain `npm test`. Also note `C:\nvm4w\nodejs` is on PATH but
+EMPTY (a dangling nvm-for-Windows symlink, no versions installed); the real Node is at
+`D:\Program Files\nodejs`, which `nodevars.bat` adds per-shell only. `.claude/settings.local.json`
+(machine-specific, git-ignored) sets a full `env.PATH` so agent shells find it.
 Always test the `acting: false` path — confirm submissions are discarded silently
 and the confirmation animation still plays.
 

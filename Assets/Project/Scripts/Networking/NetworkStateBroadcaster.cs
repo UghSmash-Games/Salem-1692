@@ -78,7 +78,15 @@ namespace Salem.Networking
             {
                 gamePhaseManager.OnPhaseChange += HandlePhaseChanged;
             }
+
+            // A mirror connecting is the one "event" that isn't a game event: nothing about the game
+            // changed, but a new screen needs the whole picture. Without this it waits for the next
+            // turn/phase/reveal, so a mirror opened during the lobby sits blank.
+            var nm = NetworkManager.Instance;
+            if (nm != null) nm.OnMirrorJoined += HandleMirrorJoined;
         }
+
+        private void HandleMirrorJoined() => BroadcastAll();
 
         private void OnDisable()
         {
@@ -89,6 +97,9 @@ namespace Salem.Networking
 
         private void OnDestroy()
         {
+            var nm = NetworkManager.Instance;
+            if (nm != null) nm.OnMirrorJoined -= HandleMirrorJoined;
+
             if (gameTurnManager != null)
             {
                 gameTurnManager.TurnStarted -= HandleTurnChanged;

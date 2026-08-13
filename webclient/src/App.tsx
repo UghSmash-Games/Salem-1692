@@ -14,6 +14,7 @@ import { DeckRearrangeScreen } from './screens/DeckRearrangeScreen';
 import { CardPickScreen } from './screens/CardPickScreen';
 import { ConfirmScreen } from './screens/ConfirmScreen';
 import { TargetScreen } from './screens/TargetScreen';
+import { TryalPickScreen } from './screens/TryalPickScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
 import { PublicRevealToast } from './components/PublicRevealToast';
@@ -38,6 +39,8 @@ function CurrentScreen() {
       return <ConfirmScreen />;
     case 'target':
       return <TargetScreen />;
+    case 'tryal_pick':
+      return <TryalPickScreen />;
     case 'spectator':
       return <SpectatorScreen />;
     case 'game_over':

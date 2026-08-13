@@ -50,6 +50,11 @@ namespace Salem.Players
         /// idle timer; no answer → the op's deterministic default resolves the curse anyway.</summary>
         private const float CurseSeconds = 30f;
 
+        /// <summary>Window for choosing WHICH face-down tryal to flip (accusation threshold,
+        /// piety-loss, conspiracy step 1). Under the 60s Day idle timer so it cannot outlive the
+        /// turn; no answer → a random face-down tryal turns, because the reveal is mandatory.</summary>
+        private const float TryalPickSeconds = 25f;
+
         private readonly Player player;
         private PlayerActionMsg pending;
         private bool hasAction;
@@ -78,6 +83,41 @@ namespace Salem.Players
 
             while (!turnOver)
             {
+                // This player just triggered a tryal reveal on someone (crossed their accusation
+                // threshold, or stripped their Piety with a Curse) and the rulebook lets the TRIGGERER
+                // choose which face-down card turns. Both triggers are synchronous and only flag it;
+                // it resolves HERE for the same reason as Abigail below — a beat after the card
+                // resolved, still this player's turn, before they are offered another action. That
+                // ordering matters more here than for Abigail: the reveal feeds win conditions, so it
+                // must not land after the turn has moved on.
+                if (p.PendingTryalRevealTarget != null)
+                {
+                    var revealTarget = p.PendingTryalRevealTarget;
+                    var revealReason = p.PendingTryalRevealReason;
+                    p.PendingTryalRevealTarget = null;              // consume once
+                    p.PendingTryalRevealReason = null;
+
+                    int chosenIndex = -1;
+                    // abortOnTurnChange: TRUE — this one IS owned by the current turn, so a
+                    // force-ended turn should cancel the wait (the reveal still resolves at random).
+                    yield return RequestTryal(p, revealTarget, revealReason,
+                                              TryalPickSeconds, true, idx => chosenIndex = idx);
+
+                    // -1 only when they hold no face-down tryal (already fully revealed) — nothing to
+                    // flip. Otherwise RequestTryal guarantees a real index, random on no answer.
+                    if (chosenIndex >= 0)
+                    {
+                        // AWAITED, not fire-and-forget: this is the common human path and we are
+                        // already in a coroutine, so the turn holds for the shared beat instead of
+                        // racing ahead of a reveal that feeds win conditions.
+                        var gpm = GamePhaseManager.Instance;
+                        if (gpm != null)
+                            yield return gpm.RevealTryalSynchronizedRoutine(revealTarget, chosenIndex);
+                        else
+                            revealTarget.RevealTryalCard(chosenIndex, fromAccusation: true);
+                    }
+                }
+
                 // Abigail Williams: she just placed a threshold-crossing accusation and owes a
                 // "may I discard my accusations?" decision. CheckAccusations is synchronous so it
                 // only flags it; we resolve it HERE — a beat after the card resolved, still her turn,
@@ -466,11 +506,96 @@ namespace Salem.Players
             onChosen?.Invoke(chosen); // null on timeout → caller does NOT play/consume the card
         }
 
-        public IEnumerator RequestTryal(Player chooser, Player target, System.Action<int> onChosen)
+        /// <summary>
+        /// "Which face-down tryal do you flip?" — the ONE implementation shared by all three reveal
+        /// paths (accusation threshold, piety-loss, conspiracy step 1). Before this existed each
+        /// path fell back to a random pick for networked players, silently dropping a choice the
+        /// rulebook gives them.
+        ///
+        /// 🔴 THE CHOOSER PICKS BLIND. Only a COUNT of face-down tryals goes out, and the answer is
+        /// an ORDINAL into that face-down subset — the mapping ordinal → real TryalCards index is
+        /// built and kept HERE, host-side. No label and no real slot position ever crosses the wire,
+        /// so this cannot become a card-identity leak by a later edit. (Real indices would matter:
+        /// tryals are APPENDED on receipt, so a Conspiracy giver could otherwise pin a card they
+        /// just passed to an exact slot.)
+        ///
+        /// NEVER RETURNS -1 WHEN A FACE-DOWN TRYAL EXISTS. The reveal is a mandatory consequence, so
+        /// a timeout substitutes a random face-down tryal rather than cancelling — unlike
+        /// RequestTarget, where a no-answer legitimately means "don't play the card".
+        /// </summary>
+        public IEnumerator RequestTryal(Player chooser, Player target, string reason,
+                                        float timeoutSeconds, bool abortOnTurnChange,
+                                        System.Action<int> onChosen)
         {
-            Debug.LogWarning("[NetworkInput] RequestTryal not implemented for Phase 4a.");
-            onChosen?.Invoke(-1);
-            yield break;
+            if (target == null) { onChosen?.Invoke(-1); yield break; }
+
+            // The face-down subset, in TryalCards order. Its POSITIONS never leave this method.
+            var faceDown = new List<int>();
+            for (int i = 0; i < target.TryalCards.Count; i++)
+                if (target.TryalCards[i] != null && !target.TryalCards[i].IsRevealed) faceDown.Add(i);
+
+            if (faceDown.Count == 0) { onChosen?.Invoke(-1); yield break; }
+
+            var rng = chooser?.Rng ?? target.Rng;
+            int RandomPick() => faceDown[rng.NextInt(0, faceDown.Count)];
+
+            var nm = NetworkManager.Instance;
+            if (nm == null || chooser == null || string.IsNullOrEmpty(chooser.NetworkId))
+            {
+                onChosen?.Invoke(RandomPick());
+                yield break;
+            }
+
+            // A single face-down card is not a choice — don't stall the turn asking for it.
+            if (faceDown.Count == 1) { onChosen?.Invoke(faceDown[0]); yield break; }
+
+            int ordinal = -1;
+            bool answered = false;
+
+            void Handler(TryalPickSubmitMsg msg)
+            {
+                if (answered) return;
+                if (msg == null || msg.playerId != chooser.NetworkId) return;
+                // Re-validate the range host-side — the client is never trusted.
+                if (msg.ordinal < 0 || msg.ordinal >= faceDown.Count)
+                {
+                    Debug.LogWarning($"[NetworkInput] RequestTryal '{reason}': rejected out-of-range ordinal {msg.ordinal}.");
+                    return; // ignore and keep waiting
+                }
+                ordinal = msg.ordinal;
+                answered = true;
+                if (abortOnTurnChange) GameTurnManager.Instance?.ResetIdleTimer();
+            }
+
+            nm.OnTryalPickSubmit += Handler;
+
+            nm.SendTryalPickRequest(new TryalPickRequestMsg
+            {
+                playerId = chooser.NetworkId,
+                targetPlayerId = PublicIdOf(target),
+                count = faceDown.Count,
+                seconds = Mathf.Max(1, Mathf.RoundToInt(timeoutSeconds)),
+                reason = reason,
+            });
+
+            var gtm = GameTurnManager.Instance;
+            int myTurnId = gtm != null ? gtm.TurnId : 0;
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+
+            // ⚠ The TurnId escape is OPT-IN. Conspiracy prompts run on a DETACHED coroutine after the
+            // drawer's turn has already ended (a Draw-2 ends it immediately), so leaving the guard on
+            // would abort them within a frame and fall back to random — silently defeating the very
+            // choice this seam exists to restore.
+            yield return new WaitUntil(() =>
+                answered ||
+                Time.realtimeSinceStartup >= deadline ||
+                (abortOnTurnChange && gtm != null && gtm.TurnId != myTurnId));
+
+            nm.OnTryalPickSubmit -= Handler;
+
+            // No answer (timeout, or the turn was force-ended under us) → random. The flip happens
+            // either way; "no response" must not let a player dodge a reveal they triggered.
+            onChosen?.Invoke(answered ? faceDown[ordinal] : RandomPick());
         }
 
         // Secret phase (dawn/night). Symmetric with RunTurn's action flow: send this

@@ -191,10 +191,106 @@ HostDisplay                     ← HostDisplayController
 - **`HostTableView`**: assign `seatPrefab`, `seatPool`, and the four containers
 - **`HostEventLog`**: `entryContainer` = the ScrollRect's Content, `entryPrefab` = Stage 4,
   `maxEntries` 14
-- **`HostDisplayController`**: assign `table`, `deck`, `header`, `eventLog`
+- **`HostDisplayController`**: assign `table`, `deck`, `header`, `eventLog`, `stats`, `inEffect`,
+  `phaseOverlay`, `revealOverlay`, `publicRevealToast`
 - **`GameEventEmitter`**: add the component to the same GameObject as `NetworkStateBroadcaster`.
   It self-finds `GamePhaseManager` and `GameManager` in `Awake`, but assign them explicitly if they
   live in a scene loaded later
+
+---
+
+## Stage 5a — Lobby panel (`HostLobbyPanel`)
+
+The pre-game screen, and the ONLY way anyone gets into the game — so the room code and the two URLs
+are the largest things on the host display. Add as a child of `HostDisplay`, a sibling of `Board`.
+
+```
+HostDisplay
+├── LobbyPanel                  ← HostLobbyPanel        (covers Board while waiting)
+│   └── Content                                          → content
+│       ├── RoomCode            TMP, IM Fell English SC, very large  → roomCodeText
+│       ├── JoinUrl             TMP                                   → joinUrlText
+│       ├── DisplayUrl          TMP                                   → displayUrlText
+│       ├── Status              TMP, mono                             → statusText
+│       └── SeatList            (Vertical)                            → seatContainer
+└── Board                       …
+```
+
+- **`Content` MUST carry a `VerticalLayoutGroup`** — Padding L/R 80 T/B 60, Spacing 24, Child
+  Alignment Middle Center, Control Child Size Width ✔ **Height ✔**, Force Expand Width ✔ **Height ✘**.
+  Without it every child sits at the TMP default (centre-anchored, 0,0, 200×50) and the whole panel
+  renders on top of itself — the first thing that went wrong in assembly.
+  - **Control Child Height ✔** is load-bearing: it makes each child use its preferred height (TMP
+    derives that from its text) and is what lets `SeatList` grow as players join. Off, `SeatList`
+    keeps its raw sizeDelta and clips rows.
+  - **Force Expand Height ✘** likewise: ticked, leftover space is split between children, so the room
+    code drifts from the URLs and spacing shifts every time someone joins.
+- **`SeatList` takes a `VerticalLayoutGroup`** (Spacing 6, Upper Center, Control W✔ H✔, Expand W✔ H✘)
+  — a Horizontal one lays joined players out sideways. **No `ContentSizeFitter`**: `Content`'s group
+  already asks it for a preferred height, and stacking a fitter on top invites rebuild loops.
+- **Set `baseUrl`** to the deployed web-client host, e.g. `salem.example.com` — host only, no scheme
+  and no path. For a LAN playtest use the machine's IP and Vite port (`192.168.1.50:5173`), never
+  `localhost` — that resolves to the phone itself. `joinUrlFormat`/`displayUrlFormat` append `/join` and `/display`. Left empty, both URL
+  lines render **blank** rather than a bare "/join", which on a TV reads as an address to type.
+- **`seatRowPrefab`** is a single TMP_Text (one row per joined seat). Rows are pooled and reused.
+- **No `HostDisplayController` wiring.** The panel drives itself from `NetworkGameCoordinator`
+  (`OnRoomCodeAssigned` / `OnRosterChanged` / `OnGameStarted`) and consumes no public state — a
+  serialized reference on the controller would be an orphaned field.
+- **Sibling order:** put `LobbyPanel` AFTER `Board` if it should cover the empty table, or give it an
+  opaque background. It switches its own `Content` off the moment the game starts.
+
+⚠ The panel shows a `----` placeholder until the server assigns a code. If it never resolves, the
+host never reached `room_created` — check the server is running, not the panel.
+
+🔴 **There is still no way to START a game from the screen.** The only trigger is
+`NetworkGameCoordinator`'s `[ContextMenu] "TEST — Start Game"` (right-click the component in the
+Inspector during Play mode) — TEMP scaffolding that predates this panel. The lobby now shows
+everything a player needs to JOIN, but someone must still start it from the Editor.
+**This is a design decision, not an oversight:** locked decision #0 makes the host screen
+DISPLAY-ONLY with zero interactive controls, so a Start button on it needs that decision revisited —
+a lobby control for the host operator is arguably a different class from the in-game
+`ADVANCE`/`RESET` artifacts that rule was written against. Left for the owner to call.
+
+---
+
+## Stage 5b — Overlays and the toast (sibling order matters)
+
+The three overlay-class objects are siblings under `HostDisplay`, **after `Board`**. uGUI draws later
+siblings on top, so hierarchy order *is* z-order. Required order, bottom → top:
+
+```
+HostDisplay
+├── Board                       (the table + rail)
+├── PublicRevealToast           ← HostPublicRevealToast   (7e, lowest of the three)
+├── RevealOverlay               ← HostRevealOverlay       (7d)
+└── PhaseOverlay                ← HostPhaseOverlay        (7c, always on top)
+```
+
+- **`PhaseOverlay` last** — the dawn/night cover must never have anything painted over it. It is the
+  masking surface; a toast on top of it would be a hole in the cover.
+- **`RevealOverlay` above the toast** — matches the web client, where the toast is `z-40` under the
+  reveal's `z-50`. An elimination beat always wins the screen.
+
+### `HostPublicRevealToast`
+
+A banner, **not** a full-screen takeover — this is informational, not a dramatic beat.
+
+- Root: `CanvasGroup` (→ `group`), anchored top-centre, stretched narrow. Keep the GameObject
+  **active** — `Update` drives the dismiss timer; it self-hides via alpha.
+- `Content` child (→ `content`) holding the visuals:
+  - `Body` — TMP, EB Garamond ~15px, colour `E8DCC0`, on a plate `17130F` at high alpha with a
+    `C98A3F` border → **`bodyText`**
+  - `CardRow` — optional `HorizontalLayoutGroup` → **`cardRow`**, plus an `Image` prefab →
+    **`cardPrefab`**, and the Stage-2 registry → **`sprites`**
+- **Leave `cardRow`/`cardPrefab` empty for a text-only toast** — it renders correctly without them
+  ("Giles Corey shows Evidence & Witness"). Assign them only when you want the card faces.
+- `autoDismissSeconds` 4 and `fadeSeconds` 0.25 are the defaults; 4s matches the web toast for
+  consistency. ⚠ Unlike `lingerSeconds` ↔ `REVEALED_LINGER_MS`, this is **not** a sync contract —
+  there is no shared `revealAt`, so the two clearing at different moments breaks nothing.
+
+To see it fire: a **Giles Corey** holder must draw two red cards on a Draw-2 (`DEBUG_forcedTownHall`
+makes this reachable). Networked play only — local play logs the line through `CardLogManager` and
+sends no `public_reveal`.
 
 ---
 
@@ -274,9 +370,48 @@ Real failures hit during assembly, cheapest first:
 
 ## Known gaps at this point
 
-- `GameStarted` and `ConfessionRevealed` are in the event vocabulary but **nothing emits them yet**.
-  The renderer already handles both; they need hooks at setup completion and at the confess reveal.
-- **Mirrors receive `game_event` but do not render it.** The TypeScript contract exists; the mirror
-  log UI is separate work.
+- ~~`GameStarted` / `ConfessionRevealed` are dead kinds~~ — **both live now.** `ConfessionRevealed`
+  fires from `GamePhaseManager.RevealNightOutcome`'s `RevealConfessions` at `revealAt` (alongside
+  `GavelPlaced`); `GameStarted` fires from `SetupRoutine` via `GamePhaseManager.OnGameStarted`, after
+  the deal and before the Dawn change, so the log opens "The table is set…" then "Dawn breaks…".
+  **Every kind in `GameEventKind` now has both an emitter and a renderer.**
+- ~~**`EmitSynchronizedReveal` covers the NIGHT ONLY.**~~ **CLOSED — every reveal path is now a
+  synchronized beat:** night (3 sites), conspiracy step 1, and — via
+  `GamePhaseManager.RevealTryalSynchronizedRoutine` / `RevealTryalSynchronized` — the
+  accusation-threshold and piety-loss reveals. The networked human path AWAITS it inside
+  `NetworkInput.RunTurn`; the local-human and AI paths use the fire-and-forget wrapper because
+  `HandleAccusationRevealChoice` cannot yield. **Offline behaviour is unchanged** — the wrapper still
+  routes through `EmitSynchronizedReveal`, which applies immediately when not networked.
+  - `elimination: null` for these, deliberately: elimination is a CONSEQUENCE discovered while
+    applying the reveal (the turned card was their last Witch), not known beforehand. The death still
+    reaches every screen via the public broadcast at `revealAt` and the `player_eliminated` log entry.
+  - The wrapper is **self-driving** (it starts its own coroutine) rather than queueing work for a
+    drainer. A queue nobody drained would silently swallow a MANDATORY reveal — a far worse failure
+    than a reveal landing a beat late.
+  - ~~**Conspiracy step 1**~~ — **DONE.** `ConspiracyRoutine` now chooses the index first and defers
+    only the flip via `EmitSynchronizedReveal(..., elimination: null)`. Required both overlays to
+    handle a reveal that kills no one: `HostRevealOverlay` shows "*X*'S TRYAL IS TURNED" with the
+    card (filtered against the confession stream so a confessor's card is never drawn twice), and
+    `applyPhaseResolve` now clears `lastElimination` — without that the mirror re-displayed the
+    PREVIOUS death on any outcome-less beat.
+    ⚠ A **networked** drawer still picks at RANDOM (rulebook p6 gives them the choice). Unlike the
+    accusation path this one *could* prompt — it is in a coroutine — but it is left for the shared
+    fix so there is one networked-tryal-choice implementation, not two.
+  - **Accusation-threshold and piety-loss** still emit no `phase_resolve`, so they remain
+    animation-less on both screens. ⚠️ Note this is now purely a REVEAL-ANIMATION gap: the separate
+    "networked player picks which tryal" blocker is SOLVED (see CLAUDE.md), so the choice is real on
+    all three paths — only the synchronized dramatic beat is missing. Wiring it needs the same
+    treatment 4a got: the reveal must be deferred to `revealAt` while the CHOICE happens first, and
+    `HandleAccusationRevealChoice` is still synchronous, so the deferral would hang off
+    `NetworkInput.RunTurn`'s pending-drain rather than the event handler.
+- ~~Mirrors receive `game_event` but do not render it.~~ **BUILT.** `useMirrorSocket` now listens
+  (added to `MIRROR_ALLOWED_EVENTS`), the store keeps a rolling 14-entry `eventLog` matching
+  `HostEventLog.maxEntries`, and `EventLog.tsx` renders it on `MirrorScreen`.
+  ⚠ **`components/gameEventCopy.ts` is a direct port of `HostEventLog.Describe` and must stay in
+  step with it** — both rooms watch the same game, so a mirror that phrases an event differently
+  from the host screen reads as a different event. Tests assert the strings verbatim. Unknown kinds
+  are DROPPED on both sides rather than guessed at.
+- ~~`OnPublicRevealSent` has no consumer~~ — **built** (`HostPublicRevealToast`, Stage 5b). Needs
+  scene wiring and a live Giles Corey trigger to confirm.
 - The **full-screen reveal overlay** (stage 7d) is not built. Source card art is 176×264, so the
   design's 230×322 overlay would upscale ~1.3× — consider the prototype PNGs for that one element.

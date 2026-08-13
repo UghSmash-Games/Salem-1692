@@ -53,8 +53,13 @@ namespace Salem.Players
         public static event Action<Player, byte, byte> AccusationCountChanged;
         public static event Action<Player, byte, byte> AccusationThresholdReached;
         public static event Action<Player, TryalCard> TryalCardRevealed;
-        // Fired when accusation limit is reached: (accused, accuser). Listener should reveal a Tryal on accused.
-        public static event Action<Player, Player> OnAccusationRevealNeeded;
+        // Fired when a tryal must be revealed and someone gets to CHOOSE which:
+        // (accused, chooser, reason). The listener (CardEffectManager) reveals a face-down tryal on
+        // `accused`. `reason` is the machine code passed through to the chooser's phone —
+        // "accusation_reveal" (threshold crossed) or "piety_loss_reveal" (Curse stripped Piety at or
+        // over the un-doubled base). Both are the SAME reveal path deliberately, so Rebecca Nurse,
+        // the multiple-witch-card rule and the win-check are shared; only the copy differs.
+        public static event Action<Player, Player, string> OnAccusationRevealNeeded;
 
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
@@ -84,6 +89,18 @@ namespace Salem.Players
         // so cannot await a prompt) and consumed by NetworkInput.RunTurn on its next loop tick, still
         // within her turn. Only ever set for a NetworkInput seat; AI/local auto-clear instead.
         public bool PendingAbigailDiscardChoice;
+
+        // "Which face-down tryal do you flip on them?" owed by THIS player (the chooser) — set when
+        // an accusation crosses the threshold or a Curse strips Piety at/over it. Both triggers are
+        // SYNCHRONOUS (ApplyAccusation ← CardEffectManager ← ExecuteCardEffect) and so cannot await a
+        // phone, exactly like PendingAbigailDiscardChoice above; NetworkInput.RunTurn consumes this
+        // on its next loop tick — still the chooser's turn, before they can act again.
+        // Only ever set for a NetworkInput seat: AI and local-host seats resolve inline instead
+        // (random / the table's own tryal selection), which is why the reveal is never lost.
+        // ⚠ Conspiracy step 1 does NOT use this — it runs in a coroutine AFTER the drawer's turn has
+        // ended, so RunTurn would never drain it; it awaits RequestTryal directly.
+        public Player PendingTryalRevealTarget;
+        public string PendingTryalRevealReason;
 
         // Will Grigs: the resolved MODE for the Alibi he is currently playing — true = use as a Witness
         // (+7 persistent), false = normal defensive Alibi. Transient: the input layer sets it right
@@ -833,7 +850,7 @@ namespace Salem.Players
                 // Otherwise fall back to random reveal.
                 if (OnAccusationRevealNeeded != null && accuser != null)
                 {
-                    OnAccusationRevealNeeded.Invoke(this, accuser);
+                    OnAccusationRevealNeeded.Invoke(this, accuser, "accusation_reveal");
                 }
                 else
                 {
@@ -929,7 +946,7 @@ namespace Salem.Players
 
             if (OnAccusationRevealNeeded != null && remover != null)
             {
-                OnAccusationRevealNeeded.Invoke(this, remover);
+                OnAccusationRevealNeeded.Invoke(this, remover, "piety_loss_reveal");
             }
             else
             {

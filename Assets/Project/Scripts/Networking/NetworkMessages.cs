@@ -356,6 +356,40 @@ namespace Salem.Networking
         public int seconds;      // countdown window
     }
 
+    // Ask ONE player to pick WHICH face-down tryal to flip on another player — the accuser at the
+    // accusation threshold, the Curse player on a piety-loss reveal, or the conspiracy drawer
+    // choosing on the black-cat holder (rulebook p6).
+    //
+    // 🔴 THE PRIVACY SHAPE IS THE POINT. This carries a COUNT of face-down tryals and NOTHING else
+    // about them — no labels, no slot positions. The chooser is picking BLIND among identical
+    // backs, exactly as at a physical table, and the wire is structurally incapable of telling
+    // them more. The answer is an ORDINAL into the face-down subset (0..count-1); the host alone
+    // maps that back to a real index in TryalCards.
+    // ⛔ NEVER add a `labels` field, and NEVER send the real slot indices: tryals are APPENDED on
+    // receipt, so a real index would let a Conspiracy giver pin a card they just passed to an exact
+    // slot. (Conspiracy step 3 re-shuffles every player's face-down row, which is what makes an
+    // ordinal safe — if that shuffle is ever removed, revisit this.)
+    [Serializable]
+    public class TryalPickRequestMsg
+    {
+        public string playerId;       // the CHOOSER's public id (the one being asked)
+        public string targetPlayerId; // whose tryals are being flipped — public, already on the board
+        public int count;             // how many FACE-DOWN tryals they may choose between
+        public int seconds;           // countdown window
+        public string reason;         // "accusation_reveal" | "piety_loss_reveal" | "conspiracy_reveal"
+    }
+
+    // Answer to a TryalPickRequestMsg — phone → host. Single-stage. `ordinal` indexes the FACE-DOWN
+    // subset the host described (0..count-1), never a raw TryalCards index. The host re-validates
+    // the range and owns the deadline; no answer → the host picks at random (the reveal is a
+    // mandatory rules consequence and cannot be skipped).
+    [Serializable]
+    public class TryalPickSubmitMsg
+    {
+        public string playerId;
+        public int ordinal;
+    }
+
     // A yes/no confirmation for a character's OWN optional ("may") choice — host → ONE player only.
     // Currently Abigail Williams' "you may discard all accusations in front of you". `prompt` is a
     // machine code the phone maps to copy; `items`/`count` are display context (her red card names

@@ -391,16 +391,44 @@ namespace Salem.GameFlow
                 Debug.LogWarning($"[Effect] Unhandled op {action.Op}");
         }
 
-         private void HandleAccusationRevealChoice(Player accused, Player accuser)
+        /// <summary>
+        /// The chooser picks which face-down tryal turns. Serves BOTH the accusation threshold and
+        /// the piety-loss reveal (TriggerPietyLossReveal routes through the same event).
+        ///
+        /// ⚠ THIS METHOD IS SYNCHRONOUS — it is an event handler on a chain that runs inside
+        /// ExecuteCardEffect, so it cannot yield to await a phone. That is why a NETWORKED chooser
+        /// is handed off via a pending flag (drained by NetworkInput.RunTurn a beat later, still
+        /// their turn) rather than prompted here. Same shape, and for the same reason, as
+        /// Abigail Williams' PendingAbigailDiscardChoice.
+        /// </summary>
+        private void HandleAccusationRevealChoice(Player accused, Player accuser, string reason)
         {
             if (accused == null) return;
+
+            // Networked chooser: defer to their turn loop, which CAN await the prompt.
+            if (accuser != null && accuser.Input is NetworkInput)
+            {
+                accuser.PendingTryalRevealTarget = accused;
+                accuser.PendingTryalRevealReason = reason;
+                return;
+            }
+
+            // Both remaining branches route the FLIP through GamePhaseManager so it lands as a
+            // synchronized beat on the host and every mirror, instead of appearing in board state
+            // with no animation. Fire-and-forget because this method cannot yield; offline that is
+            // still immediate, since EmitSynchronizedReveal short-circuits when not networked.
+            // NB: the serialized field is named the same as its type, so `GamePhaseManager.Instance`
+            // here would lean on C#'s "Color Color" rule to mean the static. Use the already-resolved
+            // field instead — same object, no ambiguity for the next reader.
+            var gpm = GamePhaseManager;
 
             // If the accuser is a local human, let them choose which Tryal to reveal
             if (accuser != null && accuser.IsHuman && accuser.IsLocalPlayer && tableLayoutController != null)
             {
                 tableLayoutController.BeginTryalSelection(accused, idx =>
                 {
-                    accused.RevealTryalCard(idx, fromAccusation: true);
+                    if (gpm != null) gpm.RevealTryalSynchronized(accused, idx);
+                    else accused.RevealTryalCard(idx, fromAccusation: true);
                 });
             }
             else
@@ -409,7 +437,10 @@ namespace Salem.GameFlow
                 var rng = accuser?.Rng ?? Rng;
                 int? idx = accused.GetRandomUnrevealedTryalIndex(rng);
                 if (idx.HasValue)
-                    accused.RevealTryalCard(idx.Value, fromAccusation: true);
+                {
+                    if (gpm != null) gpm.RevealTryalSynchronized(accused, idx.Value);
+                    else accused.RevealTryalCard(idx.Value, fromAccusation: true);
+                }
             }
         }
 

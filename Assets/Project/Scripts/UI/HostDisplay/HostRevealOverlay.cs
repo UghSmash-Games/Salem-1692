@@ -258,7 +258,26 @@ namespace Salem.UI.HostDisplay
 
             if (elimination == null)
             {
-                steps.Add(("THE DEED IS DONE", new List<string>()));
+                // No elimination_result. Either a beat that killed no one (a confession-only
+                // night) or a NON-NIGHT reveal — conspiracy step 1 turns exactly one card and
+                // sends no outcome. Show whatever actually turned rather than implying a death:
+                // "THE DEED IS DONE" over a conspiracy flip reads as an elimination that never
+                // happened. Falls back to it only when nothing turned at all.
+                // ⚠ SAME TWO-STREAM RULE AS ABOVE: a confessor's flip fires BOTH confession_revealed
+                // and the generic tryal_revealed, so an unfiltered pass would show that card a
+                // second time under a bare "TRYAL IS TURNED". Only cards belonging to nobody who
+                // confessed this beat are unattributed and need a step of their own.
+                int unattributed = 0;
+                foreach (var (targetId, label) in pending)
+                {
+                    if (confessions.Exists(c => string.Equals(c.targetId, targetId, StringComparison.Ordinal)))
+                        continue;
+                    steps.Add(($"{NameOf(targetId)}'S TRYAL IS TURNED", new List<string> { label }));
+                    unattributed++;
+                }
+
+                if (unattributed == 0 && confessions.Count == 0)
+                    steps.Add(("THE DEED IS DONE", new List<string>()));
             }
             else if (elimination.eliminated)
             {

@@ -17,6 +17,7 @@ export const CLIENT_TO_SERVER = {
   CARD_PICK_SUBMIT: 'card_pick_submit',
   CONFIRM_SUBMIT: 'confirm_submit',
   TARGET_SUBMIT: 'target_submit',
+  TRYAL_PICK_SUBMIT: 'tryal_pick_submit',
 } as const;
 
 // Server → Client
@@ -33,8 +34,10 @@ export const SERVER_TO_CLIENT = {
   CARD_PICK_REQUEST: 'card_pick_request',
   CONFIRM_REQUEST: 'confirm_request',
   TARGET_REQUEST: 'target_request',
+  TRYAL_PICK_REQUEST: 'tryal_pick_request',
   PHASE_RESOLVE: 'phase_resolve',
   PUBLIC_REVEAL: 'public_reveal',
+  GAME_EVENT: 'game_event',
   ELIMINATION_RESULT: 'elimination_result',
   GAME_OVER: 'game_over',
   ERROR_MSG: 'error_msg',

@@ -13,6 +13,7 @@ import { DeckSummary } from '../components/DeckSummary';
 import { NightDawnOverlay } from '../components/NightDawnOverlay';
 import { RevealOverlay } from '../components/RevealOverlay';
 import { PublicRevealToast } from '../components/PublicRevealToast';
+import { EventLog } from '../components/EventLog';
 import { GameOverScreen } from './GameOverScreen';
 
 export function MirrorScreen() {
@@ -57,6 +58,8 @@ export function MirrorScreen() {
           myPlayerId={null}
         />
       </section>
+
+      <EventLog />
 
       <section className="mt-auto flex items-end justify-between">
         <DeckSummary deckCount={deckCount} discardCount={discardCount} />

@@ -272,6 +272,48 @@ otherwise fails by design.
 
 ---
 
+## 7b. Mirror parity debt (deferred — but REQUIRED, not polish)
+
+**The mirror must end up an exact visual copy of this host screen.** Its purpose is that a player who
+cannot see the host TV connects a device as `display` and sees **exactly** what the people at the host
+screen see. Anything public the host shows and the mirror does not is an **information asymmetry
+between players** — a fairness bug in a social deduction game.
+
+Deferred to a later phase by decision (2026-08-13). The sync properties that matter are already in
+place — reveals land together, no private data reaches the mirror, and the event log renders from the
+same closed-kind copy — so what remains is layout and art.
+
+**🔴 NO PROTOCOL WORK IS NEEDED.** The mirror already RECEIVES every field the host renders:
+`townHall`, `tryalTotal`, `revealedTryals`, `accusationCards`, `statusCards`, `accusationLimit`,
+`handCount`, and `topDiscard` on the state payload. `BoardSummary` just doesn't render them. That also
+means the privacy audit does not need redoing — the data already flows and was already reviewed.
+
+| Host element | Mirror today | Debt |
+|---|---|---|
+| Rectangular ring (`HostTableView`) | flat `BoardSummary` list | **layout port** — the `s`/`H`/top/bottom geometry |
+| Seat: portrait, player + character name, `N IN HAND · X/Y`, `ACCUSATIONS n/7` | name + accusations only | **layout + art** |
+| Seat: tryal row (revealed art + shared back) | none | **art** |
+| Seat: accusation ×N stacks, effect badges | merged text list | layout |
+| Seat: turn ring, HANGED overlay | turn marker only | layout |
+| Meeting House: stats row, deck/discard, top-discard art, legend | `DeckSummary` counts | layout + art |
+| IN EFFECT panel (+ rules text) | none | layout (text is static copy, not wire data) |
+| Header: `TABLE code · N SOULS`, phase pill | room code + phase tag | layout |
+| Event log | ✅ built (`EventLog.tsx`) | — |
+| Night/dawn overlay | ✅ `NightDawnOverlay` | — |
+| Synchronized reveal | ✅ `RevealOverlay` | card-flip art only |
+| Public-reveal toast | ✅ `PublicRevealToast` | — |
+| Lobby (room code + URLs) | none | decide whether a mirror needs it |
+
+**The non-obvious cost is ART, not code.** The host resolves card images through
+`HostCardSpriteRegistry` (Unity sprites). The browser needs the same images as web assets — an export
+step plus a label→URL map mirroring the registry's normalization (`Trim().ToLowerInvariant()`, spaces
+stripped) so `"Not a Witch"` and `"Not A Witch"` both resolve. Budget that before the layout work.
+
+⚠️ **Do not widen the gap:** any new host element showing public information is added to both, or
+appended to this table.
+
+---
+
 ## 8. Boundary invariant
 
 After every change to `Assets/Project/Scripts/UI/HostDisplay/`:

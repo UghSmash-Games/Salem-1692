@@ -492,10 +492,12 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   networked**) → `RevealTryalCard(fromAccusation:true)` (Rebecca Nurse + multiple-witch-card + win-check
   reused). Fires uniformly for AI/local/networked Curse. Curse is the only real trigger — Scapegoat's
   `TransferAllStatusesTo` moves the reds away too, leaving the loser at 0.
-  - ⚠️ The **networked remover's which-tryal CHOICE** is still random (falls to the same
-    `HandleAccusationRevealChoice` gap as the normal accusation reveal — a synchronous event that can't
-    `yield`). Deliberately NOT forked here; it's the single shared follow-up to solve "networked player
-    picks which tryal" once, generally.
+  - ✅ The **networked remover's which-tryal CHOICE** is now REAL (was random). The shared "networked
+    player picks which tryal" seam landed: `HandleAccusationRevealChoice` hands a `NetworkInput` chooser
+    off via `Player.PendingTryalRevealTarget`, drained by `NetworkInput.RunTurn` a beat later (the
+    `PendingAbigailDiscardChoice` pattern — the handler still cannot `yield`). The prompt carries
+    `reason: "piety_loss_reveal"` so the phone copy differs from a normal accusation reveal, but it is
+    the SAME event and the same reveal path. No answer → random (the reveal is mandatory).
 - **Matchmaker:** cannot receive a 2nd (✅ #7 — `ActionOp.Matchmaker` handler refuses the play if the
   target already `HasStatus("Matchmaker")`; general, any player); if one linked player is night-killed
   both die even if the other confessed or was saved (✅ `PlayerService.Eliminate`, Phase 5: cascade

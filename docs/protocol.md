@@ -123,6 +123,35 @@ The host (Unity) emits these events. The server routes them to the correct recip
   consumed. This is NOT a masked secret phase; it is the acting player's own choice, routed to one
   socket as their private decision UI.
 
+### `tryal_pick_request`
+- **Direction:** host → server → **one specific player**
+- **Recipients:** single player socket matching `playerId` (the chooser)
+- **NEVER sent to:** host, mirrors, other players
+- **Payload:** `{ playerId: string, targetPlayerId: string, count: number, seconds: number, reason: string }`
+- **Note:** Asks a player **which face-down tryal** to act on. `reason` is a machine code —
+  `"accusation_reveal"` (threshold crossed) | `"piety_loss_reveal"` (Curse stripped Piety at or over
+  the base) | `"conspiracy_reveal"` (step 1, the drawer choosing on the black-cat holder) |
+  `"conspiracy_pass"` (step 2). The first three are the same rulebook idea: *the player who caused
+  the reveal chooses which card turns.*
+- **`"conspiracy_pass"` is the one SIMULTANEOUS use** (rulebook p6: *"All players simultaneously
+  choose a face-down tryal card from the player on their left"*). The host sends one of these to
+  EVERY alive player in the same frame — each still routed to that player's own socket — on a single
+  shared window, and **moves no card until every answer is in or the window expires**. Resolving
+  picks as they arrive would let a player take from a neighbour whose row had already changed, and
+  would leak order of play. Here the card is TAKEN, not turned: it stays face-down, and its identity
+  reaches only the RECEIVER via `private_state`. It is NOT a masked secret phase — every player picks,
+  so there is no `acting` subset that submission timing could expose.
+- 🔴 **`count` IS THE WHOLE PAYLOAD about those cards.** No labels, and **no slot positions**. The
+  chooser picks blind among identical backs, exactly as at a physical table, and the answer is an
+  ORDINAL into that face-down subset — the host alone maps ordinal → real `TryalCards` index.
+  ⛔ **Never add a `labels` field and never send real indices.** `AddTryalCardAndNotify` **appends**,
+  so a real index would let a Conspiracy giver pin a card they just passed to an exact slot and narrow
+  the rest by elimination — the same reasoning that keeps `revealedTryals` position-free. (Conspiracy
+  step 3 re-shuffles every face-down row, which is what makes even an ordinal safe; if that shuffle is
+  ever removed, revisit this.)
+- This is NOT a masked secret phase — the reveal's existence is public and only one player is asked.
+  It is routed to one socket because it is that player's private decision UI.
+
 ### `confirm_request`
 - **Direction:** host → server → **one specific player**
 - **Recipients:** single player socket matching `playerId`
@@ -249,6 +278,18 @@ Players emit these events from their phone clients. The server validates the sen
   answer IS the confirmation). The host owns the authoritative deadline and defaults to `true`
   (take the beneficial action) if no answer arrives before it expires.
 
+### `tryal_pick_submit`
+- **Direction:** player → server → host
+- **Sender role:** player ONLY
+- **Client sends:** `{ ordinal: number }`
+- **Server forwards to host:** `{ playerId: string, ordinal: number }`
+- **Note:** The answer to a `tryal_pick_request`. Single-stage. `ordinal` indexes the FACE-DOWN subset
+  the host described (`0..count-1`), **never** a raw `TryalCards` index. The host re-validates the
+  range and owns the deadline.
+  ⚠ **A no-answer does NOT cancel.** Unlike `target_submit` (where a timeout means "don't play the
+  card"), the reveal is a MANDATORY rules consequence once triggered, so the host flips a RANDOM
+  face-down tryal on timeout. "No response" must not let a player dodge a reveal they caused.
+
 ### `card_pick_submit`
 - **Direction:** player → server → host
 - **Sender role:** player ONLY
@@ -274,6 +315,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `deck_rearrange_request` | ✅ (originates) | ❌ | ❌ |
 | `card_pick_request` | ✅ (originates) | ❌ | ❌ |
 | `target_request` | ✅ (originates) | ❌ | ❌ |
+| `tryal_pick_request` | ✅ (originates) | ❌ | ❌ |
 | `confirm_request` | ✅ (originates) | ❌ | ❌ |
 | `phase_resolve` | ✅ (originates) | ❌ | ❌ |
 | `public_reveal` | ✅ (originates) | ❌ | ❌ |
@@ -286,6 +328,7 @@ Players emit these events from their phone clients. The server validates the sen
 | `deck_rearrange_submit` | ❌ | ✅ | ❌ |
 | `card_pick_submit` | ❌ | ✅ | ❌ |
 | `target_submit` | ❌ | ✅ | ❌ |
+| `tryal_pick_submit` | ❌ | ✅ | ❌ |
 | `confirm_submit` | ❌ | ✅ | ❌ |
 
 ---
@@ -296,6 +339,6 @@ These rules are enforced at the server dispatch layer:
 
 1. **`private_state`** is routed to exactly one player socket. It must never appear in any broadcast.
 2. **`secret_phase_prompt`** is unpacked per-player. Each player receives only their own `acting` flag. Mirrors and the host never receive this event.
-3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, **`confirm_request`**, and **`target_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
+3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, **`confirm_request`**, **`target_request`**, and **`tryal_pick_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
 4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `game_event`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.

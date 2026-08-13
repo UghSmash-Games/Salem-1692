@@ -43,6 +43,48 @@ namespace Salem.Networking
         public event System.Action<string> OnRoomCodeAssigned;
         public event System.Action OnRosterChanged;
 
+        /// <summary>True once StartGame has handed off to GamePhaseManager. Drives the host lobby
+        /// panel's dismissal; also guards against a double Start.</summary>
+        public bool HasStarted { get; private set; }
+        public event System.Action OnGameStarted;
+
+        /// <summary>Minimum seats needed to begin — read by the lobby panel for its "N more" copy.</summary>
+        public int MinPlayers => minPlayers;
+
+        /// <summary>
+        /// One lobby seat, with NO reference to the Player model.
+        ///
+        /// This exists so the host display can render the lobby roster without breaching its
+        /// masking boundary: `Seats` above is IReadOnlyList&lt;Player&gt;, and every file in
+        /// Assets/Project/Scripts/UI/HostDisplay is forbidden from naming Player at all. Carries
+        /// only what a person can already see across the table — a name, and whether the seat is a
+        /// bot. It is deliberately a projection, not a view onto the live object, so it cannot grow
+        /// access to a hand or a tryal later.
+        /// </summary>
+        public readonly struct LobbySeatInfo
+        {
+            public readonly string DisplayName;
+            public readonly bool IsAI;
+
+            public LobbySeatInfo(string displayName, bool isAI)
+            {
+                DisplayName = displayName;
+                IsAI = isAI;
+            }
+        }
+
+        /// <summary>The lobby roster in join order, projected free of the Player model.</summary>
+        public List<LobbySeatInfo> BuildLobbySeats()
+        {
+            var list = new List<LobbySeatInfo>(seats.Count);
+            foreach (var s in seats)
+            {
+                if (s == null) continue;
+                list.Add(new LobbySeatInfo(s.PlayerNameText, !s.IsHuman));
+            }
+            return list;
+        }
+
         // Switch to networked mode as early as possible (before GameManager.Awake).
         private void Awake()
         {
@@ -165,6 +207,12 @@ namespace Salem.Networking
             }
 
             Debug.Log($"[Coordinator] Starting game with {count} players.");
+
+            // Flagged BEFORE the hand-off: BeginGame runs the setup coroutine, and the lobby panel
+            // must be gone by the time the first public broadcast paints the board behind it.
+            HasStarted = true;
+            OnGameStarted?.Invoke();
+
             gamePhaseManager.BeginGame();
         }
 

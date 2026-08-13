@@ -41,8 +41,21 @@ namespace Salem.Networking
         public event Action<CardPickSubmitMsg> OnCardPickSubmit;
         public event Action<ConfirmSubmitMsg> OnConfirmSubmit;
         public event Action<TargetSubmitMsg> OnTargetSubmit;
+        public event Action<TryalPickSubmitMsg> OnTryalPickSubmit;
         public event Action<PhaseResolveMsg> OnPhaseResolveEcho;
         public event Action OnRoomClosed;
+
+        /// <summary>
+        /// A mirror screen just connected. The host answers with a full re-broadcast so the mirror
+        /// syncs to the CURRENT state instead of waiting for the next incidental event.
+        ///
+        /// Necessary because broadcasts are event-driven (turn / phase / elimination / card played /
+        /// tryal revealed) with no periodic tick — so a mirror that connects during the LOBBY, or
+        /// during any quiet stretch, receives nothing at all and renders an empty board. Keeping the
+        /// re-broadcast on the HOST rather than caching state server-side preserves the server as a
+        /// pure relay: it never stores or originates game state.
+        /// </summary>
+        public event Action OnMirrorJoined;
         public event Action OnConnectedToServer;
         public event Action OnDisconnectedFromServer;
 
@@ -212,6 +225,12 @@ namespace Salem.Networking
             _ = socketClient.Emit("target_request", JsonUtility.ToJson(msg));
         }
 
+        public void SendTryalPickRequest(TryalPickRequestMsg msg)
+        {
+            if (!GuardConnected("SendTryalPickRequest")) return;
+            _ = socketClient.Emit("tryal_pick_request", JsonUtility.ToJson(msg));
+        }
+
         // Host-facing echoes of the outgoing PUBLIC dramatic-beat messages. The host TV display
         // (Salem.UI.HostDisplay) subscribes to these so it renders the SAME payloads sent to phones/mirrors
         // — in particular public_reveal is NOT echoed to the host over the socket, so this is the host's
@@ -332,6 +351,13 @@ namespace Salem.Networking
                 OnTargetSubmit?.Invoke(msg);
             });
 
+            socketClient.On("tryal_pick_submit", json =>
+            {
+                var msg = JsonUtility.FromJson<TryalPickSubmitMsg>(json);
+                Debug.Log($"[NetworkManager] Tryal pick submit from {msg.playerId}: ordinal={msg.ordinal}");
+                OnTryalPickSubmit?.Invoke(msg);
+            });
+
             socketClient.On("phase_resolve", json =>
             {
                 var msg = JsonUtility.FromJson<PhaseResolveMsg>(json);
@@ -349,6 +375,7 @@ namespace Salem.Networking
             socketClient.On("mirror_joined", json =>
             {
                 Debug.Log("[NetworkManager] Mirror screen connected.");
+                OnMirrorJoined?.Invoke();
             });
 
             socketClient.On("error_msg", json =>

@@ -33,8 +33,21 @@ describe('useMirrorSocket event registration', () => {
     registered.length = 0;
     renderHook(() => useMirrorSocket());
 
-    expect(registered).not.toContain('private_state');
-    expect(registered).not.toContain('secret_phase_prompt');
-    expect(registered).not.toContain('action_request');
+    // Every host → ONE-player event. Each is listed explicitly rather than relying on the
+    // allow-list subset check above, so that adding a new per-player prompt to the allow-list by
+    // mistake still fails here. Kept in step with protocol.md's "routed to exactly one player
+    // socket" list.
+    for (const priv of [
+      'private_state',
+      'secret_phase_prompt',
+      'action_request',
+      'deck_rearrange_request',
+      'card_pick_request',
+      'confirm_request',
+      'target_request',
+      'tryal_pick_request',
+    ]) {
+      expect(registered).not.toContain(priv);
+    }
   });
 });

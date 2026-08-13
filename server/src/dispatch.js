@@ -208,6 +208,24 @@ function registerDispatch(io) {
       }
     });
 
+    // Tryal pick request → one specific player ONLY (the accuser / piety remover / conspiracy
+    // drawer choosing WHICH face-down tryal to flip on another player).
+    // ⛔ Carries a COUNT of face-down tryals, never their identities and never their slot
+    // positions — the chooser is picking blind, exactly as at a physical table. Routed to one
+    // socket because it is that player's private decision UI, not because the count is secret.
+    socket.on('tryal_pick_request', (data) => {
+      if (socket.role !== 'host') return;
+      if (!data || !data.playerId) return;
+
+      const player = getPlayerByPlayerId(socket.roomCode, data.playerId);
+      if (!player) return;
+
+      const targetSocket = io.sockets.sockets.get(player.socketId);
+      if (targetSocket) {
+        targetSocket.emit('tryal_pick_request', data);
+      }
+    });
+
     // Confirm request → one specific player ONLY (their own optional "may" choice,
     // e.g. Abigail Williams' discard). Private decision UI — never broadcast.
     socket.on('confirm_request', (data) => {
@@ -296,6 +314,11 @@ function registerDispatch(io) {
     socket.on('target_submit', (data) => {
       if (socket.role !== 'player') return;
       forwardToHost(io, socket, 'target_submit', data);
+    });
+
+    socket.on('tryal_pick_submit', (data) => {
+      if (socket.role !== 'player') return;
+      forwardToHost(io, socket, 'tryal_pick_submit', data);
     });
 
     // ─── Disconnect ────────────────────────────────────────────

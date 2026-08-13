@@ -50,7 +50,12 @@ namespace Salem.Players
             yield return new WaitUntil(() => done);
         }
 
-        public IEnumerator RequestTryal(Player chooser, Player target, Action<int> onChosen)
+        // `reason` and `timeoutSeconds` are network concerns (phone copy + host-owned deadline).
+        // The local table UI has neither: the chooser is sitting at the host screen and picks
+        // directly, so this waits indefinitely exactly as it always has.
+        public IEnumerator RequestTryal(Player chooser, Player target, string reason,
+                                        float timeoutSeconds, bool abortOnTurnChange,
+                                        Action<int> onChosen)
         {
             if (Table == null)
             {

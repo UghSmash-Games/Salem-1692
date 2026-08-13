@@ -14,6 +14,7 @@ export type Screen =
   | 'card_pick'
   | 'confirm'
   | 'target'
+  | 'tryal_pick'
   | 'spectator'
   | 'game_over';
 
@@ -41,6 +42,9 @@ export function useCurrentScreen(): Screen {
     // before the play resolves — so both outrank the turn screens below them.
     if (s.confirm) return 'confirm';
     if (s.targetRequest) return 'target';
+    // Same class as the two above: the host is blocking on this pick before a mandatory reveal
+    // resolves, so it outranks the turn screens.
+    if (s.tryalPick) return 'tryal_pick';
     // The John/Martha draft can arrive while the drafter is mid-turn (someone
     // else was eliminated), so it takes precedence over their own action/rearrange.
     if (s.cardPick) return 'card_pick';

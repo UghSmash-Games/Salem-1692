@@ -17,6 +17,7 @@ import type {
   GameStateUpdatePayload,
   PhaseResolvePayload,
   PublicRevealPayload,
+  GameEventPayload,
   EliminationResultPayload,
   GameOverPayload,
   ErrorMsgPayload,
@@ -33,6 +34,7 @@ export const MIRROR_ALLOWED_EVENTS: readonly string[] = [
   SERVER_TO_CLIENT.GAME_STATE_UPDATE,
   SERVER_TO_CLIENT.PHASE_RESOLVE,
   SERVER_TO_CLIENT.PUBLIC_REVEAL,
+  SERVER_TO_CLIENT.GAME_EVENT,
   SERVER_TO_CLIENT.ELIMINATION_RESULT,
   SERVER_TO_CLIENT.GAME_OVER,
   SERVER_TO_CLIENT.ROOM_CLOSED,
@@ -52,6 +54,8 @@ export function useMirrorSocket(): void {
       useGameStore.getState().applyPhaseResolve(data);
     const onPublicReveal = (data: PublicRevealPayload) =>
       useGameStore.getState().applyPublicReveal(data);
+    const onGameEvent = (data: GameEventPayload) =>
+      useGameStore.getState().appendGameEvent(data);
     const onElimination = (data: EliminationResultPayload) =>
       useGameStore.getState().applyEliminationResult(data);
     const onGameOver = (data: GameOverPayload) =>
@@ -66,6 +70,7 @@ export function useMirrorSocket(): void {
     socket.on(SERVER_TO_CLIENT.GAME_STATE_UPDATE, onGameState);
     socket.on(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
     socket.on(SERVER_TO_CLIENT.PUBLIC_REVEAL, onPublicReveal);
+    socket.on(SERVER_TO_CLIENT.GAME_EVENT, onGameEvent);
     socket.on(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);
     socket.on(SERVER_TO_CLIENT.GAME_OVER, onGameOver);
     socket.on(SERVER_TO_CLIENT.ROOM_CLOSED, onRoomClosed);
@@ -80,6 +85,7 @@ export function useMirrorSocket(): void {
       socket.off(SERVER_TO_CLIENT.GAME_STATE_UPDATE, onGameState);
       socket.off(SERVER_TO_CLIENT.PHASE_RESOLVE, onPhaseResolve);
       socket.off(SERVER_TO_CLIENT.PUBLIC_REVEAL, onPublicReveal);
+      socket.off(SERVER_TO_CLIENT.GAME_EVENT, onGameEvent);
       socket.off(SERVER_TO_CLIENT.ELIMINATION_RESULT, onElimination);
       socket.off(SERVER_TO_CLIENT.GAME_OVER, onGameOver);
       socket.off(SERVER_TO_CLIENT.ROOM_CLOSED, onRoomClosed);

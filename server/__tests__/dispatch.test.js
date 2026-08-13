@@ -731,6 +731,90 @@ describe('privacy isolation', () => {
     await expectNoEvent(mirror, 'target_request');
   });
 
+  test('tryal_pick_request is sent ONLY to the chooser, and carries no card identities', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player0 = trackClient(createClient());
+    await waitForConnect(player0);
+    player0.emit('join_room', { code, displayName: 'Alice' });
+    await waitFor(player0, 'joined');
+
+    const player1 = trackClient(createClient());
+    await waitForConnect(player1);
+    player1.emit('join_room', { code, displayName: 'Bob' });
+    await waitFor(player1, 'joined');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    host.emit('tryal_pick_request', {
+      playerId: 'p0',
+      targetPlayerId: 'p1',
+      count: 3,
+      seconds: 25,
+      reason: 'accusation_reveal',
+    });
+
+    const p0Data = await waitFor(player0, 'tryal_pick_request');
+    expect(p0Data.targetPlayerId).toBe('p1');
+    expect(p0Data.count).toBe(3);
+    expect(p0Data.reason).toBe('accusation_reveal');
+
+    // 🔴 The whole point of the shape: a COUNT, never the cards and never their slot positions.
+    // If someone adds labels or real indices to the payload, this fails.
+    expect(p0Data.labels).toBeUndefined();
+    expect(p0Data.cards).toBeUndefined();
+    expect(p0Data.tryals).toBeUndefined();
+    expect(p0Data.indices).toBeUndefined();
+
+    // The chooser's own decision prompt must never reach the player being revealed, or a mirror.
+    await expectNoEvent(player1, 'tryal_pick_request');
+    await expectNoEvent(mirror, 'tryal_pick_request');
+  });
+
+  test('tryal_pick_submit reaches the host with a trusted playerId the client cannot spoof', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const player0 = trackClient(createClient());
+    await waitForConnect(player0);
+    player0.emit('join_room', { code, displayName: 'Alice' });
+    const joined0 = await waitFor(player0, 'joined');
+
+    // Spoof attempt: claim to be another seat. The trusted id is spread LAST server-side, so the
+    // host's `msg.playerId == expected` check — the ONLY authorization on this family of prompts —
+    // still sees the real sender.
+    player0.emit('tryal_pick_submit', { ordinal: 1, playerId: 'p9' });
+
+    const hostData = await waitFor(host, 'tryal_pick_submit');
+    expect(hostData.ordinal).toBe(1);
+    expect(hostData.playerId).toBe(joined0.playerId);
+    expect(hostData.playerId).not.toBe('p9');
+  });
+
+  test('a mirror cannot send tryal_pick_submit', async () => {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+    mirror.emit('join_mirror', { code });
+    await waitFor(mirror, 'joined');
+
+    mirror.emit('tryal_pick_submit', { ordinal: 0 });
+
+    await expectNoEvent(host, 'tryal_pick_submit');
+  });
+
   test('confirm_request is sent ONLY to the target player (never others/mirror)', async () => {
     const host = trackClient(createClient());
     await waitForConnect(host);

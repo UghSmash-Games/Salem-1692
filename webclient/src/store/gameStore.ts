@@ -23,8 +23,10 @@ import type {
   CardPickRequestPayload,
   ConfirmRequestPayload,
   TargetRequestPayload,
+  TryalPickRequestPayload,
   PhaseResolvePayload,
   PublicRevealPayload,
+  GameEventPayload,
   EliminationResultPayload,
   GameOverPayload,
 } from '../socket/types';
@@ -87,6 +89,19 @@ export interface TargetRequestSlice {
   seconds: number;
 }
 
+/** "Which face-down tryal do you turn?" — carries a COUNT only, never card identities.
+ *  The answer is an ordinal into that face-down subset (see TryalPickRequestPayload). */
+export interface TryalPickSlice {
+  /** Whose tryals — a public player id, resolved to a name via the public board. */
+  targetPlayerId: string;
+  /** How many identical face-down backs to render. */
+  count: number;
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
+  /** "accusation_reveal" | "piety_loss_reveal" | "conspiracy_reveal". */
+  reason: string;
+}
+
 export interface DeckRearrangeSlice {
   /** Full deck labels, top→bottom (Tituba reorders these). */
   cards: string[];
@@ -138,11 +153,19 @@ interface GameStore {
   cardPick: CardPickSlice | null;
   confirm: ConfirmSlice | null;
   targetRequest: TargetRequestSlice | null;
+  tryalPick: TryalPickSlice | null;
   reveal: { revealAt: number } | null;
   /** The most recent elimination_result, for the synchronized reveal overlay. */
   lastElimination: EliminationResultPayload | null;
   /** The most recent public_reveal (e.g. Giles Corey showing two red cards), for a public toast. */
   lastPublicReveal: PublicRevealPayload | null;
+  /** The public "What Has Passed" log, oldest first, capped at MAX_EVENT_LOG_ENTRIES. */
+  eventLog: GameEventPayload[];
+  /** Events that arrived while a reveal was armed — i.e. belonging to THIS beat. Lets the overlay
+   *  say what actually turned when no elimination_result accompanies the reveal (an accusation or
+   *  piety-loss flip, which kills no one). Mirrors HostRevealOverlay, which collects game events
+   *  only while its own state is not Idle. */
+  revealEvents: GameEventPayload[];
   gameOver: GameOverSlice | null;
 
   // ── Connection / session ──
@@ -166,10 +189,13 @@ interface GameStore {
   clearConfirm: () => void;
   applyTargetRequest: (data: TargetRequestPayload) => void;
   clearTargetRequest: () => void;
+  applyTryalPickRequest: (data: TryalPickRequestPayload) => void;
+  clearTryalPick: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
   clearReveal: () => void;
   applyPublicReveal: (data: PublicRevealPayload) => void;
   clearPublicReveal: () => void;
+  appendGameEvent: (data: GameEventPayload) => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
   applyGameOver: (data: GameOverPayload) => void;
 
@@ -181,6 +207,10 @@ interface GameStore {
 // whose phase is one of these is a board refresh DURING a secret phase and must
 // NOT clear the prompt; any other phase means the secret phase has ended.
 const SECRET_PHASE_NAMES = new Set(['dawn', 'night']);
+
+/** Rolling window for the public event log. Matches HostEventLog.maxEntries (14) so the mirror
+ *  shows the same depth of history as the host screen beside it. */
+const MAX_EVENT_LOG_ENTRIES = 14;
 
 const initialSession: SessionSlice = {
   connected: false,
@@ -218,9 +248,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   cardPick: null,
   confirm: null,
   targetRequest: null,
+  tryalPick: null,
   reveal: null,
   lastElimination: null,
   lastPublicReveal: null,
+  eventLog: [],
+  revealEvents: [],
   gameOver: null,
 
   setConnected: (connected) =>
@@ -254,9 +287,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cardPick: null,
       confirm: null,
       targetRequest: null,
+      tryalPick: null,
       reveal: null,
       lastElimination: null,
       lastPublicReveal: null,
+      eventLog: [],
+      revealEvents: [],
       gameOver: null,
     }),
 
@@ -325,6 +361,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cardPick: null,
       confirm: null,
       targetRequest: null,
+      tryalPick: null,
     }),
 
   applyActionRequest: (data) =>
@@ -344,6 +381,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // waits behind the draft; when the draft resolves (clearCardPick) the action screen appears.
       confirm: null,
       targetRequest: null,
+      tryalPick: null,
     }),
 
   // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
@@ -355,6 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cardPick: null,
       confirm: null,
       targetRequest: null,
+      tryalPick: null,
     }),
 
   clearDeckRearrange: () => set({ deckRearrange: null }),
@@ -379,6 +418,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deckRearrange: null,
       confirm: null,
       targetRequest: null,
+      tryalPick: null,
     }),
 
   clearCardPick: () => set({ cardPick: null }),
@@ -398,6 +438,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       deckRearrange: null,
       cardPick: null,
       targetRequest: null,
+      tryalPick: null,
     }),
 
   clearConfirm: () => set({ confirm: null }),
@@ -420,7 +461,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   clearTargetRequest: () => set({ targetRequest: null }),
 
-  applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
+  // "Which face-down tryal do you turn?" Mutually exclusive with the other prompts, like
+  // applyTargetRequest above — the host is blocking on this answer before the reveal resolves.
+  applyTryalPickRequest: (data) =>
+    set({
+      tryalPick: {
+        targetPlayerId: data.targetPlayerId,
+        count: data.count ?? 0,
+        seconds: data.seconds ?? 25,
+        reason: data.reason,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+      targetRequest: null,
+    }),
+
+  clearTryalPick: () => set({ tryalPick: null }),
+
+  /**
+   * Arming a new reveal CLEARS the previous outcome.
+   *
+   * `elimination_result` is optional — a beat can turn a tryal and kill no one (a confession-only
+   * night, or conspiracy step 1, which flips one card and sends no outcome). Without this reset,
+   * RevealOverlay's `lastElimination` fallback would re-display the LAST death, so a conspiracy
+   * flip would announce "Alice was eliminated" about a player who died several rounds ago.
+   *
+   * Mirrors HostRevealOverlay.HandlePhaseResolve, which nulls its own `elimination` for exactly
+   * this reason — the two screens must not disagree about whether anyone died.
+   */
+  applyPhaseResolve: (data) =>
+    set({ reveal: { revealAt: data.revealAt }, lastElimination: null, revealEvents: [] }),
 
   clearReveal: () => set({ reveal: null }),
 
@@ -428,6 +501,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
   applyPublicReveal: (data) => set({ lastPublicReveal: data }),
 
   clearPublicReveal: () => set({ lastPublicReveal: null }),
+
+  // One entry in the public event log. Kept oldest-first and capped, matching the host screen's
+  // rolling window — an unbounded list would grow for the whole game on a display that never
+  // reloads. The renderer drops entries whose kind it doesn't recognise; they are still STORED,
+  // so a newer build could render them without having lost the history.
+  appendGameEvent: (data) =>
+    set((s) => ({
+      eventLog: [...s.eventLog, data].slice(-MAX_EVENT_LOG_ENTRIES),
+      // Also bucket it into THIS beat while a reveal is armed. Same rule as the host overlay's
+      // `state !== Idle` check, so the two screens scope a beat identically.
+      revealEvents: s.reveal ? [...s.revealEvents, data] : s.revealEvents,
+    })),
 
   applyEliminationResult: (data) => {
     const { playerId } = get().session;
