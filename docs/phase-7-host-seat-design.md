@@ -11,10 +11,20 @@ shapes, card art, colour) is taken from the design owner's description.
 
 ## 0. Locked decisions
 
-1. **DISPLAY-ONLY.** The PDF's `ADVANCE ▸`, `RESET TABLE`, "click a seat", and "click a sealed Tryal
-   to flip" are Claude Design prototype artifacts and are **NOT built**. Page 2's *"Try next: add the
-   night phase…"* is the same class of artifact. Zero interactive controls on the host screen —
-   consistent with stripping `DrawPileUI`'s draw button and `PlayerBoardUI`'s per-tryal buttons.
+1. **DISPLAY-ONLY — *during play*.** The PDF's `ADVANCE ▸`, `RESET TABLE`, "click a seat", and "click
+   a sealed Tryal to flip" are Claude Design prototype artifacts and are **NOT built**. Page 2's
+   *"Try next: add the night phase…"* is the same class of artifact. Zero interactive controls on the
+   in-game host screen — consistent with stripping `DrawPileUI`'s draw button and `PlayerBoardUI`'s
+   per-tryal buttons.
+   - **SCOPE CLARIFIED (Phase 9, owner decision):** this rule governs the GAME BOARD, not the LOBBY.
+     The lobby carries host-operator controls — **Start**, an **AI-fill toggle**, and a **table-size
+     stepper** — because the host must be able to begin a game once enough players have joined and
+     choose whether to fill empty seats with AI.
+   - **Why this is not a contradiction:** the rule exists to stop *unauthorized inputs that affect
+     play* — the `DrawPileUI` button let anyone at the host machine force the current player's draw.
+     A lobby control acts before any game state exists, mutates nothing a player owns, and is the
+     host operator's legitimate job. The controls live on `HostLobbyPanel`, which hides itself on
+     `OnGameStarted`, so they are structurally incapable of appearing during play.
 2. **Rectangular ring** replaces the ellipse.
 3. **Build the "What Has Passed" event log.**
 4. **No accusation pips** — the PDF's `ACCUSATIONS n/7` text counter replaces them. `HostPip.prefab`

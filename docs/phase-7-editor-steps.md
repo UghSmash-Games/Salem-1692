@@ -242,14 +242,30 @@ HostDisplay
 ⚠ The panel shows a `----` placeholder until the server assigns a code. If it never resolves, the
 host never reached `room_created` — check the server is running, not the panel.
 
-🔴 **There is still no way to START a game from the screen.** The only trigger is
-`NetworkGameCoordinator`'s `[ContextMenu] "TEST — Start Game"` (right-click the component in the
-Inspector during Play mode) — TEMP scaffolding that predates this panel. The lobby now shows
-everything a player needs to JOIN, but someone must still start it from the Editor.
-**This is a design decision, not an oversight:** locked decision #0 makes the host screen
-DISPLAY-ONLY with zero interactive controls, so a Start button on it needs that decision revisited —
-a lobby control for the host operator is arguably a different class from the in-game
-`ADVANCE`/`RESET` artifacts that rule was written against. Left for the owner to call.
+### Host controls (Phase 9 — resolved)
+
+The lobby now carries the host-operator controls. Locked decision #0 was clarified to govern the
+game BOARD, not the lobby (see `phase-7-host-seat-design.md` §0.1). Wire these on `HostLobbyPanel`:
+
+| Object | Type | Field |
+|---|---|---|
+| `StartButton` | `Button` + TMP label | `startButton` |
+| `StartBlocked` | TMP, mono ~14px, amber | `startBlockedText` |
+| `FillWithAIToggle` | `Toggle` + label | `fillWithAIToggle` |
+| `AiFillRow` | container for the stepper | `aiFillRow` |
+| `TargetMinus` / `TargetPlus` | `Button` | `targetMinusButton` / `targetPlusButton` |
+| `TargetCount` | TMP — renders `TABLE OF 6` | `targetCountText` |
+
+- **`NetworkGameCoordinator.CanStart(out reason)` is the single authority.** The button's enabled
+  state and `StartGame`'s own refusal both call it, so the button can never offer a start that
+  `StartGame` would reject. `startBlockedText` shows the reason and hides when start is legal.
+- The stepper clamps to **4–12** (`TryalDistribution` defines no other counts and aborts setup
+  outside them), and the +/- buttons go dead at the edges rather than silently no-op'ing.
+- `aiFillRow` is HIDDEN when AI fill is off, so the lobby reads as one decision, not two.
+- These controls need a **GraphicRaycaster on the host canvas** to receive clicks — the one place a
+  raycaster is wanted on this screen. It stays on the root canvas, not on the display panels.
+
+⚠ The `[ContextMenu] "TEST — Start Game"` is retained as a fallback but is no longer the only path.
 
 ---
 

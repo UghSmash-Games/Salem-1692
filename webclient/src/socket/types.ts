@@ -82,7 +82,10 @@ export type GameEventKind =
   | 'double_witch_revealed'
   | 'confession_revealed'
   | 'gavel_placed'
-  | 'game_over';
+  | 'game_over'
+  /** Draw-2 turn action: actor + COUNT in `value`, never the cards. Exists for the AUDIO cue —
+   *  both renderers deliberately drop it from the log. */
+  | 'cards_drawn';
 
 /** One entry in the public "What Has Passed" log. Broadcast to all players + mirrors.
  *  PUBLIC DATA ONLY — ids and short enumerable labels, never prose. The RENDERER turns this into a

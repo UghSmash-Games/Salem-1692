@@ -30,6 +30,8 @@ namespace Salem.Networking
         [Header("Lobby Rules")]
         [Tooltip("TryalDistribution supports 4–12 players, so 4 is the floor.")]
         [SerializeField] private int minPlayers = 4;
+        [Tooltip("TryalDistribution supports 4–12 players, so 12 is the ceiling.")]
+        [SerializeField] private int maxPlayers = 12;
         [Tooltip("Opt-in: fill empty seats with AI up to targetPlayerCount on Start.")]
         [SerializeField] private bool fillWithAI = false;
         [SerializeField] private int targetPlayerCount = 4;
@@ -50,6 +52,73 @@ namespace Salem.Networking
 
         /// <summary>Minimum seats needed to begin — read by the lobby panel for its "N more" copy.</summary>
         public int MinPlayers => minPlayers;
+
+        /// <summary>
+        /// Upper bound on seats. GameSetup.TryalDistribution defines 4–12 ONLY and logs an error and
+        /// aborts setup outside that range, so the lobby must never let the host aim past it.
+        /// </summary>
+        public int MaxPlayers => maxPlayers;
+
+        // ── Lobby settings (host-operator controlled, pre-game only) ──
+
+        /// <summary>Whether empty seats are filled with AI up to <see cref="TargetPlayerCount"/>.</summary>
+        public bool FillWithAI => fillWithAI;
+
+        /// <summary>Seat count to fill up to when <see cref="FillWithAI"/> is on. Clamped to 4–12.</summary>
+        public int TargetPlayerCount => Mathf.Clamp(targetPlayerCount, minPlayers, maxPlayers);
+
+        /// <summary>Raised when a lobby SETTING changes (AI fill / target count), so the panel repaints.
+        /// Distinct from OnRosterChanged, which means the set of seats itself changed.</summary>
+        public event System.Action OnLobbySettingsChanged;
+
+        public void SetFillWithAI(bool value)
+        {
+            if (HasStarted || fillWithAI == value) return;
+            fillWithAI = value;
+            OnLobbySettingsChanged?.Invoke();
+        }
+
+        public void SetTargetPlayerCount(int value)
+        {
+            if (HasStarted) return;
+            int clamped = Mathf.Clamp(value, minPlayers, maxPlayers);
+            if (clamped == targetPlayerCount) return;
+            targetPlayerCount = clamped;
+            OnLobbySettingsChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// THE single authority on whether Start is legal, shared by the button's enabled state and
+        /// by StartGame's own refusal. Keeping one predicate means the button can never offer a start
+        /// that StartGame would then reject (or grey out one it would have accepted).
+        ///
+        /// `reason` is human copy for the lobby panel when it returns false.
+        /// </summary>
+        public bool CanStart(out string reason)
+        {
+            if (HasStarted) { reason = "The game has already begun."; return false; }
+
+            int humans = PlayerService.All.Count;
+            int finalCount = fillWithAI ? Mathf.Max(humans, TargetPlayerCount) : humans;
+
+            if (finalCount < minPlayers)
+            {
+                int shortfall = minPlayers - finalCount;
+                reason = fillWithAI
+                    ? $"Raise the table size — {shortfall} more seat{(shortfall == 1 ? "" : "s")} needed."
+                    : $"Waiting for {shortfall} more player{(shortfall == 1 ? "" : "s")} — or fill with AI.";
+                return false;
+            }
+
+            if (finalCount > maxPlayers)
+            {
+                reason = $"Too many players — {maxPlayers} is the maximum.";
+                return false;
+            }
+
+            reason = "";
+            return true;
+        }
 
         /// <summary>
         /// One lobby seat, with NO reference to the Player model.
@@ -89,6 +158,11 @@ namespace Salem.Networking
         private void Awake()
         {
             PlayerService.Mode = GameMode.Networked;
+
+            // TimerSettings is static, so it survives a domain reload and would otherwise carry the
+            // previous game's pace — and its LOCK — into this lobby, leaving the host unable to
+            // change it.
+            TimerSettings.ResetForNewGame();
         }
 
         private void Start()
@@ -183,20 +257,12 @@ namespace Salem.Networking
         /// <summary>Host presses Start. Optionally fills AI seats, then begins.</summary>
         public void StartGame()
         {
-            if (fillWithAI)
+            // ⚠ IDEMPOTENT. Harmless while the only trigger was an Inspector context menu; essential
+            // now that a button can be double-clicked — a second call would run BeginGame's setup
+            // coroutine over a game already being dealt.
+            if (HasStarted)
             {
-                int needed = targetPlayerCount - PlayerService.All.Count;
-                for (int i = 0; i < needed; i++)
-                {
-                    SpawnAISeat();
-                }
-            }
-
-            int count = PlayerService.All.Count;
-            if (count < minPlayers)
-            {
-                Debug.LogWarning($"[Coordinator] Need at least {minPlayers} players to start (have {count}). " +
-                                 "Enable AI fill or wait for more joins.");
+                Debug.LogWarning("[Coordinator] StartGame ignored — the game has already started.");
                 return;
             }
 
@@ -206,11 +272,37 @@ namespace Salem.Networking
                 return;
             }
 
+            // ⚠ VALIDATE BEFORE SPAWNING. The old order filled AI seats first and only then checked
+            // the minimum, so a target below minPlayers stranded orphan AI seats in the lobby that
+            // no later click could clear — the roster was permanently polluted with bots for a game
+            // that never began.
+            if (!CanStart(out string reason))
+            {
+                Debug.LogWarning($"[Coordinator] StartGame refused: {reason}");
+                return;
+            }
+
+            if (fillWithAI)
+            {
+                int needed = TargetPlayerCount - PlayerService.All.Count;
+                for (int i = 0; i < needed; i++)
+                {
+                    SpawnAISeat();
+                }
+            }
+
+            int count = PlayerService.All.Count;
+
             Debug.Log($"[Coordinator] Starting game with {count} players.");
 
             // Flagged BEFORE the hand-off: BeginGame runs the setup coroutine, and the lobby panel
             // must be gone by the time the first public broadcast paints the board behind it.
             HasStarted = true;
+
+            // Freeze the pace: a window must not move while players are already racing it, and a
+            // mid-phase change could resolve a round early.
+            TimerSettings.Lock();
+
             OnGameStarted?.Invoke();
 
             gamePhaseManager.BeginGame();

@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
 import MirrorApp from './MirrorApp';
 import './styles/index.css';
+import { restoreTextScale } from './hooks/useTextScale';
 
 /**
  * The player phone client serves "/" and "/join" — both render the App state
@@ -13,6 +14,10 @@ import './styles/index.css';
  * "/display" renders the passive mirror screen (public state only), a fully
  * separate component tree that never attaches listeners for private events.
  */
+// Apply the saved large-text preference before first paint, so it is not lost on reload and does
+// not cause a visible reflow after mount.
+restoreTextScale();
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

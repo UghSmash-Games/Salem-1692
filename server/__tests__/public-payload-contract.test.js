@@ -430,6 +430,8 @@ const ALLOWED_EVENT_KINDS = [
   'confession_revealed',
   'gavel_placed',
   'game_over',
+  // Audio-only: carries actor + a COUNT, never card identities. Both log renderers drop it.
+  'cards_drawn',
 ];
 
 /** Only these fields may ride on a log event. Note the absence of anything prose-shaped. */

@@ -18,6 +18,7 @@ import { TryalPickScreen } from './screens/TryalPickScreen';
 import { SpectatorScreen } from './screens/SpectatorScreen';
 import { GameOverScreen } from './screens/GameOverScreen';
 import { PublicRevealToast } from './components/PublicRevealToast';
+import { RulesSheet } from './components/RulesSheet';
 
 function CurrentScreen() {
   const screen = useCurrentScreen();
@@ -57,6 +58,9 @@ export default function App() {
     <>
       <CurrentScreen />
       <PublicRevealToast />
+      {/* Always reachable, never a screen: it overlays whatever prompt is up and closes itself
+          when the screen changes so it can't sit over a host-owned countdown. */}
+      <RulesSheet />
     </>
   );
 }

@@ -220,6 +220,23 @@ namespace Salem.Networking
         ConfessionRevealed,
         GavelPlaced,
         GameOver,
+
+        /// <summary>
+        /// A player took the Draw-2 turn action. Carries the actor and a COUNT in `value` —
+        /// **never** the card identities, which are private (`private_state`) and would be the
+        /// single worst thing to put on a broadcast channel.
+        ///
+        /// ⚠ DELIBERATELY NOT RENDERED IN THE LOG. Both renderers (Unity HostEventLog.Describe and
+        /// the web gameEventCopy) return null for it on purpose: a turn is either a draw or a play,
+        /// so logging every draw would roughly double the volume and push more interesting entries
+        /// out of the 14-entry window. It exists so the AUDIO layer has a public event to hang the
+        /// card-draw cue on, and so a mirror can eventually play the identical cue.
+        ///
+        /// Ability-driven draws (Giles Corey's third card, Anne Putnam's end-of-turn draw, Samuel
+        /// Parris' discard-pick) deliberately do NOT emit this — they have their own signals or are
+        /// bookkeeping, and a cue per internal deck pull would be noise.
+        /// </summary>
+        CardsDrawn,
     }
 
     /// <summary>

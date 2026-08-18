@@ -331,7 +331,7 @@ namespace Salem.GameFlow
                     var target = ResolveByName(name);
                     if (target != null) votes[witch] = target;
                 },
-                shareTally: true, timeoutSeconds: dawnTimeout);
+                shareTally: true, timeoutSeconds: TimerSettings.Scale(dawnTimeout));
 
             if (votes.Count == 0)
             {
@@ -428,7 +428,7 @@ namespace Salem.GameFlow
                         // the drawer's turn ended, so the TurnId guard would abort this instantly.
                         yield return drawer.Input.RequestTryal(
                             drawer, blackCatHolder, "conspiracy_reveal",
-                            ConspiracyTryalPickSeconds, false, idx => chosenIndex = idx);
+                            TimerSettings.Scale(ConspiracyTryalPickSeconds), false, idx => chosenIndex = idx);
                     }
                     else if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
                     {
@@ -602,7 +602,7 @@ namespace Salem.GameFlow
                     var target = ResolveByName(name);
                     if (target != null) plan.SetWitchVote(witch, target);
                 },
-                shareTally: true, timeoutSeconds: witchVoteTimeout);
+                shareTally: true, timeoutSeconds: TimerSettings.Scale(witchVoteTimeout));
 
             // Round 2 — constable save.
             yield return RunNetworkedSecretPhase(
@@ -619,7 +619,7 @@ namespace Salem.GameFlow
                     // (rulebook p17) — re-enable for that mode in Phase 6.
                     if (target != null && target != constable) plan.ConstableTarget = target;
                 },
-                shareTally: false, timeoutSeconds: constableTimeout);
+                shareTally: false, timeoutSeconds: TimerSettings.Scale(constableTimeout));
 
             // Masked, timed confess window. Every phone shows the same confess prompt; a
             // confession reveals one of the player's OWN tryals for immunity, but the reveal
@@ -777,7 +777,7 @@ namespace Salem.GameFlow
 
             // One shared deadline. Every RequestTryal carries the same window, so this resolves when
             // the slowest answer lands or that window expires — never per-player.
-            float deadline = Time.realtimeSinceStartup + ConspiracyPassSeconds + 2f;
+            float deadline = Time.realtimeSinceStartup + TimerSettings.Scale(ConspiracyPassSeconds) + 2f;
             yield return new WaitUntil(() =>
                 System.Array.TrueForAll(pending, p => !p) || Time.realtimeSinceStartup >= deadline);
 
@@ -812,7 +812,7 @@ namespace Salem.GameFlow
             if (taker.Input is NetworkInput && taker.IsConnected)
             {
                 yield return taker.Input.RequestTryal(taker, leftPlayer, "conspiracy_pass",
-                                                      ConspiracyPassSeconds, false, onChosen);
+                                                      TimerSettings.Scale(ConspiracyPassSeconds), false, onChosen);
                 yield break;
             }
 
@@ -880,6 +880,11 @@ namespace Salem.GameFlow
             //     mutation, the host's own UI update, and the client broadcast all happen
             //     together at revealAt.
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // ⚠ DELIBERATELY NOT scaled by TimerSettings. Every other window is an INPUT deadline —
+            // scaling those is the whole point of the pace setting. This one is the shared lead-in
+            // to a reveal nobody interacts with; stretching it would just slow the drama, and it is
+            // the value host and mirrors both schedule against, so it is not a place to introduce a
+            // variable.
             long revealAt = nowMs + (long)(revealLeadSeconds * 1000f);
             nm.SendPhaseResolve(new PhaseResolveMsg { revealAt = revealAt });
 
@@ -1144,7 +1149,7 @@ namespace Salem.GameFlow
 
             bool timedOut = false;
             yield return AwaitAllConfirmedOrTimeout("confess", alivePlayers, allConfirmed,
-                                                    confessTimeout, t => timedOut = t);
+                                                    TimerSettings.Scale(confessTimeout), t => timedOut = t);
 
             Debug.Log($"[Confess] window closed ({(timedOut ? "TIMED OUT" : "all connected humans confirmed")}) — " +
                       $"{plan.Confessors.Count} confessor(s), {pendingConfessions.Count} tryal(s) to reveal at revealAt.");

@@ -47,16 +47,28 @@ export function HandList({
               type="button"
               disabled={isDisabled}
               onClick={() => onSelect?.(i)}
+              aria-pressed={isSelected}
               data-disabled={isDisabled || undefined}
-              className={`${base} w-full ${
+              data-selected={isSelected || undefined}
+              className={`${base} flex w-full items-center gap-2 ${
                 isDisabled
                   ? 'cursor-not-allowed border-parchment/20 bg-ink/20 text-parchment/40'
                   : isSelected
-                    ? 'border-candle bg-candle/30 text-parchment'
-                    : 'border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
+                    ? 'border-2 border-candle bg-candle/30 text-parchment'
+                    : 'border border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
               }`}
             >
+              {/* Non-colour carriers: ✓ for the chosen card, — for one that cannot be played.
+                  Greying alone is a hue+lightness cue and reads as "just styled" to many players. */}
+              <span aria-hidden className="w-3 text-candle">
+                {isSelected ? '✓' : isDisabled ? '—' : ''}
+              </span>
               {card}
+              {isDisabled && (
+                <span className="ml-auto text-xs italic text-parchment/50">
+                  can’t play
+                </span>
+              )}
             </button>
           </li>
         );

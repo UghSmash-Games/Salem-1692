@@ -107,7 +107,7 @@ export function TargetScreen() {
         disabled={selected === null}
         onClick={submit}
         data-testid="target-confirm"
-        className="mt-auto rounded-md bg-candle px-4 py-3 text-lg font-semibold text-ink disabled:opacity-40"
+        className="sticky bottom-0 mt-auto rounded-md bg-candle px-4 py-3 text-lg font-semibold text-ink disabled:opacity-40"
       >
         Confirm
       </button>

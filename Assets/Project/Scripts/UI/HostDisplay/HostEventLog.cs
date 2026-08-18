@@ -120,6 +120,13 @@ namespace Salem.UI.HostDisplay
                         ? null
                         : $"{target} is hanged.";
 
+                case "cards_drawn":
+                    // DELIBERATELY SILENT. The event exists for the AUDIO cue, not the log — a turn
+                    // is either a draw or a play, so logging every draw would roughly double the
+                    // volume and push more interesting entries out of the window. Cased explicitly
+                    // rather than left to `default` so this reads as a decision, not an oversight.
+                    return null;
+
                 case "game_over":
                     return DescribeWinner(e.value);
 

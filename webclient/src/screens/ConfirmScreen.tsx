@@ -115,7 +115,7 @@ export function ConfirmScreen() {
         </ul>
       )}
 
-      <div className="mt-auto flex flex-col gap-2">
+      <div className="sticky bottom-0 mt-auto flex flex-col gap-2 bg-ink pt-2">
         <button
           type="button"
           onClick={() => answer(true)}

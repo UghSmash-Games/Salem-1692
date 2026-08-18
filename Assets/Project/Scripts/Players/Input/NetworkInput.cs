@@ -101,7 +101,7 @@ namespace Salem.Players
                     // abortOnTurnChange: TRUE — this one IS owned by the current turn, so a
                     // force-ended turn should cancel the wait (the reveal still resolves at random).
                     yield return RequestTryal(p, revealTarget, revealReason,
-                                              TryalPickSeconds, true, idx => chosenIndex = idx);
+                                              TimerSettings.Scale(TryalPickSeconds), true, idx => chosenIndex = idx);
 
                     // -1 only when they hold no face-down tryal (already fully revealed) — nothing to
                     // flip. Otherwise RequestTryal guarantees a real index, random on no answer.
@@ -135,7 +135,7 @@ namespace Salem.Players
                         .Select(c => c.Name)
                         .ToArray();
                     yield return RequestConfirmation(p, "abigail_discard", reds,
-                        p.currentAccusationCount, AbigailConfirmSeconds, v => clearAccusations = v);
+                        p.currentAccusationCount, TimerSettings.Scale(AbigailConfirmSeconds), v => clearAccusations = v);
 
                     if (clearAccusations)
                     {
@@ -337,7 +337,7 @@ namespace Salem.Players
             {
                 bool? mode = null; // stays null if unanswered (RequestConfirmation fires only on answer)
                 yield return RequestConfirmation(p, "grigs_alibi_mode",
-                    System.Array.Empty<string>(), 0, GrigsModeSeconds, v => mode = v);
+                    System.Array.Empty<string>(), 0, TimerSettings.Scale(GrigsModeSeconds), v => mode = v);
 
                 if (mode == null)
                 {
@@ -388,7 +388,7 @@ namespace Salem.Players
                 if (pool.Count > 1)
                 {
                     int chosenIdx = -1;
-                    yield return RequestCardPick(p, pool, 1, 1, CurseSeconds, false, "curse_discard", i => chosenIdx = i);
+                    yield return RequestCardPick(p, pool, 1, 1, TimerSettings.Scale(CurseSeconds), false, "curse_discard", i => chosenIdx = i);
                     if (chosenIdx >= 0 && chosenIdx < pool.Count)
                         p.CurseChosenBlueCard = pool[chosenIdx];
                 }
@@ -489,12 +489,12 @@ namespace Salem.Players
                 playerId = chooser.NetworkId,
                 prompt = prompt,
                 targets = eligible.Select(PublicIdOf).ToArray(),
-                seconds = Mathf.Max(1, Mathf.RoundToInt(SubTargetSeconds)),
+                seconds = Mathf.Max(1, Mathf.RoundToInt(TimerSettings.Scale(SubTargetSeconds))),
             });
 
             var gtm = GameTurnManager.Instance;
             int myTurnId = gtm != null ? gtm.TurnId : 0;
-            float deadline = Time.realtimeSinceStartup + SubTargetSeconds;
+            float deadline = Time.realtimeSinceStartup + TimerSettings.Scale(SubTargetSeconds);
 
             yield return new WaitUntil(() =>
                 answered ||

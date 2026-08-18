@@ -48,6 +48,7 @@ namespace Salem.Networking
             GamePhaseManager.OnConfessionRevealed += HandleConfessionRevealed;
             GamePhaseManager.OnGavelPlaced += HandleGavelPlaced;
             GamePhaseManager.OnGameStarted += HandleGameStarted;
+            GameTurnManager.CardsDrawn += HandleCardsDrawn;
 
             if (gamePhaseManager != null) gamePhaseManager.OnPhaseChange += HandlePhaseChange;
             if (gameManager != null) gameManager.OnGameEnded += HandleGameEnded;
@@ -62,6 +63,7 @@ namespace Salem.Networking
             GamePhaseManager.OnConfessionRevealed -= HandleConfessionRevealed;
             GamePhaseManager.OnGavelPlaced -= HandleGavelPlaced;
             GamePhaseManager.OnGameStarted -= HandleGameStarted;
+            GameTurnManager.CardsDrawn -= HandleCardsDrawn;
 
             if (gamePhaseManager != null) gamePhaseManager.OnPhaseChange -= HandlePhaseChange;
             if (gameManager != null) gameManager.OnGameEnded -= HandleGameEnded;
@@ -74,6 +76,15 @@ namespace Salem.Networking
             // No actor, no target, no value. The deal itself is the news; WHAT was dealt is the
             // game's central secret. The renderer supplies a fixed line.
             Emit(GameEventKind.GameStarted);
+        }
+
+        /// <summary>
+        /// The COUNT only — never what was drawn. Exists so the audio layer has a public event for
+        /// the card-draw cue; both log renderers drop it on purpose (see GameEventKind.CardsDrawn).
+        /// </summary>
+        private void HandleCardsDrawn(Player drawer, int count)
+        {
+            Emit(GameEventKind.CardsDrawn, actor: drawer, value: count.ToString());
         }
 
         private void HandleCardPlayed(Player source, Card card, Player target)
@@ -127,7 +138,15 @@ namespace Salem.Networking
 
         private void HandleGameEnded(EndGameResult result)
         {
-            Emit(GameEventKind.GameOver, actor: null, target: null, value: result.ToString());
+            // 🐛 WAS `result.ToString()`. EndGameResult is a CLASS with no ToString() override, so
+            // that emitted the literal type name "Salem.Data.EndGameResult" — which matches neither
+            // "witch" nor "town"/"village" in either renderer's DescribeWinner, so the game-over
+            // entry was silently DROPPED from the log on the host and every mirror. The winning
+            // TEAM is the enumerable public fact this field is for.
+            // ⚠ Never emit `result` itself or `result.Reason`: Reason is free prose, and free text
+            // on a log event is the one thing GameEventKind's closed vocabulary exists to prevent.
+            Emit(GameEventKind.GameOver, actor: null, target: null,
+                 value: result != null ? result.WinningTeam.ToString() : null);
         }
 
         // ─── Emit ──────────────────────────────────────────────────

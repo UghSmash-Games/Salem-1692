@@ -63,6 +63,13 @@ between players** — a fairness bug in a social deduction game, not a cosmetic 
 identical `secret_phase_prompt`. Witches/constable get `acting: true`; all others get
 `acting: false`. The host processes submissions only from `acting: true` players.
 
+**The rulebook's masking AUDIO is NOT needed here.** The physical game prescribes stomping/creepy
+music at dawn and night because witches literally open their eyes and point — there is differential
+MOVEMENT to cover. In this implementation every player receives an identical prompt and taps, and the
+phase resolves only when all connected humans have confirmed, so no player is singled out by their
+actions. Atmospheric audio is worth building for DRAMA (Phase 9), but it is not load-bearing for
+masking — do not treat it as a fairness invariant.
+
 **Masking definition (canonical).** Masking means the **prompt, the target controls,
 the two-stage tentative→Confirm flow, and the timing are identical for every player**.
 An observer cannot identify who is acting from screen structure, controls, or

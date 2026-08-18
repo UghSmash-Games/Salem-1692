@@ -129,11 +129,15 @@ export function TryalPickScreen() {
             aria-label={`Face-down Tryal card ${i + 1}`}
             aria-pressed={selected === i}
             data-testid={`tryal-pick-option-${i}`}
-            className={`h-28 w-20 rounded-md border-2 bg-ink/60 text-parchment/40 ${
-              selected === i ? 'border-candle' : 'border-parchment/30'
+            className={`h-28 w-20 rounded-md bg-ink/60 ${
+              selected === i
+                ? 'border-4 border-candle text-candle'
+                : 'border-2 border-parchment/30 text-parchment/40'
             }`}
           >
-            ?
+            {/* The mark, not the hue, is what says "this is the one" — these backs are otherwise
+                identical by design, and the pick is confirmed under a countdown. */}
+            {selected === i ? '✓' : '?'}
           </button>
         ))}
       </div>
@@ -143,7 +147,7 @@ export function TryalPickScreen() {
         disabled={selected === null}
         onClick={submit}
         data-testid="tryal-pick-confirm"
-        className="mt-auto rounded-md bg-candle px-4 py-3 text-lg font-semibold text-ink disabled:opacity-40"
+        className="sticky bottom-0 mt-auto rounded-md bg-candle px-4 py-3 text-lg font-semibold text-ink disabled:opacity-40"
       >
         {copy.confirm ?? 'Reveal'}
       </button>

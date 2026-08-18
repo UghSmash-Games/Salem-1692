@@ -52,6 +52,16 @@ namespace Salem.GameFlow
         public event System.Action<Player> TurnStarted;
         public event System.Action<Player> TurnEnded;
 
+        /// <summary>
+        /// A player took the Draw-2 turn action: (drawer, count). PUBLIC — taking the draw action is
+        /// visible at a table; the CARDS are not, and are never carried here.
+        ///
+        /// Fires from both draw-2 paths (the voluntary <see cref="TryDrawTwoCards"/> and the
+        /// idle-timeout ForceDrawAndEndTurn) so the cue does not silently go missing when a turn is
+        /// forced. Ability draws do not fire it — see GameEventKind.CardsDrawn.
+        /// </summary>
+        public static event System.Action<Player, int> CardsDrawn;
+
         private DeckManager deckManager;
         private Player currentPlayer;
         private float turnTimer;
@@ -85,7 +95,7 @@ namespace Salem.GameFlow
         /// Reset the inactivity window. Call on each player action so an
         /// actively-playing player never times out on cumulative turn time.
         /// </summary>
-        public void ResetIdleTimer() => turnTimer = turnDuration;
+        public void ResetIdleTimer() => turnTimer = TimerSettings.Scale(turnDuration);
         private bool turnsStarted;
         private int forcedStartingIndex = 0;
 
@@ -172,7 +182,7 @@ namespace Salem.GameFlow
             var players = PlayerService.GetAlivePlayers();
             if (players.Count == 0) return;
 
-            turnTimer = turnDuration;
+            turnTimer = TimerSettings.Scale(turnDuration);
             turnId++;
 
             if (playerIndex >= players.Count) playerIndex = 0;
@@ -289,6 +299,7 @@ namespace Salem.GameFlow
             int handSizeBefore = requestingPlayer.HandManager.Hand.Count;
             deckManager.DrawMultipleCards(requestingPlayer.HandManager, 2);
             currentTurnAction = TurnActionChoice.DrawTwoCards;
+            CardsDrawn?.Invoke(requestingPlayer, 2);
             drawFromDiscardButtonUI?.Hide();
 
             ApplyGilesCoreyBonus(requestingPlayer, handSizeBefore);
@@ -374,7 +385,7 @@ namespace Salem.GameFlow
             suppressIdleTimer = true; // pause inactivity timer; the rearrange has its own deadline
             var deck = deckManager.GetDeckCards();
             yield return requestingPlayer.Input.RequestDeckRearrange(
-                requestingPlayer, deck, titubaRearrangeTimeout,
+                requestingPlayer, deck, TimerSettings.Scale(titubaRearrangeTimeout),
                 order => { if (order != null) deckManager.SetDeckOrder(order); });
             suppressIdleTimer = false;
 
@@ -629,6 +640,7 @@ namespace Salem.GameFlow
                 int handSizeBefore = currentPlayer.HandManager.Hand.Count;
                 deckManager.DrawMultipleCards(currentPlayer.HandManager, 2);
                 currentTurnAction = TurnActionChoice.DrawTwoCards;
+                CardsDrawn?.Invoke(currentPlayer, 2);
 
                 // Giles Corey (same rule as the voluntary Draw-2 path above).
                 ApplyGilesCoreyBonus(currentPlayer, handSizeBefore);

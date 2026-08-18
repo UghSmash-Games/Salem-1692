@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+using Salem.Data;      // TimerSettings only — a host-owned pace value, not game state.
 using Salem.Networking; // PUBLIC DTOs + NetworkGameCoordinator lobby data ONLY.
 
 // See the masking-boundary banner in HostTableView.cs: no file in this folder may reference Player /
@@ -64,6 +66,27 @@ namespace Salem.UI.HostDisplay
         [Tooltip("Suffix for a bot seat, so the room can see the table is being filled out.")]
         [SerializeField] private string aiSuffix = " (AI)";
 
+        [Header("Host controls (LOBBY ONLY — see the docblock)")]
+        [SerializeField] private Button startButton;
+        [Tooltip("Reason the Start button is disabled, e.g. \"Waiting for 2 more players\".")]
+        [SerializeField] private TMP_Text startBlockedText;
+        [SerializeField] private Toggle fillWithAIToggle;
+        [SerializeField] private Button targetMinusButton;
+        [SerializeField] private Button targetPlusButton;
+        [Tooltip("{0} = target seat count. Shown beside the +/- buttons.")]
+        [SerializeField] private string targetCountFormat = "TABLE OF {0}";
+        [SerializeField] private TMP_Text targetCountText;
+        [Tooltip("Row holding the AI fill controls — hidden entirely when AI fill is off.")]
+        [SerializeField] private GameObject aiFillRow;
+
+        [Header("Pace (timer lengths)")]
+        [Tooltip("Cycles Normal -> Relaxed -> Extended. One GLOBAL multiplier on every player-facing " +
+                 "deadline; see TimerSettings for why it must never be per-player.")]
+        [SerializeField] private Button paceButton;
+        [Tooltip("{0} = pace name, {1} = multiplier, e.g. \"PACE: RELAXED (1.5x)\".")]
+        [SerializeField] private string paceFormat = "PACE: {0} ({1}x)";
+        [SerializeField] private TMP_Text paceText;
+
         private NetworkGameCoordinator coordinator;
         private readonly List<TMP_Text> rows = new();
 
@@ -79,7 +102,14 @@ namespace Salem.UI.HostDisplay
 
             coordinator.OnRoomCodeAssigned += HandleRoomCode;
             coordinator.OnRosterChanged += RenderRoster;
+            coordinator.OnLobbySettingsChanged += RenderRoster;
             coordinator.OnGameStarted += Hide;
+
+            if (startButton != null) startButton.onClick.AddListener(HandleStartClicked);
+            if (fillWithAIToggle != null) fillWithAIToggle.onValueChanged.AddListener(HandleFillWithAIChanged);
+            if (targetMinusButton != null) targetMinusButton.onClick.AddListener(() => NudgeTarget(-1));
+            if (targetPlusButton != null) targetPlusButton.onClick.AddListener(() => NudgeTarget(+1));
+            if (paceButton != null) paceButton.onClick.AddListener(CyclePace);
 
             // Late-enable: the code and roster may already exist, and the game may already be
             // running (this canvas activated post-lobby) — in which case never show at all.
@@ -93,10 +123,62 @@ namespace Salem.UI.HostDisplay
 
         private void OnDisable()
         {
+            if (startButton != null) startButton.onClick.RemoveListener(HandleStartClicked);
+            if (fillWithAIToggle != null) fillWithAIToggle.onValueChanged.RemoveListener(HandleFillWithAIChanged);
+            if (targetMinusButton != null) targetMinusButton.onClick.RemoveAllListeners();
+            if (targetPlusButton != null) targetPlusButton.onClick.RemoveAllListeners();
+            if (paceButton != null) paceButton.onClick.RemoveListener(CyclePace);
+
             if (coordinator == null) return;
             coordinator.OnRoomCodeAssigned -= HandleRoomCode;
             coordinator.OnRosterChanged -= RenderRoster;
+            coordinator.OnLobbySettingsChanged -= RenderRoster;
             coordinator.OnGameStarted -= Hide;
+        }
+
+        // ─── Host controls ─────────────────────────────────────────
+
+        /// <summary>
+        /// The ONE place the game is started from the screen. Guarded twice over: the button is
+        /// disabled unless <see cref="NetworkGameCoordinator.CanStart"/> allows it, and StartGame
+        /// re-checks the same predicate and is idempotent — so a double-click, or a click that races
+        /// a player leaving, cannot deal the game twice or start it short-handed.
+        /// </summary>
+        private void HandleStartClicked()
+        {
+            if (coordinator == null) return;
+            coordinator.StartGame();
+        }
+
+        private void HandleFillWithAIChanged(bool value)
+        {
+            if (coordinator == null) return;
+            coordinator.SetFillWithAI(value);
+            // The coordinator raises OnLobbySettingsChanged, which repaints via RenderRoster.
+        }
+
+        /// <summary>
+        /// Cycles the global pace. Deliberately a single cycling button, not a per-timer editor:
+        /// the individual windows are balanced against each other (every prompt sits under the Day
+        /// idle timer), so scaling them together preserves those relationships, while editing one
+        /// could let a prompt outlive the turn that owns it.
+        /// </summary>
+        private void CyclePace()
+        {
+            var next = TimerSettings.Current switch
+            {
+                TimerSettings.Pace.Normal => TimerSettings.Pace.Relaxed,
+                TimerSettings.Pace.Relaxed => TimerSettings.Pace.Extended,
+                _ => TimerSettings.Pace.Normal,
+            };
+            TimerSettings.SetPace(next);
+            RenderHostControls();
+        }
+
+        private void NudgeTarget(int delta)
+        {
+            if (coordinator == null) return;
+            coordinator.SetTargetPlayerCount(coordinator.TargetPlayerCount + delta);
         }
 
         private void Hide()
@@ -121,6 +203,50 @@ namespace Salem.UI.HostDisplay
                 displayUrlText.text = haveBase ? string.Format(displayUrlFormat, baseUrl) : "";
         }
 
+        /// <summary>
+        /// Repaints the host controls from the coordinator. Called on every roster change AND every
+        /// settings change, because "can we start?" depends on both: a player leaving can invalidate
+        /// a Start that was legal a second ago.
+        /// </summary>
+        private void RenderHostControls()
+        {
+            if (coordinator == null) return;
+
+            bool canStart = coordinator.CanStart(out string reason);
+
+            if (startButton != null) startButton.interactable = canStart;
+            if (startBlockedText != null)
+            {
+                startBlockedText.text = reason;
+                startBlockedText.gameObject.SetActive(!canStart);
+            }
+
+            // Toggle reflects state without re-entering the setter (SetIsOnWithoutNotify), so a
+            // repaint triggered BY the toggle cannot loop back into another settings change.
+            if (fillWithAIToggle != null && fillWithAIToggle.isOn != coordinator.FillWithAI)
+                fillWithAIToggle.SetIsOnWithoutNotify(coordinator.FillWithAI);
+
+            // The target-count row is meaningless with AI fill off — hide it rather than grey it,
+            // so the lobby reads as one decision ("fill the table?") and not two.
+            if (aiFillRow != null) aiFillRow.SetActive(coordinator.FillWithAI);
+
+            if (targetCountText != null)
+                targetCountText.text = string.Format(targetCountFormat, coordinator.TargetPlayerCount);
+
+            // Clamp feedback: the bounds are the rulebook's (TryalDistribution covers 4–12 only), so
+            // the buttons go dead at the edges instead of silently no-op'ing.
+            if (targetMinusButton != null)
+                targetMinusButton.interactable = coordinator.TargetPlayerCount > coordinator.MinPlayers;
+            if (targetPlusButton != null)
+                targetPlusButton.interactable = coordinator.TargetPlayerCount < coordinator.MaxPlayers;
+
+            if (paceText != null)
+                paceText.text = string.Format(paceFormat,
+                    TimerSettings.Current.ToString().ToUpperInvariant(),
+                    TimerSettings.Multiplier.ToString("0.#"));
+            if (paceButton != null) paceButton.interactable = !TimerSettings.Locked;
+        }
+
         private void RenderRoster()
         {
             if (coordinator == null) return;
@@ -134,6 +260,8 @@ namespace Salem.UI.HostDisplay
                     ? string.Format(waitingFormat, seats.Count, needed)
                     : string.Format(readyFormat, seats.Count);
             }
+
+            RenderHostControls();
 
             if (seatContainer == null || seatRowPrefab == null) return;
 

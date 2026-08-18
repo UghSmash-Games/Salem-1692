@@ -97,7 +97,7 @@ export function CardPickScreen() {
           type="button"
           onClick={done}
           data-testid="card-pick-done"
-          className="mt-auto rounded-md border border-parchment/40 px-4 py-3 text-lg font-semibold text-parchment"
+          className="sticky bottom-0 mt-auto rounded-md border border-parchment/40 bg-ink px-4 py-3 text-lg font-semibold text-parchment"
         >
           Done
         </button>

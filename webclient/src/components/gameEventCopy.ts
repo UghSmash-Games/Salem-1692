@@ -56,6 +56,12 @@ export function describeGameEvent(
     case 'player_eliminated':
       return target ? `${target} is hanged.` : null;
 
+    case 'cards_drawn':
+      // DELIBERATELY SILENT — mirrors Unity's HostEventLog. The event exists for the AUDIO cue, not
+      // the log: a turn is either a draw or a play, so logging every draw would roughly double the
+      // volume. Cased explicitly so this reads as a decision, not an unhandled kind.
+      return null;
+
     case 'game_over':
       return describeWinner(e.value);
 

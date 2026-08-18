@@ -11,6 +11,7 @@ import { HandList } from '../components/HandList';
 import { BoardSummary } from '../components/BoardSummary';
 import { RoleIndicator } from '../components/RoleIndicator';
 import { FellowWitchBanner } from '../components/FellowWitchBanner';
+import { CharacterCard } from '../components/CharacterCard';
 
 export function IdleScreen() {
   const { tryals, hand } = useGameStore((s) => s.privateState);
@@ -26,6 +27,9 @@ export function IdleScreen() {
       </header>
 
       <FellowWitchBanner />
+
+      {/* Town Hall identity is public; this is the player's reminder of their own card. */}
+      <CharacterCard />
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm uppercase tracking-wider text-parchment/60">

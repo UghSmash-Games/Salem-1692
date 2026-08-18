@@ -107,12 +107,32 @@ describe('describeGameEvent', () => {
   });
 
   it('game_over maps the winner label', () => {
+    // ⚠ These are the values Unity ACTUALLY emits — EndGameResult.WinningTeam.ToString(), i.e. the
+    // Team enum: "Witches" / "Villagers". Not "Townspeople", which reads naturally but is not a
+    // value this system ever produces. The emitter previously sent the type name
+    // "Salem.Data.EndGameResult" here, which matched nothing and dropped the entry entirely.
     expect(describeGameEvent(ev({ kind: 'game_over', value: 'Witches' }), nameOf)).toBe(
       'The witches prevail. Salem is lost.',
     );
-    expect(describeGameEvent(ev({ kind: 'game_over', value: 'Townspeople' }), nameOf)).toBe(
+    expect(describeGameEvent(ev({ kind: 'game_over', value: 'Villagers' }), nameOf)).toBe(
       'The town prevails. The witches are undone.',
     );
+  });
+
+  it('drops a Draw result rather than inventing a winner', () => {
+    // Team.Draw exists in the enum. Neither renderer has copy for it, so the entry is dropped —
+    // correct by the drop-unknown rule, and noted here so a real draw is a known silence, not a
+    // mystery. Add copy to BOTH renderers if draws ever become reachable.
+    expect(describeGameEvent(ev({ kind: 'game_over', value: 'Draw' }), nameOf)).toBeNull();
+  });
+
+  it('renders NOTHING for cards_drawn — it exists for the audio cue only', () => {
+    // Deliberate silence, not an oversight. A turn is either a draw or a play, so logging every
+    // draw would roughly double log volume and push more interesting entries out of the window.
+    // If someone later "fixes" this by adding copy, this test should fail and make them decide.
+    expect(
+      describeGameEvent(ev({ kind: 'cards_drawn', actorId: 'p0', value: '2' }), nameOf),
+    ).toBeNull();
   });
 
   it('DROPS an unrecognised kind rather than inventing text', () => {
