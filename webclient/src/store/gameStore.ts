@@ -61,6 +61,11 @@ export interface PublicBoardSlice {
   players: PublicPlayer[];
   deckCount: number | null;
   discardCount: number | null;
+  /** Name of the face-up TOP discard card, or null when the pile is empty. Public by the card
+   *  rules — a discard pile is face-up at a table. The mirror's Meeting House renders its art.
+   *  ⚠ TOP CARD ONLY, never the ordered pile: the order would leak play history and expose
+   *  Samuel Parris' discard-draw pool. */
+  topDiscard: string | null;
 }
 
 export interface PromptSlice {
@@ -233,6 +238,7 @@ const initialPrivate: PrivateSlice = {
 const initialPublicBoard: PublicBoardSlice = {
   phase: null,
   whoseTurn: null,
+  topDiscard: null,
   players: [],
   deckCount: null,
   discardCount: null,
@@ -325,6 +331,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           players: data.players ?? [],
           deckCount: data.deckCount ?? null,
           discardCount: data.discardCount ?? null,
+          topDiscard: data.topDiscard ?? null,
         },
         // Prompt cleared only when the secret phase ended (above). actionRequest
         // is Day-only and is always re-sent after a board tick if the turn

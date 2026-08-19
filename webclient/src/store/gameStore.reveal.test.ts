@@ -69,3 +69,22 @@ describe('reveal arming', () => {
     expect(useGameStore.getState().lastElimination).toBeNull();
   });
 });
+
+describe('public board', () => {
+  it('KEEPS topDiscard — the store used to drop it silently', () => {
+    // topDiscard rides on game_state_update and drives the Meeting House's face-up discard card.
+    // The slice omitted the field entirely, so the mirror could never have rendered it and the
+    // failure would have looked like missing art rather than a dropped field.
+    useGameStore.getState().applyGameStateUpdate({
+      players: [],
+      topDiscard: 'Evidence',
+    });
+    expect(useGameStore.getState().publicBoard.topDiscard).toBe('Evidence');
+  });
+
+  it('clears topDiscard when the pile empties', () => {
+    useGameStore.getState().applyGameStateUpdate({ players: [], topDiscard: 'Evidence' });
+    useGameStore.getState().applyGameStateUpdate({ players: [] });
+    expect(useGameStore.getState().publicBoard.topDiscard).toBeNull();
+  });
+});

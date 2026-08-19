@@ -289,30 +289,46 @@ cannot see the host TV connects a device as `display` and sees **exactly** what 
 screen see. Anything public the host shows and the mirror does not is an **information asymmetry
 between players** — a fairness bug in a social deduction game.
 
-Deferred to a later phase by decision (2026-08-13). The sync properties that matter are already in
-place — reveals land together, no private data reaches the mirror, and the event log renders from the
-same closed-kind copy — so what remains is layout and art.
+**BUILT (2026-08-13, Phase 9 follow-on).** The mirror now renders the ring, seats, Meeting House,
+IN EFFECT panel and header from the same public data and the SAME locked geometry
+(`webclient/src/data/ringLayout.ts` ports `HostTableView.Distribute`/`SlotFor`, with every row of the
+§1 table asserted). Card art is the SAME .jpg assets, copied to `webclient/public/cards/` — there was
+never an export step to build, because the Unity sprites reference plain image files.
 
-**🔴 NO PROTOCOL WORK IS NEEDED.** The mirror already RECEIVES every field the host renders:
-`townHall`, `tryalTotal`, `revealedTryals`, `accusationCards`, `statusCards`, `accusationLimit`,
-`handCount`, and `topDiscard` on the state payload. `BoardSummary` just doesn't render them. That also
-means the privacy audit does not need redoing — the data already flows and was already reviewed.
-
-| Host element | Mirror today | Debt |
+| Host element | Mirror | State |
 |---|---|---|
-| Rectangular ring (`HostTableView`) | flat `BoardSummary` list | **layout port** — the `s`/`H`/top/bottom geometry |
-| Seat: portrait, player + character name, `N IN HAND · X/Y`, `ACCUSATIONS n/7` | name + accusations only | **layout + art** |
-| Seat: tryal row (revealed art + shared back) | none | **art** |
-| Seat: accusation ×N stacks, effect badges | merged text list | layout |
-| Seat: turn ring, HANGED overlay | turn marker only | layout |
-| Meeting House: stats row, deck/discard, top-discard art, legend | `DeckSummary` counts | layout + art |
-| IN EFFECT panel (+ rules text) | none | layout (text is static copy, not wire data) |
-| Header: `TABLE code · N SOULS`, phase pill | room code + phase tag | layout |
-| Event log | ✅ built (`EventLog.tsx`) | — |
-| Night/dawn overlay | ✅ `NightDawnOverlay` | — |
-| Synchronized reveal | ✅ `RevealOverlay` | card-flip art only |
-| Public-reveal toast | ✅ `PublicRevealToast` | — |
-| Lobby (room code + URLs) | none | decide whether a mirror needs it |
+| Rectangular ring | `ringLayout.ts` + `MirrorScreen` | ✅ same geometry, same clockwise seat order |
+| Seat: portrait, names, `N IN HAND · X/Y`, `ACCUSATIONS n/limit` | `MirrorSeat` | ✅ formats copied verbatim |
+| Seat: tryal row (revealed art + shared back) | `MirrorSeat` | ✅ drawn from `tryalTotal`, backs from a COUNT |
+| Seat: accusation ×N stacks, effect badges | `MirrorSeat` | ✅ incl. `+N` hidden-TYPE overflow |
+| Seat: turn ring, HANGED overlay | `MirrorSeat` | ✅ |
+| Meeting House: stats, deck/discard, top-discard art, legend | `MeetingHouse` | ✅ stats derived identically |
+| IN EFFECT panel (+ rules text) | `InEffectPanel` + `cardDescriptions.ts` | ✅ skips eliminated, as the host does |
+| Header: `TABLE code · N SOULS`, phase pill | `MirrorHeader` | ✅ SOULS = seats dealt, living AND dead |
+| Event log · night/dawn · reveal · toast | existing components | ✅ |
+| Lobby (room code + URLs) | none | ⬜ open question — a mirror can only exist once someone joined |
+
+**Side seats are SHORTER than top/bottom seats, deliberately.** The board is a fixed 100vh with no
+scrolling, and at 9–12 players the sides hold 2 seats — four legs then want four seat-heights of
+vertical space before the header and gaps, which is more than the screen has. The sides give, because
+the horizontal rows have width to spare while the middle band's height is only ever what those rows
+leave over. Unity does the same thing (the side columns are layout groups that compress their
+children), so this is parity, not a divergence. `ringLayout.verticalSeatUnit` computes the scale and
+`MirrorSeat` applies it through ONE CSS variable (`--su`); every vertical metric in the seat is a
+multiple of it. ⚠️ The scale is MEASURED off the rendered seat and band, not computed from the seat's
+metrics — the first attempt added those metrics up by hand, was 1.4vh short (the name/character/stats
+text block is taller than the portrait next to it), and still overlapped by 11px at 900px tall.
+
+**Still differs, honestly:** the host is a fixed 1920×1080 Unity canvas with TMP fonts and an
+animated ember pulse; the mirror is a browser at arbitrary size using viewport units and web fonts.
+Structure, data, ordering and artwork match — every public fact appears on both — but the two are not
+pixel-identical and cannot be across two renderers. The fairness property (no information asymmetry)
+is met; exact pixel parity is not a goal that survives contact with two engines.
+
+⚠️ **Two bugs this work surfaced**, both pre-existing: `PublicBoardSlice` silently DROPPED
+`topDiscard`, so the mirror could never have shown the face-up discard; and the registry asset held
+John Proctor's pre-correction ability text, which the populator PRESERVES on re-run, so the host's IN
+EFFECT panel was showing a rule the game does not implement. Both fixed.
 
 **The non-obvious cost is ART, not code.** The host resolves card images through
 `HostCardSpriteRegistry` (Unity sprites). The browser needs the same images as web assets — an export

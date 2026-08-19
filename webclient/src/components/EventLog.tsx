@@ -37,14 +37,14 @@ export function EventLog() {
 
   return (
     <section className="flex flex-col gap-2" data-testid="event-log">
-      <h2 className="text-sm uppercase tracking-wider text-parchment/60">
+      <h2 className="text-[1.7vh] uppercase tracking-[0.3em] text-host-parchment/60">
         What Has Passed
       </h2>
       <ol className="flex flex-col gap-1">
         {lines.map((l) => (
-          <li key={l.key} className="flex gap-3 text-sm" data-testid="event-log-entry">
-            <span className="shrink-0 tabular-nums text-parchment/40">{l.time}</span>
-            <span className="text-parchment/80">{l.body}</span>
+          <li key={l.key} className="flex gap-[0.6vw] text-[1.6vh]" data-testid="event-log-entry">
+            <span className="shrink-0 tabular-nums text-host-parchment/45">{l.time}</span>
+            <span className="text-host-parchment/80">{l.body}</span>
           </li>
         ))}
       </ol>
