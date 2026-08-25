@@ -108,8 +108,8 @@ server dispatch layer, not the UI layer.
 
 ## Socket Event Names (source of truth)
 
-Room management:         create_room | join_room | join_mirror
-                         room_created | joined | player_joined | room_closed
+Room management:         create_room | join_room | join_mirror | rejoin_room
+                         room_created | joined | player_joined | player_rejoined | room_closed
 
 Server → clients:        game_state_update | private_state | secret_phase_prompt
                          action_request | confirm_request | target_request

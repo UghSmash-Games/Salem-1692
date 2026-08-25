@@ -29,10 +29,42 @@ All communication between Unity (host), phone browsers (players), and passive di
 - **Payload:** `{ code: string }`
 - **Response:** `joined` → mirror
 
+### `rejoin_room`
+- **Direction:** client → server
+- **Sender role:** an un-joined socket (the reconnecting phone has a NEW socket after any drop)
+- **Payload:** `{ code: string, playerId: string, token: string }`
+- **Response:** `joined` → player (same shape as a fresh join), or `error_msg` on failure
+- **Side effect:** `player_rejoined` → host
+- **Note:** Reclaims a seat the player already holds. A phone loses its socket constantly in normal
+  play — the screen locks, the browser backgrounds the tab, wifi blips — and without this the seat
+  was gone for good: `join_room` always mints a fresh `playerId`, so the returning player became a
+  stranger to a host that still held their tryals under the old id.
+- 🔴 **`token` IS THE AUTHORIZATION.** `playerId` is public (it appears in every `game_state_update`),
+  so it can never be what proves ownership of a seat. The token is a 32-hex-character secret minted
+  server-side at join, sent to that one socket in `joined`, and never broadcast, never given to the
+  host, and never included in any public payload. Without it, any player could reclaim any seat and
+  receive that seat's `private_state` — the tryal cards and role of another player. ⛔ Do not "fix" a
+  failed rejoin by falling back to matching on `displayName`: names are public and duplicable.
+- **Failure is deliberately uninformative:** an unknown room, an unknown seat, and a bad token all
+  return the same `error_msg`, so the event cannot be used to enumerate which seats exist.
+- **Newest socket wins.** If the seat is still held by a live socket (a second tab, or a drop the
+  server has not noticed yet), the seat rebinds to the newcomer and the previous socket is removed
+  from the room — one socket per seat, always, or `private_state` would fan out to two devices.
+
 ### `joined`
 - **Direction:** server → player or mirror
-- **Payload (player):** `{ playerId: string, roomCode: string }`
+- **Payload (player):** `{ playerId: string, roomCode: string, token: string }`
 - **Payload (mirror):** `{ roomCode: string }`
+- **Note:** `token` is the seat secret described under `rejoin_room` — player payload only. The phone
+  stores it and replays it on every reconnect. It is NOT sent to the host or any mirror.
+
+### `player_rejoined`
+- **Direction:** server → host
+- **Payload:** `{ playerId: string, displayName: string }`
+- **Note:** The seat is live again on a new socket. The host marks it connected and **re-sends that
+  player's state** — the phone reconnected with an empty store and knows nothing: not its tryals, not
+  its hand, and not the prompt it may be blocking the game on. Carries no token; the host never sees
+  one.
 
 ### `player_joined`
 - **Direction:** server → host
@@ -308,6 +340,8 @@ Players emit these events from their phone clients. The server validates the sen
 | `create_room` | ✅ | ❌ | ❌ |
 | `join_room` | ❌ | ✅ | ❌ |
 | `join_mirror` | ❌ | ❌ | ✅ |
+| `rejoin_room` | ❌ | ✅ (its own seat, with the token) | ❌ |
+| `player_rejoined` | ✅ (server originates) | ❌ | ❌ |
 | `game_state_update` | ✅ (originates) | ❌ | ❌ |
 | `private_state` | ✅ (originates) | ❌ | ❌ |
 | `secret_phase_prompt` | ✅ (originates) | ❌ | ❌ |
@@ -342,3 +376,4 @@ These rules are enforced at the server dispatch layer:
 3. **`action_request`**, **`deck_rearrange_request`**, **`card_pick_request`**, **`confirm_request`**, **`target_request`**, and **`tryal_pick_request`** are each routed to exactly one player socket. The deck card list and the draft-pool hand list never appear in any broadcast.
 4. Mirrors receive only: `game_state_update`, `phase_resolve`, `public_reveal`, `game_event`, `elimination_result`, `game_over`, `room_closed`.
 5. The server attaches `playerId` to all player → host messages so Unity can identify the sender without trusting client-provided IDs.
+6. The seat **token** (`joined`, `rejoin_room`) never appears in a broadcast, never reaches the host or a mirror, and is never logged. It is the only thing standing between a reconnecting phone and someone else's `private_state`.
