@@ -306,7 +306,7 @@ never an export step to build, because the Unity sprites reference plain image f
 | IN EFFECT panel (+ rules text) | `InEffectPanel` + `cardDescriptions.ts` | ✅ skips eliminated, as the host does |
 | Header: `TABLE code · N SOULS`, phase pill | `MirrorHeader` | ✅ SOULS = seats dealt, living AND dead |
 | Event log · night/dawn · reveal · toast | existing components | ✅ |
-| Lobby (room code + URLs) | none | ⬜ open question — a mirror can only exist once someone joined |
+| Lobby (room code + URLs) | none | ✅ closed (2026-08-24) — nothing to show: a mirror can only connect once someone gave it the code, so it would display a fact its operator already used to get there. Revisit only if the mirror ever becomes discoverable without the code. |
 
 **Side seats are SHORTER than top/bottom seats, deliberately.** The board is a fixed 100vh with no
 scrolling, and at 9–12 players the sides hold 2 seats — four legs then want four seat-heights of
@@ -330,10 +330,12 @@ is met; exact pixel parity is not a goal that survives contact with two engines.
 John Proctor's pre-correction ability text, which the populator PRESERVES on re-run, so the host's IN
 EFFECT panel was showing a rule the game does not implement. Both fixed.
 
-**The non-obvious cost is ART, not code.** The host resolves card images through
-`HostCardSpriteRegistry` (Unity sprites). The browser needs the same images as web assets — an export
-step plus a label→URL map mirroring the registry's normalization (`Trim().ToLowerInvariant()`, spaces
-stripped) so `"Not a Witch"` and `"Not A Witch"` both resolve. Budget that before the layout work.
+**The art turned out NOT to be a cost.** This section previously warned that the browser would need
+an export step to get the host's card images. It did not: `HostCardSpriteRegistry` points at plain
+.jpg files, so the same assets were simply copied to `webclient/public/cards/`. What DID carry over
+is the registry's normalization — `cardArt.ts` mirrors `Trim().ToLowerInvariant()` with spaces
+stripped, so `"Not a Witch"` (the wire label) and `"Not A Witch"` (the asset name) both resolve, the
+same mismatch that would otherwise blank all tryal art on the host.
 
 ⚠️ **Do not widen the gap:** any new host element showing public information is added to both, or
 appended to this table.

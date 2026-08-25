@@ -49,13 +49,19 @@ copy of the host screen. Its purpose is that a player who cannot see the host TV
 as `display` and play from their phone seeing **exactly** what the people sitting at the host screen
 see. So any public information the host renders and the mirror does not is an **information asymmetry
 between players** — a fairness bug in a social deduction game, not a cosmetic gap.
-- **Currently NOT met.** `MirrorScreen` is the Phase-3 simplified board (`BoardSummary` + deck
-  summary + overlays + event log); the Phase-7 host redesign (ring, seats, Meeting House, IN EFFECT,
-  header) was built in Unity only. Deferred to a later phase by decision, with the debt inventoried
-  in `docs/phase-7-host-seat-design.md`.
-- **No protocol work is needed** — the mirror ALREADY receives every field the host renders
+- **MET.** `MirrorScreen` renders the full Phase-7 board — ring, seats, Meeting House, IN EFFECT,
+  header, event log — from the same public data, the same locked geometry
+  (`webclient/src/data/ringLayout.ts` ports `HostTableView.Distribute`/`SlotFor`) and the SAME card
+  art (the Unity sprites are plain .jpg files, copied to `webclient/public/cards/`). Inventory and
+  the honest list of what still differs: `docs/phase-7-host-seat-design.md` §7b.
+- **No protocol work was ever needed** — the mirror ALREADY receives every field the host renders
   (`townHall`, `tryalTotal`, `revealedTryals`, `accusationCards`, `statusCards`, `accusationLimit`,
-  `handCount`, `topDiscard`). The gap is entirely rendering.
+  `handCount`, `topDiscard`). The gap was entirely rendering, which is why the privacy audit did not
+  need redoing.
+- **Not PIXEL-identical, and that is not the goal.** Unity is a fixed 1920×1080 canvas with TMP
+  fonts; the mirror is a browser at arbitrary size with web fonts, and its side seats scale down to
+  fit (as Unity's own side columns do). The invariant is that every PUBLIC fact appears on both — no
+  information asymmetry between players — not that the two renderers agree pixel for pixel.
 - ⚠️ **Do not widen the gap.** Any NEW host-screen element showing public game information must
   either be added to the mirror too, or explicitly logged as parity debt in that inventory.
 
