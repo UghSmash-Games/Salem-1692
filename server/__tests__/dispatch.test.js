@@ -1087,3 +1087,100 @@ describe('rejoin_room', () => {
     await noJoin;
   });
 });
+
+// ─── Phase 10, item 17: every client drops at once ─────────────
+
+describe('a whole-table disconnect', () => {
+  /** Host plus `n` seated players, each with its own credentials. */
+  async function seatTable(n) {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const seats = [];
+    for (let i = 0; i < n; i++) {
+      const phone = trackClient(createClient());
+      await waitForConnect(phone);
+      phone.emit('join_room', { code, displayName: `Player ${i}` });
+      const joined = await waitFor(phone, 'joined');
+      seats.push({ phone, playerId: joined.playerId, token: joined.token });
+    }
+    return { host, code, seats };
+  }
+
+  test('every seat survives the whole table dropping at once', async () => {
+    // The Phase 10 scenario: a router reboots, or the group walks out of wifi range. Each seat must
+    // still be there when the phones come back — this is the case a per-player test cannot cover,
+    // because the failure mode would be seats interfering with each other's bookkeeping.
+    const { host, code, seats } = await seatTable(3);
+
+    const allLeft = Promise.all(seats.map(() => waitFor(host, 'player_left')));
+    for (const s of seats) s.phone.disconnect();
+    await allLeft;
+
+    // All three return, in a DIFFERENT order than they left — nothing may depend on ordering.
+    const returning = [];
+    for (const s of [...seats].reverse()) {
+      const phone = trackClient(createClient());
+      await waitForConnect(phone);
+      phone.emit('rejoin_room', { code, playerId: s.playerId, token: s.token });
+      await waitFor(phone, 'joined');
+      returning.push({ phone, playerId: s.playerId });
+    }
+
+    // Each phone gets ITS OWN private state and no one else's — the property most at risk when
+    // three seats rebind at once.
+    for (const r of returning) {
+      const others = returning.filter((o) => o.playerId !== r.playerId);
+      const noCrossTalk = others.map((o) => expectNoEvent(o.phone, 'private_state', 200));
+
+      host.emit('private_state', { playerId: r.playerId, tryals: [{ label: r.playerId }] });
+      const priv = await waitFor(r.phone, 'private_state');
+      expect(priv.tryals[0].label).toBe(r.playerId);
+      await Promise.all(noCrossTalk);
+    }
+  });
+
+  test('the game is playable again — every reclaimed seat can act', async () => {
+    const { host, code, seats } = await seatTable(3);
+
+    const allLeft = Promise.all(seats.map(() => waitFor(host, 'player_left')));
+    for (const s of seats) s.phone.disconnect();
+    await allLeft;
+
+    for (const s of seats) {
+      const phone = trackClient(createClient());
+      await waitForConnect(phone);
+      phone.emit('rejoin_room', { code, playerId: s.playerId, token: s.token });
+      await waitFor(phone, 'joined');
+
+      const action = waitFor(host, 'player_action');
+      phone.emit('player_action', { card: 'Accusation', targetPlayerId: 'p0' });
+      expect((await action).playerId).toBe(s.playerId);  // still the server-trusted id
+    }
+  });
+
+  test('a seat nobody reclaims stays reserved, and blocks nothing', async () => {
+    // One player's battery dies for good. The others must be unaffected, and the host keeps
+    // addressing the absent seat without the relay erroring on a socket that is not there.
+    const { host, code, seats } = await seatTable(3);
+
+    const [absent, ...rest] = seats;
+    absent.phone.disconnect();
+    await waitFor(host, 'player_left');
+
+    host.emit('private_state', { playerId: absent.playerId, tryals: [{ label: 'Witch' }] });
+
+    // The live seats still work.
+    const stillWorks = waitFor(rest[0].phone, 'private_state');
+    host.emit('private_state', { playerId: rest[0].playerId, tryals: [{ label: 'Not a Witch' }] });
+    expect((await stillWorks).tryals[0].label).toBe('Not a Witch');
+
+    // And the absent seat is still reclaimable whenever they return.
+    const returning = trackClient(createClient());
+    await waitForConnect(returning);
+    returning.emit('rejoin_room', { code, playerId: absent.playerId, token: absent.token });
+    expect((await waitFor(returning, 'joined')).playerId).toBe(absent.playerId);
+  });
+});

@@ -20,6 +20,7 @@
 */
 
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using Salem.Cards;
 using Salem.Characters;
@@ -271,6 +272,177 @@ namespace Salem.DebugTools
             if (d == null) { Debug.LogWarning("[MarthaDebug] no CharacterAbilityDispatcher.Instance."); return; }
             Debug.Log($"[MarthaDebug] dispatcher: draftRunning={d.IsDraftRunning}, queued={d.QueuedDraftCount}.");
         }
+
+        // ─── TEMP (Phase 10 — deterministic seat setup) ──────────────────────────────
+        //
+        // ⚠ WHY THIS EXISTS. Seven Phase-10 checklist items describe a SPECIFIC end state — the last
+        // townsperson turning witch, a player holding two witch cards, an evil constable, a piety
+        // holder at the threshold. GameSetup deals tryals at RANDOM, so before these hooks the only
+        // way to "test" those items was to play games until the situation happened to arise, which
+        // is waiting, not testing. See docs/phase-10-test-plan.md.
+        //
+        // These write the SAME state the real deal produces (instantiated TryalCard SOs, then
+        // DetermineRole) and drive reveals through the normal path, so nothing here is a shortcut
+        // around the rules — only around the randomness.
+
+        [Header("TEMP — Phase 10 seat setup")]
+        [SerializeField, Tooltip("Tryal SO templates in the SAME order GameSetup uses: 0 Constable, 1 Witch, 2 Not a Witch.")]
+        private TryalCard[] debugTryalTemplates = new TryalCard[3];
+        [SerializeField, Tooltip("Tryals to deal to debugSeat. W = Witch, C = Constable, N = Not a Witch. e.g. \"W,W,N\"")]
+        private string debugTryalSpec = "W,N,N";
+        [SerializeField, Tooltip("Index into the seat's tryal row for 'Reveal Tryal On Seat'.")]
+        private int debugTryalIndex = 0;
+        [SerializeField, Tooltip("Drag 'Accusation 1' (Red Cards). Used by 'Add Accusations To Seat'.")]
+        private ActionCardSO debugAccusationCard;
+        [SerializeField, Tooltip("How many Accusation cards 'Add Accusations To Seat' places.")]
+        private int debugAccusationCount = 7;
+        [SerializeField, Tooltip("Any blue/persistent card (Piety, Asylum, Stocks…). Used by 'Add Status Card To Seat'.")]
+        private ActionCardSO debugStatusCard;
+
+        /// <summary>
+        /// Deal an EXACT tryal row to a seat: "W,N,N" | "W,W,N" | "W,C" …
+        ///
+        /// Replaces the row wholesale, then re-runs DetermineRole — the same two steps GameSetup
+        /// performs after dealing, so the seat is indistinguishable from a dealt one.
+        ///
+        /// ⚠ IsWitch is STICKY by rulebook ("a player who loses their only witch card remains a
+        /// witch"), so clearing a witch row does NOT clear the role. That is correct game behavior,
+        /// not a harness bug — restart the game to get a clean seat.
+        /// </summary>
+        [ContextMenu("DEBUG — Set Tryals On Seat")]
+        private void DebugSetTryals()
+        {
+            var p = DebugSeat(debugSeat);
+            if (p == null) return;
+
+            if (debugTryalTemplates == null || debugTryalTemplates.Length < 3 ||
+                debugTryalTemplates[0] == null || debugTryalTemplates[1] == null || debugTryalTemplates[2] == null)
+            {
+                Debug.LogWarning("[Phase10Debug] assign all three debugTryalTemplates (Constable, Witch, Not a Witch).");
+                return;
+            }
+
+            var row = new List<TryalCard>();
+            foreach (var raw in (debugTryalSpec ?? "").Split(','))
+            {
+                var token = raw.Trim().ToUpperInvariant();
+                if (token.Length == 0) continue;
+
+                TryalCardType type;
+                int templateIndex;
+                switch (token[0])
+                {
+                    case 'C': type = TryalCardType.Constable; templateIndex = 0; break;
+                    case 'W': type = TryalCardType.Witch;     templateIndex = 1; break;
+                    case 'N': type = TryalCardType.NotAWitch; templateIndex = 2; break;
+                    default:
+                        Debug.LogWarning($"[Phase10Debug] '{token}' is not W, C or N — skipped.");
+                        continue;
+                }
+
+                // Instantiate: the SOs are shared project assets, and writing TryalCardType or
+                // IsRevealed on the asset itself would persist into every later game.
+                var card = (TryalCard)Instantiate(debugTryalTemplates[templateIndex]);
+                card.TryalCardType = type;
+                card.IsRevealed = false;
+                row.Add(card);
+            }
+
+            if (row.Count == 0) { Debug.LogWarning("[Phase10Debug] empty tryal spec — nothing dealt."); return; }
+
+            p.TryalCards = row;
+            p.InvokeOnTryalCardsChanged();
+            p.DetermineRole();
+
+            Debug.Log($"[Phase10Debug] seat {debugSeat} '{p.PlayerNameText}' dealt [{debugTryalSpec}] — " +
+                      $"IsWitch={p.IsWitch} IsConstable={p.IsConstable}.");
+        }
+
+        /// <summary>
+        /// Flip one tryal through the REAL reveal path (Player.RevealTryalCard), so TrialService, the
+        /// double-witch announcement, Rebecca Nurse's draw and the win check all fire exactly as in
+        /// play. `fromAccusation` is false — this stands in for a night/conspiracy flip, not an
+        /// accusation one.
+        /// </summary>
+        [ContextMenu("DEBUG — Reveal Tryal On Seat")]
+        private void DebugRevealTryal()
+        {
+            var p = DebugSeat(debugSeat);
+            if (p == null) return;
+            if (p.TryalCards == null || debugTryalIndex < 0 || debugTryalIndex >= p.TryalCards.Count)
+            {
+                Debug.LogWarning($"[Phase10Debug] tryal index {debugTryalIndex} out of range for seat {debugSeat}.");
+                return;
+            }
+
+            Debug.Log($"[Phase10Debug] revealing tryal {debugTryalIndex} " +
+                      $"({p.TryalCards[debugTryalIndex].TryalCardType}) on '{p.PlayerNameText}'.");
+            p.RevealTryalCard(debugTryalIndex);
+        }
+
+        /// <summary>
+        /// Place N Accusation cards in front of a seat — real status cards, so the count comes from
+        /// RecalculateAccusations and honours Piety doubling, George Burroughs' base 8 and Cotton
+        /// Mather's Evidence discount, exactly as a played card would.
+        /// </summary>
+        [ContextMenu("DEBUG — Add Accusations To Seat")]
+        private void DebugAddAccusations()
+        {
+            var p = DebugSeat(debugSeat);
+            if (p == null) return;
+            if (debugAccusationCard == null) { Debug.LogWarning("[Phase10Debug] assign debugAccusationCard first."); return; }
+
+            for (int i = 0; i < debugAccusationCount; i++) p.AddStatusCard(debugAccusationCard);
+            p.ApplyAccusation(0);   // recompute from status cards
+
+            Debug.Log($"[Phase10Debug] added {debugAccusationCount} accusations to '{p.PlayerNameText}'.");
+            DebugDump(p);
+        }
+
+        /// <summary>Attach any blue/persistent card (Piety, Asylum, Stocks…) to a seat.</summary>
+        [ContextMenu("DEBUG — Add Status Card To Seat")]
+        private void DebugAddStatusCard()
+        {
+            var p = DebugSeat(debugSeat);
+            if (p == null) return;
+            if (debugStatusCard == null) { Debug.LogWarning("[Phase10Debug] assign debugStatusCard first."); return; }
+
+            p.AddStatusCard(debugStatusCard);
+            p.ApplyAccusation(0);   // Piety changes the LIMIT, so recompute
+            Debug.Log($"[Phase10Debug] added '{debugStatusCard.name}' to '{p.PlayerNameText}'.");
+            DebugDump(p);
+        }
+
+        /// <summary>
+        /// Print the win-condition inputs for the whole table.
+        ///
+        /// The two checks are asymmetric and easy to confuse, so both are shown: witches win ONLY
+        /// when nonWitches == 0 (there is NO parity rule — see CLAUDE.md), villagers win when no
+        /// unrevealed Witch tryal remains anywhere.
+        /// </summary>
+        [ContextMenu("DEBUG — Dump Win State")]
+        private void DebugDumpWinState()
+        {
+            int alive = 0, aliveWitches = 0, aliveNonWitches = 0, unrevealedWitchCards = 0;
+
+            foreach (var p in PlayerService.All)
+            {
+                if (p == null) continue;
+
+                foreach (var t in p.TryalCards)
+                    if (!t.IsRevealed && t.TryalCardType == TryalCardType.Witch) unrevealedWitchCards++;
+
+                if (p.IsEliminated) continue;
+                alive++;
+                if (p.IsWitch) aliveWitches++; else aliveNonWitches++;
+            }
+
+            Debug.Log($"[Phase10Debug] alive={alive} witches={aliveWitches} nonWitches={aliveNonWitches} " +
+                      $"unrevealedWitchTryals={unrevealedWitchCards} → " +
+                      $"witchesWin={(aliveWitches > 0 && aliveNonWitches == 0)} " +
+                      $"villagersWin={(unrevealedWitchCards == 0)}");
+        }
+
         // ─── end TEMP ────────────────────────────────────────────────────────────────
     }
 }
