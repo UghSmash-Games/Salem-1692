@@ -5,6 +5,7 @@ const {
   createRoom,
   joinRoomAsPlayer,
   joinRoomAsMirror,
+  reclaimSeat,
   removeSocket,
   getRoom,
   getPlayerByPlayerId,
@@ -81,18 +82,25 @@ describe('joinRoomAsPlayer', () => {
     const code = createRoom('host-socket-1');
 
     const r1 = joinRoomAsPlayer(code, 'player-1', 'Alice');
-    expect(r1).toEqual({ playerId: 'p0' });
+    expect(r1.playerId).toBe('p0');
 
     const r2 = joinRoomAsPlayer(code, 'player-2', 'Bob');
-    expect(r2).toEqual({ playerId: 'p1' });
+    expect(r2.playerId).toBe('p1');
+
+    // Each seat also gets its reconnection token — see the reclaimSeat suite.
+    expect(r1.token).toMatch(/^[0-9a-f]{32}$/);
 
     const r3 = joinRoomAsPlayer(code, 'player-3', 'Carlos');
-    expect(r3).toEqual({ playerId: 'p2' });
+    expect(r3.playerId).toBe('p2');
 
     const players = getPlayers(code);
     expect(players).toHaveLength(3);
-    expect(players[0]).toEqual({ socketId: 'player-1', displayName: 'Alice', playerId: 'p0' });
-    expect(players[2]).toEqual({ socketId: 'player-3', displayName: 'Carlos', playerId: 'p2' });
+    expect(players[0]).toMatchObject({
+      socketId: 'player-1', displayName: 'Alice', playerId: 'p0', connected: true,
+    });
+    expect(players[2]).toMatchObject({
+      socketId: 'player-3', displayName: 'Carlos', playerId: 'p2', connected: true,
+    });
   });
 
   test('returns null for invalid room code', () => {
@@ -157,7 +165,10 @@ describe('getAllSocketIds', () => {
 });
 
 describe('removeSocket', () => {
-  test('removing a player removes them from the room', () => {
+  test('a departing player RESERVES their seat rather than losing it', () => {
+    // ⚠ This test asserted the opposite until reconnection existed: the entry was spliced out, so a
+    // locked phone screen destroyed the seat, its playerId and its identity, and the player could
+    // only return as a stranger while the host still held their tryals under the old id.
     const code = createRoom('host-1');
     joinRoomAsPlayer(code, 'player-1', 'Alice');
     joinRoomAsPlayer(code, 'player-2', 'Bob');
@@ -167,8 +178,34 @@ describe('removeSocket', () => {
     expect(result.playerId).toBe('p0');
     expect(result.code).toBe(code);
 
-    expect(getPlayers(code)).toHaveLength(1);
-    expect(getPlayers(code)[0].displayName).toBe('Bob');
+    // Both seats survive; Alice's is held with no socket on it.
+    expect(getPlayers(code)).toHaveLength(2);
+    const alice = getPlayers(code).find(p => p.playerId === 'p0');
+    expect(alice.displayName).toBe('Alice');
+    expect(alice.connected).toBe(false);
+    expect(alice.socketId).toBeNull();
+  });
+
+  test('a reserved seat is skipped by socket routing, never emitted to as null', () => {
+    const code = createRoom('host-1');
+    joinRoomAsPlayer(code, 'player-1', 'Alice');
+    joinRoomAsPlayer(code, 'player-2', 'Bob');
+    removeSocket('player-1');
+
+    const ids = getAllSocketIds(code);
+    expect(ids).toContain('player-2');
+    expect(ids).not.toContain('player-1');
+    expect(ids).not.toContain(null);
+  });
+
+  test('a host leaving does not try to close a reserved seat', () => {
+    const code = createRoom('host-1');
+    joinRoomAsPlayer(code, 'player-1', 'Alice');
+    removeSocket('player-1');
+
+    const result = removeSocket('host-1');
+    expect(result.type).toBe('host');
+    expect(result.allSocketIds).not.toContain(null);
   });
 
   test('removing the host destroys the room and returns all socket IDs', () => {
@@ -199,5 +236,85 @@ describe('removeSocket', () => {
   test('removing an unknown socket returns null type', () => {
     const result = removeSocket('unknown-socket');
     expect(result.type).toBeNull();
+  });
+});
+
+describe('reclaimSeat — the token is the authorization', () => {
+  test('the right token rebinds the seat to the new socket', () => {
+    const code = createRoom('host-1');
+    const { playerId, token } = joinRoomAsPlayer(code, 'phone-old', 'Alice');
+    removeSocket('phone-old');
+
+    const result = reclaimSeat(code, playerId, token, 'phone-new');
+    expect(result).not.toBeNull();
+    expect(result.playerId).toBe(playerId);
+    expect(result.displayName).toBe('Alice');
+
+    const seat = getPlayerByPlayerId(code, playerId);
+    expect(seat.socketId).toBe('phone-new');
+    expect(seat.connected).toBe(true);
+  });
+
+  test('a WRONG token cannot take a seat', () => {
+    // The whole point. playerId is public — it is in every game_state_update — so if a guessed id
+    // were enough, any player could reclaim any seat and be sent its private_state: another
+    // player's tryal cards and role.
+    const code = createRoom('host-1');
+    const { playerId } = joinRoomAsPlayer(code, 'phone-1', 'Alice');
+    removeSocket('phone-1');
+
+    expect(reclaimSeat(code, playerId, 'not-the-token', 'attacker')).toBeNull();
+    expect(reclaimSeat(code, playerId, '', 'attacker')).toBeNull();
+    expect(reclaimSeat(code, playerId, undefined, 'attacker')).toBeNull();
+    // A token of the RIGHT LENGTH but wrong content — the constant-time compare path.
+    const wrongSameLength = 'f'.repeat(32);
+    expect(reclaimSeat(code, playerId, wrongSameLength, 'attacker')).toBeNull();
+
+    expect(getPlayerByPlayerId(code, playerId).socketId).toBeNull();
+  });
+
+  test("one seat's token does not open another seat", () => {
+    const code = createRoom('host-1');
+    joinRoomAsPlayer(code, 'phone-1', 'Alice');
+    const bob = joinRoomAsPlayer(code, 'phone-2', 'Bob');
+
+    expect(reclaimSeat(code, 'p0', bob.token, 'attacker')).toBeNull();
+  });
+
+  test('every failure looks the same — unknown room, unknown seat, bad token', () => {
+    // Uninformative by design: distinguishing them would make this an oracle for enumerating seats.
+    const code = createRoom('host-1');
+    const { token } = joinRoomAsPlayer(code, 'phone-1', 'Alice');
+
+    expect(reclaimSeat('ZZZZ', 'p0', token, 's')).toBeNull();
+    expect(reclaimSeat(code, 'p99', token, 's')).toBeNull();
+    expect(reclaimSeat(code, 'p0', 'wrong', 's')).toBeNull();
+  });
+
+  test('tokens are unguessable and unique per seat', () => {
+    const code = createRoom('host-1');
+    const a = joinRoomAsPlayer(code, 'phone-1', 'Alice');
+    const b = joinRoomAsPlayer(code, 'phone-2', 'Bob');
+
+    expect(a.token).toMatch(/^[0-9a-f]{32}$/);
+    expect(a.token).not.toBe(b.token);
+  });
+
+  test('reclaiming a seat that is still live reports the socket to evict', () => {
+    // Two devices cannot hold one seat, or private_state fans out to both.
+    const code = createRoom('host-1');
+    const { playerId, token } = joinRoomAsPlayer(code, 'phone-old', 'Alice');
+
+    const result = reclaimSeat(code, playerId, token, 'phone-new');
+    expect(result.previousSocketId).toBe('phone-old');
+    expect(getPlayerByPlayerId(code, playerId).socketId).toBe('phone-new');
+  });
+
+  test('rejoining on the SAME socket evicts nothing', () => {
+    const code = createRoom('host-1');
+    const { playerId, token } = joinRoomAsPlayer(code, 'phone-1', 'Alice');
+
+    const result = reclaimSeat(code, playerId, token, 'phone-1');
+    expect(result.previousSocketId).toBeNull();
   });
 });

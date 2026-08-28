@@ -16,6 +16,7 @@
 const {
   createRoom,
   joinRoomAsPlayer,
+  reclaimSeat,
   joinRoomAsMirror,
   removeSocket,
   getRoom,
@@ -59,6 +60,8 @@ function registerDispatch(io) {
       socket.emit('joined', {
         playerId: result.playerId,
         roomCode: data.code,
+        // Seat secret — this socket only. Never broadcast, never sent to the host or a mirror.
+        token: result.token,
       });
 
       // Notify host of new player
@@ -69,6 +72,67 @@ function registerDispatch(io) {
           hostSocket.emit('player_joined', {
             playerId: result.playerId,
             displayName: data.displayName,
+          });
+        }
+      }
+    });
+
+    // Player reclaims a seat they already hold, on a NEW socket.
+    //
+    // A phone loses its socket constantly in normal play — screen lock, backgrounded tab, wifi blip
+    // — and socket.io reconnects with a fresh socket.id. Without this the seat was unrecoverable:
+    // join_room always mints a new playerId, so the returning player became a stranger to a host
+    // that still held their tryals under the old one.
+    //
+    // 🔴 THE TOKEN IS THE AUTHORIZATION, and it is checked inside reclaimSeat. playerId is PUBLIC
+    // (every game_state_update carries it), so it can never be what proves a seat is yours —
+    // without the secret, any player could reclaim any seat and be sent its private_state: another
+    // player's tryal cards and role. Never soften this to a displayName match; names are public.
+    socket.on('rejoin_room', (data) => {
+      if (!data || !data.code || !data.playerId || !data.token) return;
+
+      const result = reclaimSeat(data.code, data.playerId, data.token, socket.id);
+      if (!result) {
+        // One message for unknown room, unknown seat AND bad token — telling them apart would turn
+        // this into an oracle for enumerating seats.
+        socket.emit('error_msg', { message: 'Could not rejoin' });
+        return;
+      }
+
+      // Evict whatever socket held the seat before (a second tab, or a drop the server has not
+      // noticed yet). One socket per seat, always, or private_state fans out to two devices.
+      if (result.previousSocketId) {
+        const stale = io.sockets.sockets.get(result.previousSocketId);
+        if (stale) {
+          stale.role = null;
+          stale.roomCode = null;
+          stale.playerId = null;
+          stale.leave(data.code);
+          stale.emit('error_msg', { message: 'Seat taken over on another device' });
+        }
+      }
+
+      socket.role = 'player';
+      socket.roomCode = data.code;
+      socket.playerId = result.playerId;
+      socket.join(data.code);
+
+      socket.emit('joined', {
+        playerId: result.playerId,
+        roomCode: data.code,
+        token: result.token,
+      });
+
+      // Tell the host the seat is live again. It re-sends this player's state — the phone came back
+      // with an empty store and knows nothing: not its tryals, not its hand, not the prompt it may
+      // be blocking the game on. No token here; the host never sees one.
+      const room = getRoom(data.code);
+      if (room) {
+        const hostSocket = io.sockets.sockets.get(room.hostSocketId);
+        if (hostSocket) {
+          hostSocket.emit('player_rejoined', {
+            playerId: result.playerId,
+            displayName: result.displayName,
           });
         }
       }

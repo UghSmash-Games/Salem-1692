@@ -901,3 +901,189 @@ describe('room cleanup', () => {
     expect(data.playerId).toBe('p0');
   });
 });
+
+// ─── Reconnection ──────────────────────────────────────────────
+
+describe('rejoin_room', () => {
+  /** Host + one joined player, returned with the seat's credentials. */
+  async function seatOnePlayer() {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+    phone.emit('join_room', { code, displayName: 'Alice' });
+    const joined = await waitFor(phone, 'joined');
+
+    return { host, phone, code, playerId: joined.playerId, token: joined.token };
+  }
+
+  test('a fresh join issues a seat token', async () => {
+    const { token } = await seatOnePlayer();
+    expect(token).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  test('the host is never told the token', async () => {
+    // It is the one credential that lets a socket be handed another player's private_state.
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room');
+    const { code } = await waitFor(host, 'room_created');
+
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+    const notification = waitFor(host, 'player_joined');
+    phone.emit('join_room', { code, displayName: 'Alice' });
+
+    const payload = await notification;
+    expect(payload).not.toHaveProperty('token');
+  });
+
+  test('a dropped player reclaims their seat on a new socket', async () => {
+    const { host, phone, code, playerId, token } = await seatOnePlayer();
+
+    // The phone drops — screen lock, wifi blip, tab reload.
+    const left = waitFor(host, 'player_left');
+    phone.disconnect();
+    await left;
+
+    const returning = trackClient(createClient());
+    await waitForConnect(returning);
+    const rejoinNotice = waitFor(host, 'player_rejoined');
+    returning.emit('rejoin_room', { code, playerId, token });
+
+    const joined = await waitFor(returning, 'joined');
+    expect(joined.playerId).toBe(playerId);   // the SAME seat, not a new one
+    expect(joined.roomCode).toBe(code);
+
+    const notice = await rejoinNotice;
+    expect(notice.playerId).toBe(playerId);
+    expect(notice.displayName).toBe('Alice');
+    expect(notice).not.toHaveProperty('token');
+  });
+
+  test('private_state follows the seat to the NEW socket', async () => {
+    // The functional heart of reconnection: the host addresses playerId, and the relay must now
+    // resolve that to the socket the player is actually holding.
+    const { host, phone, code, playerId, token } = await seatOnePlayer();
+
+    phone.disconnect();
+    await waitFor(host, 'player_left');
+
+    const returning = trackClient(createClient());
+    await waitForConnect(returning);
+    returning.emit('rejoin_room', { code, playerId, token });
+    await waitFor(returning, 'joined');
+
+    host.emit('private_state', { playerId, tryals: [{ label: 'Witch' }], hand: ['Alibi'] });
+    const priv = await waitFor(returning, 'private_state');
+    expect(priv.tryals[0].label).toBe('Witch');
+  });
+
+  test('a WRONG token cannot steal a seat, and leaks nothing', async () => {
+    const { host, phone, code, playerId } = await seatOnePlayer();
+
+    phone.disconnect();
+    await waitFor(host, 'player_left');
+
+    const attacker = trackClient(createClient());
+    await waitForConnect(attacker);
+    const noRejoin = expectNoEvent(host, 'player_rejoined');
+    attacker.emit('rejoin_room', { code, playerId, token: 'f'.repeat(32) });
+
+    const err = await waitFor(attacker, 'error_msg');
+    expect(err.message).toBe('Could not rejoin');
+    await noRejoin;
+
+    // And the seat's private state must not reach them.
+    const noPrivate = expectNoEvent(attacker, 'private_state');
+    host.emit('private_state', { playerId, tryals: [{ label: 'Witch' }] });
+    await noPrivate;
+  });
+
+  test('an unknown room and an unknown seat report the SAME failure as a bad token', async () => {
+    // Uninformative by design — otherwise this is an oracle for enumerating seats.
+    const { code, playerId, token } = await seatOnePlayer();
+
+    const probe = trackClient(createClient());
+    await waitForConnect(probe);
+
+    probe.emit('rejoin_room', { code: 'ZZZZ', playerId, token });
+    expect((await waitFor(probe, 'error_msg')).message).toBe('Could not rejoin');
+
+    probe.emit('rejoin_room', { code, playerId: 'p99', token });
+    expect((await waitFor(probe, 'error_msg')).message).toBe('Could not rejoin');
+
+    probe.emit('rejoin_room', { code, playerId, token: 'nope' });
+    expect((await waitFor(probe, 'error_msg')).message).toBe('Could not rejoin');
+  });
+
+  test('a takeover leaves exactly ONE socket on the seat', async () => {
+    // Two live devices on one seat would fan private_state out to both.
+    const { host, phone, code, playerId, token } = await seatOnePlayer();
+
+    const second = trackClient(createClient());
+    await waitForConnect(second);
+    // ⚠ Listen BEFORE the takeover: the server evicts the old socket before it answers the new
+    // one, so a listener registered after `joined` has already missed the notice.
+    const evicted = waitFor(phone, 'error_msg');
+    second.emit('rejoin_room', { code, playerId, token });
+    await waitFor(second, 'joined');
+
+    // The original is told, and stops receiving the seat's private state.
+    const err = await evicted;
+    expect(err.message).toBe('Seat taken over on another device');
+
+    const noPrivate = expectNoEvent(phone, 'private_state');
+    host.emit('private_state', { playerId, tryals: [{ label: 'Not a Witch' }] });
+    await waitFor(second, 'private_state');
+    await noPrivate;
+  });
+
+  test('an evicted socket loses its player role and cannot act', async () => {
+    const { host, phone, code, playerId, token } = await seatOnePlayer();
+
+    const second = trackClient(createClient());
+    await waitForConnect(second);
+    const evicted = waitFor(phone, 'error_msg');   // see the note above — listen first
+    second.emit('rejoin_room', { code, playerId, token });
+    await waitFor(second, 'joined');
+    await evicted;
+
+    const noAction = expectNoEvent(host, 'player_action');
+    phone.emit('player_action', { card: 'Accusation', targetPlayerId: 'p1' });
+    await noAction;
+  });
+
+  test('a reclaimed seat can act again', async () => {
+    const { host, phone, code, playerId, token } = await seatOnePlayer();
+
+    phone.disconnect();
+    await waitFor(host, 'player_left');
+
+    const returning = trackClient(createClient());
+    await waitForConnect(returning);
+    returning.emit('rejoin_room', { code, playerId, token });
+    await waitFor(returning, 'joined');
+
+    const action = waitFor(host, 'player_action');
+    returning.emit('player_action', { card: 'Accusation', targetPlayerId: 'p1' });
+
+    const received = await action;
+    expect(received.playerId).toBe(playerId);  // server-attached, still trusted
+    expect(received.card).toBe('Accusation');
+  });
+
+  test('a malformed rejoin is ignored, not crashed on', async () => {
+    const probe = trackClient(createClient());
+    await waitForConnect(probe);
+
+    const noJoin = expectNoEvent(probe, 'joined');
+    probe.emit('rejoin_room', {});
+    probe.emit('rejoin_room', { code: 'ABCD' });
+    probe.emit('rejoin_room', null);
+    await noJoin;
+  });
+});
