@@ -55,9 +55,19 @@ export function useGameSocket(): void {
     const onJoined = (data: JoinedPayload) => {
       useGameStore.getState().onJoined(data.playerId, data.roomCode);
 
+      // ⚠ RESTORE THE NAME ON A RECONNECT. A fresh join sets displayName from the join form, but a
+      // reconnect never passes through that form — the store starts empty, so the phone rendered a
+      // BLANK name over its own tryals until the player noticed. The stored seat is the only place
+      // the name survives a reload, and writing the seat back with the empty store value would
+      // erase it for good.
+      const stored = loadSeat();
+      const displayName = useGameStore.getState().session.displayName ?? stored?.displayName ?? null;
+      if (displayName && !useGameStore.getState().session.displayName) {
+        useGameStore.getState().beginJoin(displayName);
+      }
+
       // Remember the seat so the next connect can reclaim it. The token is a credential — stored,
       // never rendered or logged. A rejoin returns the same token, so this also refreshes it.
-      const { displayName } = useGameStore.getState().session;
       if (data.token) {
         saveSeat({
           roomCode: data.roomCode,

@@ -195,6 +195,23 @@ describe('when a seat can no longer be held', () => {
 });
 
 describe('what comes back after a reconnect', () => {
+  it("restores the player's own name, which no server message carries back", () => {
+    // 🐛 Caught in a live reload test: a fresh join sets the name from the join form, but a
+    // reconnect never passes through that form, so the phone rendered a BLANK name over its own
+    // tryals. The stored seat is the only place the name survives a reload.
+    renderHook(() => useGameSocket());
+    useGameStore.getState().beginJoin('Goody Cris');
+    fire('joined', SEAT);
+
+    // Reload: a new store, the seat still on disk.
+    useGameStore.getState().reset();
+    fire('connect');
+    fire('joined', SEAT);
+
+    expect(useGameStore.getState().session.displayName).toBe('Goody Cris');
+    expect(loadSeat()?.displayName).toBe('Goody Cris');   // and it is not erased on the way through
+  });
+
   it('rebuilds private state from what the host re-sends', () => {
     // The phone reconnects with an empty store — it knows neither its tryals nor its hand until the
     // host re-sends them, which is why player_rejoined obliges the host to.
