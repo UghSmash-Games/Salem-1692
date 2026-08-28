@@ -77,6 +77,12 @@ All communication between Unity (host), phone browsers (players), and passive di
 ### `player_left`
 - **Direction:** server → host
 - **Payload:** `{ playerId: string }`
+- **Note:** The socket dropped — it does NOT mean the seat is gone. The relay RESERVES the seat
+  (entry kept, `socketId` null) because it cannot know whether a game is running; the **host** decides
+  what a departure means. `NetworkGameCoordinator` frees the chair only in the lobby, and mid-game
+  holds it (it owns tryal cards, a hand, a turn-order slot and possibly a witch identity) with
+  `Player.IsConnected = false`, which drops that seat from the secret-phase wait set so a dropped
+  phone cannot stall a phase to its timeout.
 
 ### `room_closed`
 - **Direction:** server → all clients in room

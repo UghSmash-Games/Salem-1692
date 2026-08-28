@@ -261,8 +261,7 @@ callbacks. All of Phase 4 is now built and verified end to end:
   capture it and exit when it changes. This RESOLVES the earlier orphan-seat /
   parked-`WaitUntil` risk — a `NetworkInput` coroutine whose turn is force-ended
   (idle timeout, etc.) now wakes on `TurnId != myTurnId`, breaks, and unsubscribes
-  instead of blocking forever. (Still wire real per-seat disconnect handling
-  post-4a, but the coroutine no longer leaks.)
+  instead of blocking forever.
 - MASKING-TIMING LEAK — CLOSED in 4c. Secret-phase rounds used to advance on "all
   ACTING players confirmed", letting an observer exclude the tardiest from being
   witches. Now the shared `AwaitAllConfirmedOrTimeout` predicate (the ONE place the
@@ -289,6 +288,41 @@ callbacks. All of Phase 4 is now built and verified end to end:
   flip itself is PUBLIC, per the rulebook). Immunity via `plan.Confessors` is unchanged.
   Phone confess UI is the `confess` variant of `SecretPhaseScreen` (renders own face-down
   tryals + "don't confess"; selection = tryal index or `skip`).
+
+## Player Reconnection (built — the phone half of "a dropped seat")
+
+**A phone loses its socket constantly in normal play** — the screen locks, the browser backgrounds
+the tab, wifi blips, someone reloads. Before this, the seat was gone for good: `removeSocket` SPLICED
+the entry out of the room, and `join_room` always mints a fresh `playerId`, so a returning player
+became a stranger to a host that still held their tryals under the old id.
+
+- **The relay RESERVES seats, it does not delete them.** A player disconnect keeps the entry with
+  `socketId = null` / `connected = false`. The relay cannot know whether a game is running, so the
+  **HOST decides what a departure means**: `NetworkGameCoordinator.HandlePlayerLeft` frees the chair
+  only when `!HasStarted`, and holds it mid-game (it owns tryals, a hand, a turn-order slot and
+  possibly a witch identity).
+- 🔴 **The seat TOKEN is the authorization, not `playerId`.** `playerId` is PUBLIC — it appears in
+  every `game_state_update` — so it can never prove a seat is yours. The token is a 32-hex secret
+  minted at join, sent to that one socket, never broadcast, **never given to the host**, never
+  logged. Without it any player could reclaim any seat and be handed its `private_state`: another
+  player's tryal cards and role. ⛔ Never fall back to matching on `displayName` — names are public
+  and duplicable.
+- **The phone replays its seat on EVERY `connect`,** not just the first (`useGameSocket` →
+  `seatSession.ts`). socket.io restores the transport by itself but comes back with a NEW socket.id,
+  so each reconnect must re-present the seat. Stored in **localStorage, not sessionStorage** — a
+  phone browser discarding a backgrounded tab is one of the exact failures this exists to survive.
+- **Newest socket wins**, and the evicted phone must DROP its stored seat (`error_msg.code ==
+  "seat_taken"`). Both devices auto-reclaim on connect, so an evicted device that kept its seat would
+  snatch it back on its next blip and the two would trade the seat forever.
+- **On `player_rejoined` the host re-sends everything**: the board, that player's `private_state`,
+  AND any prompt still awaiting an answer (`NetworkManager.ResendPendingPrompt`). The phone comes
+  back with an EMPTY store and does not know it is holding the game up — and it genuinely is, until
+  the phase times out.
+- ⚠️ **The prompt-replay cache must never go stale.** `NetworkInput` clears a player's entry at the
+  same point it unsubscribes each prompt handler, so a replay can only re-issue a prompt that is
+  still open; a stale one would show a phone a prompt whose handler is gone and swallow its answer.
+  The `secret_phase_prompt` batch is remembered **per entry, as single-entry batches** — replaying
+  the whole batch would hand one phone every other player's `acting` flag.
 
 ## Phase 5 — Town Hall Characters (TIER NOTE)
 

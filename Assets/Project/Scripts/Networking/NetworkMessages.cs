@@ -33,6 +33,18 @@ namespace Salem.Networking
         public string playerId;
     }
 
+    /// <summary>
+    /// A seat came back on a NEW socket (the phone locked, backgrounded, blipped or reloaded).
+    /// Carries no token — the seat secret lives only between the phone and the relay; the host never
+    /// sees one and never needs to.
+    /// </summary>
+    [Serializable]
+    public class PlayerRejoinedMsg
+    {
+        public string playerId;
+        public string displayName;
+    }
+
     [Serializable]
     public class PlayerActionMsg
     {

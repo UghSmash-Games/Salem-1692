@@ -81,6 +81,24 @@ namespace Salem.Data
             }
         }
 
+        /// <summary>
+        /// Drop a seat entirely — LOBBY USE ONLY (a player who left before the deal).
+        ///
+        /// ⚠ NEVER call this mid-game. A seat in play holds tryal cards, a hand, a place in the turn
+        /// order and possibly a witch identity; removing it would silently change the win conditions.
+        /// A player who drops mid-game keeps their seat (marked <see cref="Player.IsConnected"/>
+        /// false) and reclaims it on reconnect.
+        /// </summary>
+        public static void Unregister(Player player)
+        {
+            if (player == null) return;
+
+            allPlayers.Remove(player);
+
+            // The id → seat map must go too, or a returning player resolves to a destroyed seat.
+            if (!string.IsNullOrEmpty(player.NetworkId)) byNetworkId.Remove(player.NetworkId);
+        }
+
         public static void Clear()
         {
             allPlayers.Clear();

@@ -285,6 +285,7 @@ namespace Salem.Players
             }
 
             nm.OnPlayerAction -= HandlePlayerAction;
+            nm.ClearPendingPrompt(p.NetworkId);   // answered or expired — nothing to replay on reconnect
         }
 
         private void HandlePlayerAction(PlayerActionMsg msg)
@@ -502,6 +503,7 @@ namespace Salem.Players
                 (gtm != null && gtm.TurnId != myTurnId));
 
             nm.OnTargetSubmit -= Handler;
+            nm.ClearPendingPrompt(chooser.NetworkId);   // answered or expired — nothing to replay on reconnect
 
             onChosen?.Invoke(chosen); // null on timeout → caller does NOT play/consume the card
         }
@@ -592,6 +594,7 @@ namespace Salem.Players
                 (abortOnTurnChange && gtm != null && gtm.TurnId != myTurnId));
 
             nm.OnTryalPickSubmit -= Handler;
+            nm.ClearPendingPrompt(chooser.NetworkId);   // answered or expired — nothing to replay on reconnect
 
             // No answer (timeout, or the turn was force-ended under us) → random. The flip happens
             // either way; "no response" must not let a player dodge a reveal they triggered.
@@ -650,6 +653,7 @@ namespace Salem.Players
             yield return new WaitUntil(() => confirmed);
 
             nm.OnSecretPhaseSubmit -= Handler;
+            nm.ClearPendingPrompt(p.NetworkId);   // answered or expired — nothing to replay on reconnect
         }
 
         // Tituba's deck rearrange. Send the full deck (top→bottom) to this player's phone and
@@ -699,6 +703,7 @@ namespace Salem.Players
                 (gtm != null && gtm.TurnId != myTurnId));
 
             nm.OnDeckRearrangeSubmit -= Handler;
+            nm.ClearPendingPrompt(p.NetworkId);   // answered or expired — nothing to replay on reconnect
 
             // Commit the latest order she sent (her in-progress work at the deadline);
             // null if she never moved anything → caller keeps the current order.
@@ -750,6 +755,7 @@ namespace Salem.Players
             yield return new WaitUntil(() => done || Time.realtimeSinceStartup >= deadline);
 
             nm.OnCardPickSubmit -= Handler;
+            nm.ClearPendingPrompt(p.NetworkId);   // answered or expired — nothing to replay on reconnect
 
             onIndex?.Invoke(chosen); // -1 on timeout → caller safety-picks
         }
@@ -805,6 +811,7 @@ namespace Salem.Players
                 (gtm != null && gtm.TurnId != myTurnId));
 
             nm.OnConfirmSubmit -= Handler;
+            nm.ClearPendingPrompt(p.NetworkId);   // answered or expired — nothing to replay on reconnect
 
             if (answered) onConfirm?.Invoke(result); // fire ONLY on a real answer (see CONTRACT above)
         }

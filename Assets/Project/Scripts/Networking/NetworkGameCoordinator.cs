@@ -178,6 +178,7 @@ namespace Salem.Networking
             nm.OnRoomCreated += HandleRoomCreated;
             nm.OnPlayerJoined += HandlePlayerJoined;
             nm.OnPlayerLeft += HandlePlayerLeft;
+            nm.OnPlayerRejoined += HandlePlayerRejoined;
 
             nm.ConnectToServer();
         }
@@ -190,6 +191,7 @@ namespace Salem.Networking
             nm.OnRoomCreated -= HandleRoomCreated;
             nm.OnPlayerJoined -= HandlePlayerJoined;
             nm.OnPlayerLeft -= HandlePlayerLeft;
+            nm.OnPlayerRejoined -= HandlePlayerRejoined;
         }
 
         // ─── Lobby ────────────────────────────────────────────────
@@ -238,12 +240,72 @@ namespace Salem.Networking
             // a dropped human no longer stalls a phase to its timeout.
             p.IsConnected = false;
 
-            // Pre-game: also free the lobby seat.
-            seats.Remove(p);
-            Debug.Log($"[Coordinator] {playerId} left (IsConnected=false).");
+            // ⚠ ONLY the lobby frees the chair. Mid-game the seat is HELD: it holds tryal cards, a
+            // hand, a place in the turn order and possibly a witch identity, and phones drop
+            // constantly in normal play (screen lock, backgrounded tab, wifi blip). Removing the
+            // seat on every blip is what used to make a dropped player unrecoverable — the relay
+            // now reserves their seat too, and HandlePlayerRejoined puts them back in it.
+            if (!HasStarted)
+            {
+                // 🐛 The seat must leave PlayerService too, not just the lobby list. StartGame deals
+                // from PlayerService.All, so a seat removed from `seats` alone was still dealt a
+                // hand and tryals and then never acted — an orphan player nobody could see leaving.
+                // Reconnection made it worse: rejoining registered a SECOND seat for one human.
+                seats.Remove(p);
+                PlayerService.Unregister(p);
+                Destroy(p.gameObject);
+                Debug.Log($"[Coordinator] {playerId} left the lobby — seat freed.");
+            }
+            else
+            {
+                Debug.Log($"[Coordinator] {playerId} dropped mid-game — seat HELD for reconnect.");
+            }
+
             OnRosterChanged?.Invoke();
-            // Note: full seat cleanup (PlayerService.All removal + Destroy), reconnect,
-            // and turn-order removal remain post-4a (4c only stops the phase stall).
+        }
+
+        /// <summary>
+        /// A seat came back on a new socket. The phone reconnected with an EMPTY store — it knows
+        /// neither its tryals nor its hand, and not the prompt it may be holding the game up on — so
+        /// the host re-sends all three. Nothing here trusts the phone: the relay already proved the
+        /// seat with the token before this event was raised.
+        /// </summary>
+        private void HandlePlayerRejoined(string playerId, string displayName)
+        {
+            var p = PlayerService.GetByNetworkId(playerId);
+
+            if (p == null)
+            {
+                // They left during the LOBBY, so the chair was freed above. Seat them again under
+                // the SAME playerId — their phone is still holding that seat's token, and minting a
+                // new id here would strand it.
+                if (!HasStarted)
+                {
+                    Debug.Log($"[Coordinator] {playerId} returned to the lobby — re-seating.");
+                    HandlePlayerJoined(playerId, displayName);
+                }
+                else
+                {
+                    // Mid-game with no seat should be impossible (the seat is held above), so this
+                    // is a real inconsistency rather than something to paper over by inventing a
+                    // seat — a new seat mid-game would have no tryals and break the deal.
+                    Debug.LogWarning($"[Coordinator] {playerId} rejoined mid-game with no seat.");
+                }
+                return;
+            }
+
+            p.IsConnected = true;
+            Debug.Log($"[Coordinator] {playerId} reconnected — restoring their state.");
+            OnRosterChanged?.Invoke();
+
+            // 1) Board + this player's own private state (tryals, hand, role, fellow witches).
+            // Found the same way GamePhaseManager finds it — the broadcaster is a scene component,
+            // not a singleton.
+            FindFirstObjectByType<NetworkStateBroadcaster>()?.BroadcastNow();
+
+            // 2) The prompt they may still owe an answer to. Without this the game waits on a phone
+            // that no longer knows it was asked, until the phase times out.
+            NetworkManager.Instance?.ResendPendingPrompt(playerId);
         }
 
         // ─── Start ────────────────────────────────────────────────
@@ -265,6 +327,9 @@ namespace Salem.Networking
                 Debug.LogWarning("[Coordinator] StartGame ignored — the game has already started.");
                 return;
             }
+
+            // A fresh game owes nobody an answer — drop any prompt left remembered for replay.
+            NetworkManager.Instance?.ClearAllPendingPrompts();
 
             if (gamePhaseManager == null)
             {

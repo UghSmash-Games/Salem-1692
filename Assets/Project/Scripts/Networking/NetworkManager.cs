@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Salem.Networking
@@ -34,6 +35,7 @@ namespace Salem.Networking
         public event Action<string> OnRoomCreated;                    // room code
         public event Action<string, string> OnPlayerJoined;           // playerId, displayName
         public event Action<string> OnPlayerLeft;                     // playerId
+        public event Action<string, string> OnPlayerRejoined;         // playerId, displayName
         public event Action<PlayerActionMsg> OnPlayerAction;
         public event Action<SecretPhaseSubmitMsg> OnSecretPhaseSubmit;
         public event Action<ConfessMsg> OnConfess;
@@ -169,6 +171,63 @@ namespace Salem.Networking
             }
         }
 
+        // ─── Pending prompt replay (reconnection) ─────────────────
+
+        /// <summary>
+        /// The last per-player prompt still awaiting an answer, kept so a phone that dropped can be
+        /// handed it again when it returns.
+        ///
+        /// 🔴 WHY THIS IS NEEDED. Every per-player request is a one-shot emit to one socket. A phone
+        /// that locks its screen mid-prompt comes back with an empty store and no idea it is holding
+        /// the game up — and the game genuinely IS held up: the host waits on that answer until the
+        /// phase times out. Re-sending is what turns a dropped connection into a pause instead of a
+        /// lost turn.
+        ///
+        /// Entries are written by the Send*Request methods and cleared by NetworkInput when the
+        /// matching wait ends, so a replay can only ever re-issue a prompt that is still open. A
+        /// stale replay would be worse than none: the phone would show a prompt whose handler is
+        /// already gone, and nothing it sent would be heard.
+        /// </summary>
+        private readonly Dictionary<string, PendingPrompt> pendingPrompts = new();
+
+        private readonly struct PendingPrompt
+        {
+            public readonly string Event;
+            public readonly string Json;
+            public PendingPrompt(string evt, string json) { Event = evt; Json = json; }
+        }
+
+        private void RememberPrompt(string playerId, string evt, string json)
+        {
+            if (string.IsNullOrEmpty(playerId)) return;   // local/AI seats have no socket
+            pendingPrompts[playerId] = new PendingPrompt(evt, json);
+        }
+
+        /// <summary>The prompt is answered (or expired) — stop offering to replay it.</summary>
+        public void ClearPendingPrompt(string playerId)
+        {
+            if (string.IsNullOrEmpty(playerId)) return;
+            pendingPrompts.Remove(playerId);
+        }
+
+        /// <summary>
+        /// Re-send this player's open prompt, if any, to whatever socket now holds their seat.
+        /// Addressed by playerId exactly like the original, so the relay routes it to the new socket
+        /// with no idea a reconnection happened.
+        /// </summary>
+        public void ResendPendingPrompt(string playerId)
+        {
+            if (string.IsNullOrEmpty(playerId)) return;
+            if (!pendingPrompts.TryGetValue(playerId, out var prompt)) return;
+            if (!GuardConnected("ResendPendingPrompt")) return;
+
+            Debug.Log($"[NetworkManager] Re-sending {prompt.Event} to {playerId} after reconnect.");
+            _ = socketClient.Emit(prompt.Event, prompt.Json);
+        }
+
+        /// <summary>Drop every remembered prompt — a new game owes nobody an answer.</summary>
+        public void ClearAllPendingPrompts() => pendingPrompts.Clear();
+
         // ΓöÇΓöÇΓöÇ Public API ΓÇö Outbound Messages ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
         public void CreateRoom()
@@ -192,43 +251,69 @@ namespace Salem.Networking
         public void SendSecretPhasePrompt(SecretPhasePromptMsg msg)
         {
             if (!GuardConnected("SendSecretPhasePrompt")) return;
+
+            // Remembered PER ENTRY, each as its own single-entry batch: a replay must carry only
+            // the returning player's own prompt. Replaying the whole batch would hand one phone
+            // every other player's `acting` flag — the masking model's one unforgivable leak.
+            if (msg?.prompts != null)
+            {
+                foreach (var entry in msg.prompts)
+                {
+                    if (entry == null || string.IsNullOrEmpty(entry.playerId)) continue;
+                    var single = new SecretPhasePromptMsg { prompts = new[] { entry } };
+                    RememberPrompt(entry.playerId, "secret_phase_prompt", JsonUtility.ToJson(single));
+                }
+            }
+
             _ = socketClient.Emit("secret_phase_prompt", JsonUtility.ToJson(msg));
         }
 
         public void SendActionRequest(ActionRequestMsg msg)
         {
             if (!GuardConnected("SendActionRequest")) return;
-            _ = socketClient.Emit("action_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "action_request", json);
+            _ = socketClient.Emit("action_request", json);
         }
 
         public void SendDeckRearrangeRequest(DeckRearrangeRequestMsg msg)
         {
             if (!GuardConnected("SendDeckRearrangeRequest")) return;
-            _ = socketClient.Emit("deck_rearrange_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "deck_rearrange_request", json);
+            _ = socketClient.Emit("deck_rearrange_request", json);
         }
 
         public void SendCardPickRequest(CardPickRequestMsg msg)
         {
             if (!GuardConnected("SendCardPickRequest")) return;
-            _ = socketClient.Emit("card_pick_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "card_pick_request", json);
+            _ = socketClient.Emit("card_pick_request", json);
         }
 
         public void SendConfirmRequest(ConfirmRequestMsg msg)
         {
             if (!GuardConnected("SendConfirmRequest")) return;
-            _ = socketClient.Emit("confirm_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "confirm_request", json);
+            _ = socketClient.Emit("confirm_request", json);
         }
 
         public void SendTargetRequest(TargetRequestMsg msg)
         {
             if (!GuardConnected("SendTargetRequest")) return;
-            _ = socketClient.Emit("target_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "target_request", json);
+            _ = socketClient.Emit("target_request", json);
         }
 
         public void SendTryalPickRequest(TryalPickRequestMsg msg)
         {
             if (!GuardConnected("SendTryalPickRequest")) return;
-            _ = socketClient.Emit("tryal_pick_request", JsonUtility.ToJson(msg));
+            var json = JsonUtility.ToJson(msg);
+            RememberPrompt(msg.playerId, "tryal_pick_request", json);
+            _ = socketClient.Emit("tryal_pick_request", json);
         }
 
         // Host-facing echoes of the outgoing PUBLIC dramatic-beat messages. The host TV display
@@ -300,6 +385,13 @@ namespace Salem.Networking
                 var msg = JsonUtility.FromJson<PlayerLeftMsg>(json);
                 Debug.Log($"[NetworkManager] Player left: {msg.playerId}");
                 OnPlayerLeft?.Invoke(msg.playerId);
+            });
+
+            socketClient.On("player_rejoined", json =>
+            {
+                var msg = JsonUtility.FromJson<PlayerRejoinedMsg>(json);
+                Debug.Log($"[NetworkManager] Player rejoined: {msg.playerId} ({msg.displayName})");
+                OnPlayerRejoined?.Invoke(msg.playerId, msg.displayName);
             });
 
             socketClient.On("player_action", json =>
