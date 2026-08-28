@@ -289,7 +289,7 @@ callbacks. All of Phase 4 is now built and verified end to end:
   Phone confess UI is the `confess` variant of `SecretPhaseScreen` (renders own face-down
   tryals + "don't confess"; selection = tryal index or `skip`).
 
-## Player Reconnection (built — the phone half of "a dropped seat")
+## Player Reconnection (built + playtested against the real Unity host, 2026-08-28)
 
 **A phone loses its socket constantly in normal play** — the screen locks, the browser backgrounds
 the tab, wifi blips, someone reloads. Before this, the seat was gone for good: `removeSocket` SPLICED
@@ -318,6 +318,10 @@ became a stranger to a host that still held their tryals under the old id.
   AND any prompt still awaiting an answer (`NetworkManager.ResendPendingPrompt`). The phone comes
   back with an EMPTY store and does not know it is holding the game up — and it genuinely is, until
   the phase times out.
+- **Verified in a live playtest:** a phone dropped mid-game and came back into its own seat with its
+  board and private state restored. ⚠️ The narrower case still unconfirmed live is a drop while that
+  phone is holding an OPEN prompt (`ResendPendingPrompt`) — worth watching for the first time a
+  player drops mid-target/confess.
 - ⚠️ **The prompt-replay cache must never go stale.** `NetworkInput` clears a player's entry at the
   same point it unsubscribes each prompt handler, so a replay can only re-issue a prompt that is
   still open; a stale one would show a phone a prompt whose handler is gone and swallow its answer.
