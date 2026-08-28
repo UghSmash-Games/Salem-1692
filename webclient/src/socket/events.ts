@@ -10,6 +10,7 @@
 export const CLIENT_TO_SERVER = {
   JOIN_ROOM: 'join_room',
   JOIN_MIRROR: 'join_mirror',
+  REJOIN_ROOM: 'rejoin_room',
   PLAYER_ACTION: 'player_action',
   SECRET_PHASE_SUBMIT: 'secret_phase_submit',
   CONFESS: 'confess',

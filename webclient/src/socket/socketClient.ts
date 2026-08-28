@@ -14,6 +14,7 @@ import { CLIENT_TO_SERVER } from './events';
 import type {
   JoinRoomPayload,
   JoinMirrorPayload,
+  RejoinRoomPayload,
   PlayerActionPayload,
   SecretPhaseSubmitPayload,
   ConfessPayload,
@@ -50,6 +51,15 @@ export function disconnect(): void {
 
 export function joinRoom(payload: JoinRoomPayload): void {
   socket.emit(CLIENT_TO_SERVER.JOIN_ROOM, payload);
+}
+
+/**
+ * Reclaim a seat after a socket drop. The token is the authorization — playerId alone is public and
+ * proves nothing. A failure comes back as `error_msg`, at which point the stored seat is stale and
+ * the phone falls back to a fresh join.
+ */
+export function rejoinRoom(payload: RejoinRoomPayload): void {
+  socket.emit(CLIENT_TO_SERVER.REJOIN_ROOM, payload);
 }
 
 /** Join a room as a passive mirror display (public state only). */

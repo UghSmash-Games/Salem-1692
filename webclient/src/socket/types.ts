@@ -20,6 +20,16 @@ export type SecretPhaseType = 'black_cat' | 'night_vote' | 'constable_save' | 'c
 export interface JoinedPayload {
   playerId: string;
   roomCode: string;
+  /** Seat secret for reconnection. Sent to this socket only — never broadcast, never given to the
+   *  host or a mirror. Store it, replay it on `rejoin_room`, and never display or log it. */
+  token?: string;
+}
+
+/** Reclaim a seat this phone already holds, after any socket drop. */
+export interface RejoinRoomPayload {
+  code: string;
+  playerId: string;
+  token: string;
 }
 
 /** A single player's public-facing entry on the board. */
@@ -256,6 +266,10 @@ export interface GameOverPayload {
 
 export interface ErrorMsgPayload {
   message: string;
+  /** Machine code for errors the client must ACT on rather than merely display:
+   *  `rejoin_failed` (the stored seat is stale) | `seat_taken` (another device claimed this seat).
+   *  Absent on plain join failures. */
+  code?: 'rejoin_failed' | 'seat_taken';
 }
 
 // ─── Client → Server payloads ─────────────────────────────────────

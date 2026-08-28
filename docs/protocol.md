@@ -46,7 +46,11 @@ All communication between Unity (host), phone browsers (players), and passive di
   receive that seat's `private_state` — the tryal cards and role of another player. ⛔ Do not "fix" a
   failed rejoin by falling back to matching on `displayName`: names are public and duplicable.
 - **Failure is deliberately uninformative:** an unknown room, an unknown seat, and a bad token all
-  return the same `error_msg`, so the event cannot be used to enumerate which seats exist.
+  return the same `error_msg` — `{ message: "Could not rejoin", code: "rejoin_failed" }` — so the
+  event cannot be used to enumerate which seats exist. The evicted socket in a takeover instead gets
+  `{ message: "Seat taken over on another device", code: "seat_taken" }`. `code` is a MACHINE code:
+  the evicted phone must drop its stored seat, and recognising that by matching on prose would break
+  the moment the copy changed.
 - **Newest socket wins.** If the seat is still held by a live socket (a second tab, or a drop the
   server has not noticed yet), the seat rebinds to the newcomer and the previous socket is removed
   from the room — one socket per seat, always, or `private_state` would fan out to two devices.

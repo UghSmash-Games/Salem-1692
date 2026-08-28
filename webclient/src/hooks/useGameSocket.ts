@@ -7,7 +7,8 @@
  */
 
 import { useEffect } from 'react';
-import { socket, connect } from '../socket/socketClient';
+import { socket, connect, rejoinRoom } from '../socket/socketClient';
+import { loadSeat, saveSeat, clearSeat } from '../socket/seatSession';
 import { SERVER_TO_CLIENT } from '../socket/events';
 import { useGameStore } from '../store/gameStore';
 import type {
@@ -28,23 +29,43 @@ import type {
   ErrorMsgPayload,
 } from '../socket/types';
 
-const SESSION_KEY = 'salem.session';
-
 export function useGameSocket(): void {
   useEffect(() => {
     const store = useGameStore.getState();
 
-    const onConnect = () => store.setConnected(true);
+    /**
+     * 🔴 THE RECONNECTION ENTRY POINT. socket.io reconnects the transport by itself, but it comes
+     * back with a NEW socket.id, and the server keyed the seat to the old one — so every `connect`
+     * has to re-present the seat. This fires on the first connect too, which is what restores a
+     * player who reloaded the page or whose phone killed the backgrounded tab.
+     *
+     * Deliberately unconditional on why we connected: a drop the user never noticed and a full page
+     * reload are indistinguishable here, and both need the same reclaim.
+     */
+    const onConnect = () => {
+      store.setConnected(true);
+
+      const seat = loadSeat();
+      if (seat) {
+        rejoinRoom({ code: seat.roomCode, playerId: seat.playerId, token: seat.token });
+      }
+    };
     const onDisconnect = () => store.setConnected(false);
 
     const onJoined = (data: JoinedPayload) => {
       useGameStore.getState().onJoined(data.playerId, data.roomCode);
-      // Persist for refresh-resilience (re-join handled by JoinScreen).
+
+      // Remember the seat so the next connect can reclaim it. The token is a credential — stored,
+      // never rendered or logged. A rejoin returns the same token, so this also refreshes it.
       const { displayName } = useGameStore.getState().session;
-      sessionStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify({ roomCode: data.roomCode, displayName }),
-      );
+      if (data.token) {
+        saveSeat({
+          roomCode: data.roomCode,
+          playerId: data.playerId,
+          token: data.token,
+          displayName,
+        });
+      }
     };
 
     const onGameState = (data: GameStateUpdatePayload) =>
@@ -75,11 +96,31 @@ export function useGameSocket(): void {
       useGameStore.getState().applyGameOver(data);
 
     const onRoomClosed = () => {
-      sessionStorage.removeItem(SESSION_KEY);
+      // The game is over as far as this phone is concerned — the seat can never be reclaimed.
+      clearSeat();
       useGameStore.getState().reset();
     };
-    const onError = (data: ErrorMsgPayload) =>
-      useGameStore.getState().setJoinError(data?.message ?? 'Unknown error');
+
+    const onError = (data: ErrorMsgPayload) => {
+      const message = data?.message ?? 'Unknown error';
+
+      if (data?.code === 'seat_taken') {
+        // Another device holds this seat now. Drop ours and stand down — keeping it would make the
+        // next reconnect snatch the seat back, and the two phones would trade it back and forth.
+        clearSeat();
+        useGameStore.getState().reset();          // clears joinError too, so set it AFTER
+        useGameStore.getState().setJoinError(message);
+        return;
+      }
+
+      if (data?.code === 'rejoin_failed') {
+        // The stored seat is stale — host restarted, or the room was recycled. Forget it, or every
+        // later connect replays the same dead credential and never reaches the join screen.
+        clearSeat();
+      }
+
+      useGameStore.getState().setJoinError(message);
+    };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -124,5 +165,3 @@ export function useGameSocket(): void {
     };
   }, []);
 }
-
-export { SESSION_KEY };

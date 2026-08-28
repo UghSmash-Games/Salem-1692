@@ -93,9 +93,9 @@ function registerDispatch(io) {
 
       const result = reclaimSeat(data.code, data.playerId, data.token, socket.id);
       if (!result) {
-        // One message for unknown room, unknown seat AND bad token — telling them apart would turn
-        // this into an oracle for enumerating seats.
-        socket.emit('error_msg', { message: 'Could not rejoin' });
+        // One message AND one code for unknown room, unknown seat AND bad token — telling them
+        // apart would turn this into an oracle for enumerating seats.
+        socket.emit('error_msg', { message: 'Could not rejoin', code: 'rejoin_failed' });
         return;
       }
 
@@ -108,7 +108,13 @@ function registerDispatch(io) {
           stale.roomCode = null;
           stale.playerId = null;
           stale.leave(data.code);
-          stale.emit('error_msg', { message: 'Seat taken over on another device' });
+          // `code` so the evicted phone can recognise this WITHOUT matching on prose: it must drop
+          // its stored seat, or its next reconnect would snatch the seat back and the two devices
+          // would trade it back and forth.
+          stale.emit('error_msg', {
+            message: 'Seat taken over on another device',
+            code: 'seat_taken',
+          });
         }
       }
 
