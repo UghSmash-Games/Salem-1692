@@ -545,3 +545,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
   markPromptSubmitted: () =>
     set((s) => (s.prompt ? { prompt: { ...s.prompt, submitted: true } } : {})),
 }));
+
+/**
+ * This player's name AS THE TABLE KNOWS IT.
+ *
+ * 🔴 NOT the name they typed. The host UNIQUIFIES display names at join
+ * (`NetworkGameCoordinator.UniqueName` appends " (2)", " (3)" …) because targets resolve by name, so
+ * two players called "Cris" would make targeting ambiguous. The phone kept showing the TYPED name,
+ * which then disagreed with the board — and worse, `SecretPhaseScreen` compared it against a target
+ * name from the host to detect an illegal constable self-protect. For the duplicated player that
+ * comparison could never match: they would get no warning, tap themselves, and the host (which
+ * enforces the rule for real) would silently place no gavel. A wasted constable save that LOOKS like
+ * a save is the worst version of that bug.
+ *
+ * Falls back to the typed name for the moment before the first board arrives.
+ */
+export function selectMyDisplayName(s: GameStore): string | null {
+  const mine = s.publicBoard.players.find((p) => p.playerId === s.session.playerId);
+  return mine?.displayName ?? s.session.displayName;
+}

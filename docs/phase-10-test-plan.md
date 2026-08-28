@@ -109,9 +109,13 @@ Also locked client-side: `MirrorSeat` renders a dynamic limit rather than a hard
 *says* so rather than merely looking dim.
 
 ### 15. Tituba rearranges a night card to the top — night still triggers on draw
-**Status:** ⬜ unexercised. The interaction (a black card moved by a player, then drawn) has not been
-run since the real reorder replaced the stubbed shuffle.
+**Status:** ◐ code-verified (traced 2026-08-28); still ⬜ for a live run.
+The trigger cannot be bypassed by reordering, because it fires on the DRAW, not on deck position:
+`DeckManager.DrawCard` → `CardEffectManager.HandleCardDrawn` → `GamePhaseManager.HandleNightCardDrawn`.
+`SetDeckOrder` validates that the submitted order is a true permutation and leaves the deck untouched
+otherwise, so a malformed phone submission cannot corrupt the deck either.
 **Repro:** hold Tituba, use the rearrange, put Night on top, end turn, draw.
+🐛 This trace surfaced an unrelated defect on the neighbouring branch — see Finding 1.
 
 ### 16. 2–3 player ghost mode
 **Status:** ⛔ **not applicable — superseded.** Ghost mode will not be built (CLAUDE.md → Phase 6);
@@ -129,9 +133,14 @@ own seat with board + private state, and any open prompt must reappear.
 ⚠ The **open-prompt replay** is the specific part not yet seen live.
 
 ### 18. A player joins with the same display name as an existing player
-**Status:** ◐ code-verified. `NetworkGameCoordinator.UniqueName` appends " (2)", " (3)" … because
-targets resolve by `PlayerNameText`, so a duplicate would make targeting ambiguous.
-**Repro:** two phones, same name, in the lobby.
+**Status:** ✅ automated (the client half, after a fix) / ◐ code-verified (the host half).
+`NetworkGameCoordinator.UniqueName` appends " (2)", " (3)" … because targets resolve by
+`PlayerNameText`, so a duplicate would make targeting ambiguous. It is correct and unbounded.
+🐛 Tracing it found the phone did NOT honour that renaming — see Finding 2, now fixed and locked by
+`gameStore.myName.test.ts`.
+**Repro:** two phones, same name, in the lobby. The second must appear as "Name (2)" on the board
+**and on its own phone**, and if that player is the constable, selecting themselves during the
+constable save must still be refused on their screen.
 
 ---
 
@@ -174,3 +183,51 @@ restart the game for a clean seat.
 
 Run **Dump Win State** before and after the decisive action in every one of these — it is the
 cheapest way to see WHICH win condition fired, and the two are easy to mistake for each other.
+
+
+---
+
+## Findings from the Phase 10 traces
+
+### Finding 1 — a drawn Black Cat is assigned AT RANDOM in networked play ⚠ OPEN (needs a rules call)
+
+`CardEffectManager.HandleCardDrawn` offers the drawer a choice of recipient only when
+`drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null`. **In networked mode no
+player is ever `IsLocalPlayer`** — every human is remote — so the branch is dead and every networked
+draw falls through to `AITargetingHelper.SelectRandomTarget`. The cat lands on a random player with
+no agency from anyone.
+
+This is the same bug class as the Robbery recipient, the Curse blue-card pick and Will Grigs' mode
+choice — all three already fixed by routing through `IPlayerInput`. The two neighbouring gates were
+checked and are FINE: the accusation reveal (`HandleAccusationRevealChoice`) and conspiracy step 1
+both handle the networked chooser first and use `IsLocalPlayer` only as the local-host fallback.
+
+**Reachability is narrow.** `GameSetup` extracts the Black Cat before dealing and holds it for dawn,
+so it is not in the draw deck at the start. It returns only if it reaches the discard pile (a Curse
+discards it) AND the deck later re-forms from the discard. So: a long game, after a Curse.
+
+**Why it is NOT fixed here:** the fix depends on a rules answer this document should not invent.
+Drawing the Black Cat mid-game has no explicit rulebook entry (the glossary covers giving it at dawn,
+cursing it, and moving it with scapegoat). Two readings:
+1. **It is a blue card you drew** → it should go to your HAND and be played on a target later, like
+   any blue card. That would mean deleting the immediate-assign path entirely.
+2. **It resolves on draw** → the drawer chooses a recipient now, over `RequestTarget`, exactly like
+   the Robbery recipient.
+
+Either is defensible; they differ in feel and in timing. **Decision needed before implementing.**
+
+### Finding 2 — the phone showed the name the player TYPED, not the one the table uses ✅ FIXED
+
+The host uniquifies duplicate names (`UniqueName` → "Cris (2)"). The phone went on displaying the
+typed name, so the player's own screen and the board disagreed. That was cosmetic in itself — but
+`SecretPhaseScreen` compares "my name" against a target name **that came from the host** to warn a
+constable off protecting themselves. For the renamed player the comparison could never match: no
+warning, they tap themselves, and the host — which enforces the rule for real
+(`target != constable`) — silently places no gavel.
+
+A wasted constable save that LOOKS like a save is the worst version of that bug: the player believes
+someone is protected, and the night resolves as if nobody was.
+
+**Fixed** by `selectMyDisplayName`, which reads this player's name from the public board and falls
+back to the typed one only before the first board arrives. It also fixes the reconnect case, where
+nothing typed a name at all. The rule itself was never at risk — the host was always the backstop.

@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, selectMyDisplayName } from '../store/gameStore';
 import { sendSecretPhaseSubmit } from '../socket/socketClient';
 import { PlayerTargetList } from '../components/PlayerTargetList';
 import { WaitingForOthers } from '../components/WaitingForOthers';
@@ -49,7 +49,9 @@ export function SecretPhaseScreen() {
   // Private (constable-only) info used to block an illegal self-protect on this
   // player's own device. The shared target list stays full + identical for all.
   const isConstable = useGameStore((s) => s.privateState.isConstable);
-  const myName = useGameStore((s) => s.session.displayName);
+  // ⚠ MUST be the host's name for us, not the typed one: it is compared against a target name
+  // that came FROM the host. See selectMyDisplayName.
+  const myName = useGameStore(selectMyDisplayName);
   // Own tryals (private) — used only for the confess window, where each player
   // confesses one of their OWN face-down cards. Same class of private data as the
   // witch tally; differs per phone legitimately and is never broadcast.

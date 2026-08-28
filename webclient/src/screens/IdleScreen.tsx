@@ -5,7 +5,7 @@
  * (game_state_update); never another player's secrets.
  */
 
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, selectMyDisplayName } from '../store/gameStore';
 import { TryalCardList } from '../components/TryalCardList';
 import { HandList } from '../components/HandList';
 import { BoardSummary } from '../components/BoardSummary';
@@ -17,7 +17,8 @@ export function IdleScreen() {
   const { tryals, hand } = useGameStore((s) => s.privateState);
   const { players, whoseTurn } = useGameStore((s) => s.publicBoard);
   const playerId = useGameStore((s) => s.session.playerId);
-  const displayName = useGameStore((s) => s.session.displayName);
+  // The table's name for us, not the typed one — see selectMyDisplayName.
+  const displayName = useGameStore(selectMyDisplayName);
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 bg-ink px-5 py-6">
