@@ -57,18 +57,24 @@ namespace Salem.Cards
             return CardName switch
             {
                 TownhallName.SarahGood => "Robbery and Arson cards have no effect on you and are discarded.",
-                TownhallName.JohnProctor => "When a player is eliminated, take all blue cards in front of them and all cards in their hand.",
-                TownhallName.WillGrigs => "You may use Alibi cards as Witness cards, worth 7 total accusations.",
+                // ⚠ CORRECTED. This previously read "take all blue cards in front of them and all
+                // cards in their hand", which is the PRE-correction rule and is not what the game
+                // implements: John takes from the HAND only, it is a CHOICE of up to three, and the
+                // eliminated player's cards IN PLAY are discarded, not taken. See
+                // docs/character-spec.md #5. The stale text fed the host's IN EFFECT panel via
+                // HostCardSpriteRegistry.description, so it was being shown to players.
+                TownhallName.JohnProctor => "When a player is eliminated, choose up to three cards from their hand to take. The rest are discarded.",
+                TownhallName.WillGrigs => "You may choose to use alibi cards as if they were witness cards, worth seven total accusations.",
                 TownhallName.SamuelParris => "Twice per game, draw up to 2 cards from the discard pile instead of the deck. No Black cards.",
-                TownhallName.GilesCorey => "If you draw 2 Accusation cards on your turn, show them and draw a 3rd card.",
+                TownhallName.GilesCorey => "If you draw 2 red cards on your turn, show the other players and draw a 3rd card.",
                 TownhallName.RebeccaNurse => "Each time a Tryal is revealed on another player (from accusations), draw 1 card.",
                 TownhallName.MarthaCorey => "You have the same ability as the first living player to your right.",
                 TownhallName.ThomasDanforth => "When you accuse, the threshold is reduced by 1 (6th accusation triggers reveal).",
                 TownhallName.CottonMather => "Evidence cards played against you are worth only 1 accusation.",
                 TownhallName.WilliamsPhipps => "Once per game, you may confess without revealing one of your Tryal cards.",
                 TownhallName.Tituba => "Once per game, on your turn before drawing, rearrange the deck for 60 seconds.",
-                TownhallName.AbigailWilliams => "When you trigger a Tryal reveal, discard all accusations in front of your own Tryals.",
-                TownhallName.AnnePutnam => "When you trigger a Tryal reveal, draw 2 cards before the Tryal is revealed.",
+                TownhallName.AbigailWilliams => "If you place the final accusation on a tryal, you may discard all accusations in front of you.",
+                TownhallName.AnnePutnam => "At the end of your turn, draw two cards for each tryal card you revealed during your turn.",
                 TownhallName.GeorgeBurroughs => "8 total accusations must be played against you to reveal a Tryal.",
                 TownhallName.MaryWarren => "You are immune to the ill effects of Matchmaker and Black Cat.",
                 _ => ""

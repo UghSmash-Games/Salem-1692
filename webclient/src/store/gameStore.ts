@@ -13,12 +13,20 @@ import type {
   PublicPlayer,
   TryalCardView,
   PlayerRole,
+  WitchVote,
   SecretPhaseType,
   GameStateUpdatePayload,
   PrivateStatePayload,
   SecretPhasePromptPayload,
   ActionRequestPayload,
+  DeckRearrangeRequestPayload,
+  CardPickRequestPayload,
+  ConfirmRequestPayload,
+  TargetRequestPayload,
+  TryalPickRequestPayload,
   PhaseResolvePayload,
+  PublicRevealPayload,
+  GameEventPayload,
   EliminationResultPayload,
   GameOverPayload,
 } from '../socket/types';
@@ -38,12 +46,26 @@ export interface PrivateSlice {
   tryals: TryalCardView[];
   hand: string[];
   role: PlayerRole | null;
+  /** Independent role truths — a player can be BOTH (evil constable). */
+  isWitch: boolean;
+  isConstable: boolean;
+  /** Other witches' names — non-empty (for a witch) only after the dawn reveal. */
+  fellowWitches: string[];
+  /** Other witches' live tentative picks — non-empty (for a witch) only during a witch round. */
+  witchVotes: WitchVote[];
 }
 
 export interface PublicBoardSlice {
   phase: string | null;
   whoseTurn: string | null;
   players: PublicPlayer[];
+  deckCount: number | null;
+  discardCount: number | null;
+  /** Name of the face-up TOP discard card, or null when the pile is empty. Public by the card
+   *  rules — a discard pile is face-up at a table. The mirror's Meeting House renders its art.
+   *  ⚠ TOP CARD ONLY, never the ordered pile: the order would leak play history and expose
+   *  Samuel Parris' discard-draw pool. */
+  topDiscard: string | null;
 }
 
 export interface PromptSlice {
@@ -51,11 +73,72 @@ export interface PromptSlice {
   targets: string[];
   /** Stored, never read by render/timing logic. */
   acting: boolean;
+  /** Confess window only: this player is a William Phipps with a charge → show the "confess without
+   *  revealing" button. Host-gated per-player (Town Hall identity is public). */
+  canFakeConfess: boolean;
   submitted: boolean;
 }
 
 export interface ActionRequestSlice {
   actions: string[];
+  /** Card names that can't be played right now (host-computed) — rendered greyed-out. */
+  unplayableCards: string[];
+}
+
+export interface TargetRequestSlice {
+  /** Machine code, e.g. "robbery_recipient". */
+  prompt: string;
+  /** Eligible public player ids. */
+  targets: string[];
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
+}
+
+/** "Which face-down tryal do you turn?" — carries a COUNT only, never card identities.
+ *  The answer is an ordinal into that face-down subset (see TryalPickRequestPayload). */
+export interface TryalPickSlice {
+  /** Whose tryals — a public player id, resolved to a name via the public board. */
+  targetPlayerId: string;
+  /** How many identical face-down backs to render. */
+  count: number;
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
+  /** "accusation_reveal" | "piety_loss_reveal" | "conspiracy_reveal". */
+  reason: string;
+}
+
+export interface DeckRearrangeSlice {
+  /** Full deck labels, top→bottom (Tituba reorders these). */
+  cards: string[];
+  /** Rearrange window in seconds (rules value, 60) — shown as a countdown. */
+  seconds: number;
+}
+
+export interface CardPickSlice {
+  /** The pool of card labels to pick from (draft hand, or filtered discard pile). */
+  cards: string[];
+  /** 1-based index of this pick ("pick N of up to M"). */
+  pickNumber: number;
+  /** Max picks allowed (John: 3; Parris: 2). */
+  totalPicks: number;
+  /** Pick window in seconds — shown as a countdown. */
+  seconds: number;
+  /** When true, a "Done" button lets the picker stop early (submits index -1). */
+  allowDone: boolean;
+  /** Machine code for WHAT this pick is ("proctor_draft"/"parris_discard" = take; "curse_discard" =
+   *  discard an opponent's blue card). Drives the screen copy; absent → generic take. */
+  reason?: string;
+}
+
+export interface ConfirmSlice {
+  /** Machine code for the decision, e.g. "abigail_discard". */
+  prompt: string;
+  /** Context card labels shown with the question. */
+  items: string[];
+  /** Numeric context (e.g. accusation total). */
+  count: number;
+  /** Window in seconds — shown as a countdown. */
+  seconds: number;
 }
 
 export interface GameOverSlice {
@@ -71,13 +154,30 @@ interface GameStore {
   publicBoard: PublicBoardSlice;
   prompt: PromptSlice | null;
   actionRequest: ActionRequestSlice | null;
+  deckRearrange: DeckRearrangeSlice | null;
+  cardPick: CardPickSlice | null;
+  confirm: ConfirmSlice | null;
+  targetRequest: TargetRequestSlice | null;
+  tryalPick: TryalPickSlice | null;
   reveal: { revealAt: number } | null;
+  /** The most recent elimination_result, for the synchronized reveal overlay. */
+  lastElimination: EliminationResultPayload | null;
+  /** The most recent public_reveal (e.g. Giles Corey showing two red cards), for a public toast. */
+  lastPublicReveal: PublicRevealPayload | null;
+  /** The public "What Has Passed" log, oldest first, capped at MAX_EVENT_LOG_ENTRIES. */
+  eventLog: GameEventPayload[];
+  /** Events that arrived while a reveal was armed — i.e. belonging to THIS beat. Lets the overlay
+   *  say what actually turned when no elimination_result accompanies the reveal (an accusation or
+   *  piety-loss flip, which kills no one). Mirrors HostRevealOverlay, which collects game events
+   *  only while its own state is not Idle. */
+  revealEvents: GameEventPayload[];
   gameOver: GameOverSlice | null;
 
   // ── Connection / session ──
   setConnected: (connected: boolean) => void;
   beginJoin: (displayName: string) => void;
   onJoined: (playerId: string, roomCode: string) => void;
+  onMirrorJoined: (roomCode: string) => void;
   setJoinError: (message: string) => void;
   reset: () => void;
 
@@ -86,13 +186,36 @@ interface GameStore {
   applyPrivateState: (data: PrivateStatePayload) => void;
   applySecretPhasePrompt: (data: SecretPhasePromptPayload) => void;
   applyActionRequest: (data: ActionRequestPayload) => void;
+  applyDeckRearrangeRequest: (data: DeckRearrangeRequestPayload) => void;
+  clearDeckRearrange: () => void;
+  applyCardPickRequest: (data: CardPickRequestPayload) => void;
+  clearCardPick: () => void;
+  applyConfirmRequest: (data: ConfirmRequestPayload) => void;
+  clearConfirm: () => void;
+  applyTargetRequest: (data: TargetRequestPayload) => void;
+  clearTargetRequest: () => void;
+  applyTryalPickRequest: (data: TryalPickRequestPayload) => void;
+  clearTryalPick: () => void;
   applyPhaseResolve: (data: PhaseResolvePayload) => void;
+  clearReveal: () => void;
+  applyPublicReveal: (data: PublicRevealPayload) => void;
+  clearPublicReveal: () => void;
+  appendGameEvent: (data: GameEventPayload) => void;
   applyEliminationResult: (data: EliminationResultPayload) => void;
   applyGameOver: (data: GameOverPayload) => void;
 
   // ── Local UI transitions ──
   markPromptSubmitted: () => void;
 }
+
+// Phases during which a secret_phase_prompt can be active. A game_state_update
+// whose phase is one of these is a board refresh DURING a secret phase and must
+// NOT clear the prompt; any other phase means the secret phase has ended.
+const SECRET_PHASE_NAMES = new Set(['dawn', 'night']);
+
+/** Rolling window for the public event log. Matches HostEventLog.maxEntries (14) so the mirror
+ *  shows the same depth of history as the host screen beside it. */
+const MAX_EVENT_LOG_ENTRIES = 14;
 
 const initialSession: SessionSlice = {
   connected: false,
@@ -106,12 +229,19 @@ const initialPrivate: PrivateSlice = {
   tryals: [],
   hand: [],
   role: null,
+  isWitch: false,
+  isConstable: false,
+  fellowWitches: [],
+  witchVotes: [],
 };
 
 const initialPublicBoard: PublicBoardSlice = {
   phase: null,
   whoseTurn: null,
+  topDiscard: null,
   players: [],
+  deckCount: null,
+  discardCount: null,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -120,7 +250,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
   publicBoard: { ...initialPublicBoard },
   prompt: null,
   actionRequest: null,
+  deckRearrange: null,
+  cardPick: null,
+  confirm: null,
+  targetRequest: null,
+  tryalPick: null,
   reveal: null,
+  lastElimination: null,
+  lastPublicReveal: null,
+  eventLog: [],
+  revealEvents: [],
   gameOver: null,
 
   setConnected: (connected) =>
@@ -134,6 +273,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       session: { ...s.session, playerId, roomCode, joinError: null },
     })),
 
+  // Mirror clients have a room but no player slot (playerId stays null).
+  onMirrorJoined: (roomCode) =>
+    set((s) => ({
+      session: { ...s.session, roomCode, playerId: null, joinError: null },
+    })),
+
   setJoinError: (message) =>
     set((s) => ({ session: { ...s.session, joinError: message } })),
 
@@ -144,20 +289,56 @@ export const useGameStore = create<GameStore>((set, get) => ({
       publicBoard: { ...initialPublicBoard },
       prompt: null,
       actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+      targetRequest: null,
+      tryalPick: null,
       reveal: null,
+      lastElimination: null,
+      lastPublicReveal: null,
+      eventLog: [],
+      revealEvents: [],
       gameOver: null,
     }),
 
   applyGameStateUpdate: (data) =>
-    set({
-      publicBoard: {
-        phase: data.phase ?? null,
-        whoseTurn: data.whoseTurn ?? null,
-        players: data.players ?? [],
-      },
-      // Advancing public state ends any active secret phase / action request.
-      prompt: null,
-      actionRequest: null,
+    set((s) => {
+      const newPhase = data.phase ?? null;
+      // Clear an active secret-phase prompt ONLY when the phase has moved out of a
+      // secret phase (the phase genuinely ended). A routine board refresh during a
+      // secret phase — including the phase-entry update — must NOT wipe a freshly
+      // set prompt. That race was dropping every phone off the SecretPhaseScreen.
+      const inSecretPhase =
+        newPhase != null && SECRET_PHASE_NAMES.has(newPhase.toLowerCase());
+      const secretPhaseEnded = !!s.prompt && newPhase != null && !inSecretPhase;
+
+      // actionRequest is Day-only. Clear it ONLY when it can no longer be valid — the turn moved to
+      // another player, or we entered a secret (night/dawn) phase. Clearing it on EVERY board tick
+      // (the old 4a behavior) rested on the assumption that the host "always re-sends after a board
+      // tick"; it does not — it re-sends once per turn-loop iteration. So any unrelated broadcast
+      // (the flurry of eliminations/reveals during a John Proctor draft) wiped a LIVE turn prompt and
+      // stranded the phone on idle until the turn timer fired. Same race, same shape, as the prompt
+      // guard above.
+      const turnMovedAway =
+        data.whoseTurn != null && data.whoseTurn !== s.session.playerId;
+      const dropAction = inSecretPhase || turnMovedAway;
+
+      return {
+        publicBoard: {
+          phase: newPhase,
+          whoseTurn: data.whoseTurn ?? null,
+          players: data.players ?? [],
+          deckCount: data.deckCount ?? null,
+          discardCount: data.discardCount ?? null,
+          topDiscard: data.topDiscard ?? null,
+        },
+        // Prompt cleared only when the secret phase ended (above). actionRequest
+        // is Day-only and is always re-sent after a board tick if the turn
+        // continues, so clearing it on every update remains safe (4a behavior).
+        ...(secretPhaseEnded ? { prompt: null } : {}),
+        ...(dropAction ? { actionRequest: null } : {}),
+      };
     }),
 
   applyPrivateState: (data) =>
@@ -166,6 +347,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         tryals: data.tryals ?? [],
         hand: data.hand ?? [],
         role: data.role ?? null,
+        isWitch: data.isWitch ?? false,
+        isConstable: data.isConstable ?? false,
+        fellowWitches: data.fellowWitches ?? [],
+        witchVotes: data.witchVotes ?? [],
       },
     }),
 
@@ -175,18 +360,166 @@ export const useGameStore = create<GameStore>((set, get) => ({
         type: data.prompt,
         targets: data.targets ?? [],
         acting: data.acting,
+        canFakeConfess: data.canFakeConfess ?? false,
         submitted: false,
       },
       actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+      targetRequest: null,
+      tryalPick: null,
     }),
 
   applyActionRequest: (data) =>
     set({
-      actionRequest: { actions: data.actions ?? [] },
+      actionRequest: {
+        actions: data.actions ?? [],
+        unplayableCards: data.unplayableCards ?? [],
+      },
       prompt: null,
+      // After a rearrange, the host re-prompts the turn action — leave the
+      // rearrange screen for the action screen.
+      deckRearrange: null,
+      // NOTE: cardPick is deliberately NOT cleared here. A John/Martha draft can still be open when
+      // the drafter's own turn begins (someone was eliminated just before it), and the selector gives
+      // cardPick precedence over actionRequest for exactly that case. Clearing it here would defeat
+      // that precedence and yank the half-finished draft off the phone. The stored actionRequest just
+      // waits behind the draft; when the draft resolves (clearCardPick) the action screen appears.
+      confirm: null,
+      targetRequest: null,
+      tryalPick: null,
     }),
 
-  applyPhaseResolve: (data) => set({ reveal: { revealAt: data.revealAt } }),
+  // Tituba's deck rearrange — mutually exclusive with prompt/actionRequest.
+  applyDeckRearrangeRequest: (data) =>
+    set({
+      deckRearrange: { cards: data.cards ?? [], seconds: data.seconds ?? 60 },
+      prompt: null,
+      actionRequest: null,
+      cardPick: null,
+      confirm: null,
+      targetRequest: null,
+      tryalPick: null,
+    }),
+
+  clearDeckRearrange: () => set({ deckRearrange: null }),
+
+  // John Proctor / Martha card draft — mutually exclusive with prompt/action/rearrange.
+  applyCardPickRequest: (data) =>
+    set({
+      cardPick: {
+        cards: data.cards ?? [],
+        pickNumber: data.pickNumber ?? 1,
+        totalPicks: data.totalPicks ?? 3,
+        seconds: data.seconds ?? 45,
+        allowDone: data.allowDone ?? false,
+        reason: data.reason,
+      },
+      prompt: null,
+      // NOTE: actionRequest is deliberately NOT cleared here — the mirror of the guard in
+      // applyActionRequest. A draft can fire DURING the drafter's own turn (their card play
+      // eliminated someone), and the turn prompt must survive underneath it so the action screen
+      // returns when the draft resolves. Clearing it here stranded the phone on the idle screen
+      // until the host's turn timer fired.
+      deckRearrange: null,
+      confirm: null,
+      targetRequest: null,
+      tryalPick: null,
+    }),
+
+  clearCardPick: () => set({ cardPick: null }),
+
+  // A yes/no confirmation for this player's own optional ability choice (e.g. Abigail's
+  // discard) — mutually exclusive with the other prompts, like cardPick.
+  applyConfirmRequest: (data) =>
+    set({
+      confirm: {
+        prompt: data.prompt,
+        items: data.items ?? [],
+        count: data.count ?? 0,
+        seconds: data.seconds ?? 20,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      targetRequest: null,
+      tryalPick: null,
+    }),
+
+  clearConfirm: () => set({ confirm: null }),
+
+  // Sub-target pick for a two-target card (Robbery/Scapegoat recipient). Mutually exclusive with
+  // the other prompts — the host is blocking on this answer before the play resolves.
+  applyTargetRequest: (data) =>
+    set({
+      targetRequest: {
+        prompt: data.prompt,
+        targets: data.targets ?? [],
+        seconds: data.seconds ?? 30,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+    }),
+
+  clearTargetRequest: () => set({ targetRequest: null }),
+
+  // "Which face-down tryal do you turn?" Mutually exclusive with the other prompts, like
+  // applyTargetRequest above — the host is blocking on this answer before the reveal resolves.
+  applyTryalPickRequest: (data) =>
+    set({
+      tryalPick: {
+        targetPlayerId: data.targetPlayerId,
+        count: data.count ?? 0,
+        seconds: data.seconds ?? 25,
+        reason: data.reason,
+      },
+      prompt: null,
+      actionRequest: null,
+      deckRearrange: null,
+      cardPick: null,
+      confirm: null,
+      targetRequest: null,
+    }),
+
+  clearTryalPick: () => set({ tryalPick: null }),
+
+  /**
+   * Arming a new reveal CLEARS the previous outcome.
+   *
+   * `elimination_result` is optional — a beat can turn a tryal and kill no one (a confession-only
+   * night, or conspiracy step 1, which flips one card and sends no outcome). Without this reset,
+   * RevealOverlay's `lastElimination` fallback would re-display the LAST death, so a conspiracy
+   * flip would announce "Alice was eliminated" about a player who died several rounds ago.
+   *
+   * Mirrors HostRevealOverlay.HandlePhaseResolve, which nulls its own `elimination` for exactly
+   * this reason — the two screens must not disagree about whether anyone died.
+   */
+  applyPhaseResolve: (data) =>
+    set({ reveal: { revealAt: data.revealAt }, lastElimination: null, revealEvents: [] }),
+
+  clearReveal: () => set({ reveal: null }),
+
+  // Public card-show (e.g. Giles Corey). Store-only; a UI toast reads it and clears it.
+  applyPublicReveal: (data) => set({ lastPublicReveal: data }),
+
+  clearPublicReveal: () => set({ lastPublicReveal: null }),
+
+  // One entry in the public event log. Kept oldest-first and capped, matching the host screen's
+  // rolling window — an unbounded list would grow for the whole game on a display that never
+  // reloads. The renderer drops entries whose kind it doesn't recognise; they are still STORED,
+  // so a newer build could render them without having lost the history.
+  appendGameEvent: (data) =>
+    set((s) => ({
+      eventLog: [...s.eventLog, data].slice(-MAX_EVENT_LOG_ENTRIES),
+      // Also bucket it into THIS beat while a reveal is armed. Same rule as the host overlay's
+      // `state !== Idle` check, so the two screens scope a beat identically.
+      revealEvents: s.reveal ? [...s.revealEvents, data] : s.revealEvents,
+    })),
 
   applyEliminationResult: (data) => {
     const { playerId } = get().session;
@@ -199,6 +532,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : p,
         ),
       },
+      lastElimination: data,
       // If this elimination targets me, drop any pending prompt/action.
       prompt: data.playerId === playerId ? null : s.prompt,
       actionRequest: data.playerId === playerId ? null : s.actionRequest,
@@ -211,3 +545,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
   markPromptSubmitted: () =>
     set((s) => (s.prompt ? { prompt: { ...s.prompt, submitted: true } } : {})),
 }));
+
+/**
+ * This player's name AS THE TABLE KNOWS IT.
+ *
+ * 🔴 NOT the name they typed. The host UNIQUIFIES display names at join
+ * (`NetworkGameCoordinator.UniqueName` appends " (2)", " (3)" …) because targets resolve by name, so
+ * two players called "Cris" would make targeting ambiguous. The phone kept showing the TYPED name,
+ * which then disagreed with the board — and worse, `SecretPhaseScreen` compared it against a target
+ * name from the host to detect an illegal constable self-protect. For the duplicated player that
+ * comparison could never match: they would get no warning, tap themselves, and the host (which
+ * enforces the rule for real) would silently place no gavel. A wasted constable save that LOOKS like
+ * a save is the worst version of that bug.
+ *
+ * Falls back to the typed name for the moment before the first board arrives.
+ */
+export function selectMyDisplayName(s: GameStore): string | null {
+  const mine = s.publicBoard.players.find((p) => p.playerId === s.session.playerId);
+  return mine?.displayName ?? s.session.displayName;
+}

@@ -8,6 +8,9 @@ interface Props {
   selectable?: boolean;
   selectedIndex?: number | null;
   onSelect?: (index: number) => void;
+  /** Card NAMES that can't be played right now (host-computed, e.g. Robbery/Scapegoat
+   *  with fewer than 3 players alive). Rendered greyed-out and non-selectable. */
+  disabledCards?: string[];
 }
 
 export function HandList({
@@ -15,6 +18,7 @@ export function HandList({
   selectable = false,
   selectedIndex = null,
   onSelect,
+  disabledCards = [],
 }: Props) {
   if (hand.length === 0) {
     return <p className="text-sm italic text-parchment/60">No cards in hand.</p>;
@@ -36,18 +40,35 @@ export function HandList({
             </li>
           );
         }
+        const isDisabled = disabledCards.includes(card);
         return (
           <li key={i}>
             <button
               type="button"
+              disabled={isDisabled}
               onClick={() => onSelect?.(i)}
-              className={`${base} w-full ${
-                isSelected
-                  ? 'border-candle bg-candle/30 text-parchment'
-                  : 'border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
+              aria-pressed={isSelected}
+              data-disabled={isDisabled || undefined}
+              data-selected={isSelected || undefined}
+              className={`${base} flex w-full items-center gap-2 ${
+                isDisabled
+                  ? 'cursor-not-allowed border-parchment/20 bg-ink/20 text-parchment/40'
+                  : isSelected
+                    ? 'border-2 border-candle bg-candle/30 text-parchment'
+                    : 'border border-parchment/30 bg-ink/30 text-parchment hover:border-candle/60'
               }`}
             >
+              {/* Non-colour carriers: ✓ for the chosen card, — for one that cannot be played.
+                  Greying alone is a hue+lightness cue and reads as "just styled" to many players. */}
+              <span aria-hidden className="w-3 text-candle">
+                {isSelected ? '✓' : isDisabled ? '—' : ''}
+              </span>
               {card}
+              {isDisabled && (
+                <span className="ml-auto text-xs italic text-parchment/50">
+                  can’t play
+                </span>
+              )}
             </button>
           </li>
         );

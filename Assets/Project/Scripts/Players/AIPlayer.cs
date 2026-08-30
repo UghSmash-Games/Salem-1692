@@ -56,61 +56,6 @@ namespace Salem.Players
 
             yield return AITurnSequencer.ExecuteTurn(player, deckManager, aiThinkDelay, false);
         }
-
-        public override void ApplyCardEffect(Card card)
-        {
-            base.ApplyCardEffect(card);
-        }
-
-        public override Card SelectCard()
-        {
-            if (HandManager == null || HandManager.Hand.Count == 0)
-            {
-                Debug.LogWarning("[AI] No cards to select.");
-                return null;
-            }
-
-            return HandManager.Hand[0];
-        }
-
-        public override void PerformTurnAction(ActionCardSO selectedCard)
-        {
-            if (selectedCard == null)
-            {
-                Debug.Log("No Selected Card");
-                return;
-            }
-
-            if (CardEffectManager.Instance == null)
-            {
-                Debug.LogError("CardEffectManager.Instance is null!");
-                return;
-            }
-
-            Player primary = null;
-            Player secondary = null;
-            if (selectedCard.RequiresTarget)
-            {
-                primary = AITargetingHelper.SelectRandomTarget(this);
-                if (primary == null)
-                {
-                    Debug.LogWarning("[AI] No valid target found.");
-                    return;
-                }
-            }
-            if (selectedCard.RequiresSecondTarget)
-            {
-                secondary = AITargetingHelper.SelectRandomTarget(this);
-                if (secondary == null || secondary == primary)
-                {
-                    Debug.LogWarning("[AI] No valid target found.");
-                    return;
-                }
-            }
-            Debug.Log("Playing Card");
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
-            HandManager.RemoveCard(selectedCard);
-        }
         #endregion
 
         #region Helper Functions

@@ -57,6 +57,10 @@ socket.on('player_left', ({ playerId }) => {
   players.delete(playerId);
 });
 
+socket.on('mirror_joined', () => {
+  console.log('[mock-host] a mirror display connected');
+});
+
 // Log anything players send back so we can confirm acting:false is discarded
 // upstream of game logic (here we just observe — Unity would gate on acting).
 socket.on('player_action', (d) => console.log('[mock-host] player_action', d));
@@ -79,14 +83,39 @@ function publicPlayers() {
   }));
 }
 
-function sendGameState() {
+function sendGameState(phase = 'day') {
   const ids = playerIds();
   socket.emit('game_state_update', {
-    phase: 'day',
+    phase,
     whoseTurn: ids[0] ?? null,
     players: publicPlayers(),
+    deckCount: 28,
+    discardCount: 4,
   });
-  console.log('[mock-host] → game_state_update');
+  console.log(`[mock-host] → game_state_update (phase=${phase})`);
+}
+
+/**
+ * Reveal sequence: broadcast a phase_resolve timestamp 3s out, then emit the
+ * elimination_result at that moment. Two /display tabs side by side should
+ * flip in unison because they schedule against the shared revealAt, not on
+ * message receipt.
+ */
+function sendRevealSequence() {
+  const ids = playerIds();
+  const target = ids[1] ?? ids[0];
+  const revealAt = Date.now() + 3000;
+  socket.emit('phase_resolve', { revealAt });
+  console.log('[mock-host] → phase_resolve (reveal in 3s)…');
+  setTimeout(() => {
+    if (!target) return;
+    socket.emit('elimination_result', {
+      playerId: target,
+      eliminated: true,
+      savedBy: null,
+    });
+    console.log(`[mock-host] → elimination_result: ${target} eliminated`);
+  }, 3000);
 }
 
 function sendPrivateStates() {
@@ -171,6 +200,10 @@ function printHelp() {
       '  v  night_vote prompt      b  black_cat (dawn) prompt',
       '  a  action_request (p0)    r  phase_resolve',
       '  e  eliminate p1           o  game_over',
+      '  ── mirror (/display) ──',
+      '  n  game_state phase=night (overlay on)',
+      '  d  game_state phase=day   (overlay off)',
+      '  x  reveal sequence: phase_resolve + elimination in sync',
       '  h  help                   q  quit',
     ].join('\n'),
   );
@@ -188,6 +221,9 @@ rl.on('line', (line) => {
     case 'r': sendPhaseResolve(); break;
     case 'e': sendElimination(); break;
     case 'o': sendGameOver(); break;
+    case 'n': sendGameState('night'); break;
+    case 'd': sendGameState('day'); break;
+    case 'x': sendRevealSequence(); break;
     case 'h': printHelp(); break;
     case 'q':
       socket.disconnect();

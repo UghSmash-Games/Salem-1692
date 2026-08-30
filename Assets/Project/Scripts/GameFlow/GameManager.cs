@@ -19,6 +19,7 @@
  * FIXME: [Known bugs or issues]
 */
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Salem.Cards;
 using Salem.Data;
@@ -60,7 +61,12 @@ namespace Salem.GameFlow
         void Awake()
         {
             HandleInstance();
-            PopulatePlayers();
+            // Local mode discovers pre-placed tagged players. In networked mode the
+            // NetworkGameCoordinator instantiates and registers players on join.
+            if (PlayerService.Mode == GameMode.Local)
+            {
+                PopulatePlayers();
+            }
             isGameActive = true;
         }
 
@@ -72,7 +78,12 @@ namespace Salem.GameFlow
                 Debug.Log($" - Player: {p.PlayerNameText}, IsLocal: {p.IsLocalPlayer}");
             }
             */
-            UIManager.SetupLocalPlayerUI(PlayerService.GetLocalPlayer());
+            // Networked mode has no single local player (every human is remote).
+            var localPlayer = PlayerService.GetLocalPlayer();
+            if (localPlayer != null)
+            {
+                UIManager.SetupLocalPlayerUI(localPlayer);
+            }
 
             /*AIR CONSOLE DISABLED 4/28/26
             // In AirConsole mode, there is no single local player — input comes from phones
@@ -85,13 +96,31 @@ namespace Salem.GameFlow
         #endregion
 
         #region Accessor Functions
-        public void EvaluateEndGame()
+        /// <summary>
+        /// The ONE authority for "witches win": every alive player is a witch (≥1). This single
+        /// condition covers BOTH rulebook triggers — "witches eliminate all townspeople" AND "the
+        /// final remaining townsperson becomes a witch" (that player now holds a witch tryal → IsWitch
+        /// → not a non-witch). SALEM HAS NO PARITY WIN CONDITION — `witches >= nonWitches` was a
+        /// Werewolf/Mafia import and is NOT in the rulebook. Never reintroduce it. Used by both
+        /// EvaluateEndGame and CascadeWouldEndBothTeams so the definition can't drift.
+        /// </summary>
+        private static bool WitchesControl(IReadOnlyCollection<Player> aliveSet) =>
+            aliveSet != null && aliveSet.Count > 0 && aliveSet.All(p => p.IsWitch);
+
+        /// <param name="justTurnedWitch">
+        /// If this evaluation was triggered by the LAST non-witch just becoming a witch (via a
+        /// conspiracy swap — AddTryalCardAndNotify passes itself), that player LOSES per the rulebook
+        /// ("in which case that player loses") and is excluded from the winning witch team. Null for
+        /// every other trigger (eliminations, reveals) — those credit all alive witches.
+        /// </param>
+        public void EvaluateEndGame(Player justTurnedWitch = null)
         {
             var alive = PlayerService.GetAlivePlayers();
             if (alive == null || alive.Count == 0) return;
 
              // Townspeople win when ALL Witch Tryal cards in the game have been revealed.
             // Check across all players (alive and eliminated) for any unrevealed Witch cards.
+            // Checked FIRST so a reveal-win beats any elimination count (ties go to townspeople).
             bool anyUnrevealedWitch = PlayerService.All.Any(p =>
                 p.TryalCards != null && p.TryalCards.Any(c =>
                     c.TryalCardType == TryalCardType.Witch && !c.IsRevealed));
@@ -103,12 +132,10 @@ namespace Salem.GameFlow
                 return;
             }
 
-            // Witches win when all remaining alive players are witches
-            // (covers both: all townspeople eliminated, OR final townsperson became a witch)
-            int witches = alive.Count(p => p.IsWitch && !p.IsEliminated);
-            int nonWitches = alive.Count - witches;
+            int witches = alive.Count(p => p.IsWitch);
 
-            // villagers win if all witches dead
+            // Villagers also win if no witches remain alive (redundant with the reveal check above —
+            // an eliminated witch has all tryals revealed — but harmless and defensive).
             if (witches == 0)
             {
                 var winners = alive.Where(p => !p.IsWitch).ToList();
@@ -116,13 +143,42 @@ namespace Salem.GameFlow
                 return;
             }
 
-            // Witches also win at parity (witches >= townspeople)
-            if (witches >= nonWitches)
+            // Witches win iff every alive player is a witch (NO parity — see WitchesControl).
+            if (WitchesControl(alive))
             {
-                var winners = alive.Where(p => p.IsWitch).ToList();
-                RaiseGameEnded(new EndGameResult(Team.Witches, winners, "Witches reached parity"));
+                // "...in which case that player loses": exclude the last townsperson who JUST turned.
+                var winners = alive.Where(p => p.IsWitch && p != justTurnedWitch).ToList();
+                RaiseGameEnded(new EndGameResult(Team.Witches, winners, "All townspeople eliminated or turned"));
                 return;
             }
+        }
+
+        /// <summary>
+        /// #7 both-teams-lose rule (GENERAL — any matchmaker cascade). Non-mutating hypothetical: would
+        /// eliminating the matched <paramref name="partner"/> (on top of the already-eliminated
+        /// <paramref name="intendedTarget"/>) satisfy BOTH win conditions at once? If so the cascade must
+        /// spare the partner and only the intended target dies. Win logic stays centralized here; the
+        /// cascade in PlayerService.Eliminate just reads this. Reads only — mutates nothing.
+        /// </summary>
+        public bool CascadeWouldEndBothTeams(Player intendedTarget, Player partner)
+        {
+            if (partner == null) return false;
+
+            // Villagers win: no unrevealed Witch tryals remain, treating BOTH the intended target's and
+            // the partner's tryals as revealed (elimination reveals tryals — the double-kill reveals both).
+            bool wouldVillagersWin = !PlayerService.All.Any(p =>
+                p != partner && p != intendedTarget && p.TryalCards != null &&
+                p.TryalCards.Any(c => c.TryalCardType == TryalCardType.Witch && !c.IsRevealed));
+
+            // Witches win: among alive minus the partner (the intended target is already eliminated →
+            // already excluded from GetAlivePlayers()), every remaining player is a witch — i.e. the
+            // partner was the last non-witch. NO parity (see WitchesControl). Reachable only when the
+            // survivors are "sticky lost-card witches" (IsWitch true, witch tryal already revealed) —
+            // otherwise wouldVillagersWin can't also hold. Same reachability as before; correct condition.
+            var aliveAfter = PlayerService.GetAlivePlayers().Where(p => p != partner).ToList();
+            bool wouldWitchesWin = WitchesControl(aliveAfter);
+
+            return wouldVillagersWin && wouldWitchesWin;
         }
 
         // Call EvaluateEndGame() at key points:
@@ -173,10 +229,17 @@ namespace Salem.GameFlow
             }
         }
 
+        // Last raised end result + a simple query, so the synchronized-reveal helper
+        // can decide whether to emit game_over AFTER the reveal animation (the win
+        // check itself runs BEFORE the reveal, per the reveal-tryal sequence).
+        public EndGameResult LastEndResult { get; private set; }
+        public bool IsGameOver => gameAlreadyEnded;
+
         private void RaiseGameEnded(EndGameResult result)
         {
             if (gameAlreadyEnded) return;
             gameAlreadyEnded = true;
+            LastEndResult = result;
             if (pauseOnGameEnd) Time.timeScale = 0f;
             OnGameEnded?.Invoke(result);
         }

@@ -10,6 +10,11 @@ export type Screen =
   | 'idle'
   | 'action'
   | 'secret_phase'
+  | 'deck_rearrange'
+  | 'card_pick'
+  | 'confirm'
+  | 'target'
+  | 'tryal_pick'
   | 'spectator'
   | 'game_over';
 
@@ -17,7 +22,8 @@ export type Screen =
  * Decide which screen to render from the current store slices.
  *
  * Priority order:
- *   game_over  > eliminated (spectator) > secret phase > action > idle > join
+ *   game_over  > eliminated (spectator) > secret phase > confirm > target
+ *              > card pick > deck rearrange > action > idle > join
  */
 export function useCurrentScreen(): Screen {
   return useGameStore((s): Screen => {
@@ -32,6 +38,17 @@ export function useCurrentScreen(): Screen {
     if (me?.eliminated) return 'spectator';
 
     if (s.prompt) return 'secret_phase';
+    // A confirm / sub-target pick is a blocking mid-turn decision the host is actively awaiting
+    // before the play resolves — so both outrank the turn screens below them.
+    if (s.confirm) return 'confirm';
+    if (s.targetRequest) return 'target';
+    // Same class as the two above: the host is blocking on this pick before a mandatory reveal
+    // resolves, so it outranks the turn screens.
+    if (s.tryalPick) return 'tryal_pick';
+    // The John/Martha draft can arrive while the drafter is mid-turn (someone
+    // else was eliminated), so it takes precedence over their own action/rearrange.
+    if (s.cardPick) return 'card_pick';
+    if (s.deckRearrange) return 'deck_rearrange';
     if (s.actionRequest) return 'action';
 
     return 'idle';

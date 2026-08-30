@@ -21,6 +21,7 @@ using Salem.Cards;
 using Salem.Data;
 using Salem.Deck;
 using Salem.Gameplay.Setup;
+using Salem.Networking;
 using Salem.Players;
 using Salem.UI;
 using Unity.VisualScripting;
@@ -45,18 +46,106 @@ namespace Salem.GameFlow
         [SerializeField] private DeckManager DeckManager;
         [SerializeField] private float aiDecisionDelay = 0.25f;
         [SerializeField] private bool witchesCanTargetWitches = false;
-        [SerializeField] private bool constableCanSelfProtect = false;
-        [SerializeField] private string constablePrompt = "Choose a player to protect";
-        [SerializeField] private string witchPrompt = "Choose a player to eliminate";
-        [SerializeField] private string dawnBlackCatPrompt = "Witches choose who receives the Black Cat";
         [SerializeField] private float confessionAiChance = 0.15f;
         [SerializeField] private string confessionPrompt = "Confess? Reveal a Tryal to protect yourself.";
+
+        // Per-phase secret-phase timeouts (seconds). Backstop only — a phase normally
+        // resolves the instant every connected human Confirms (Item 1). On timeout the
+        // phase resolves with whatever was recorded; existing safety nets cover missing
+        // input (random-fill un-voted witches; no gavel if the constable didn't act).
+        // One deadline per phase, identical for everyone → tardiness leaks nothing.
+        [Header("Secret-phase timeouts (s)")]
+        [SerializeField] private float dawnTimeout = 30f;
+        [SerializeField] private float witchVoteTimeout = 45f;
+        [SerializeField] private float constableTimeout = 30f;
+        [SerializeField] private float confessTimeout = 20f;   // used by the Item 4 confess rework
+
+        // Conspiracy step 1: how long the DRAWER has to choose which of the black-cat holder's
+        // face-down tryals turns. NOT a secret-phase window — conspiracy is a public event and only
+        // one player is being asked — but it sits here with the other host-owned deadlines. No
+        // answer → a random face-down tryal turns (the reveal is mandatory).
+        [SerializeField] private float ConspiracyTryalPickSeconds = 25f;
+
+        // Conspiracy step 2: the shared window for the SIMULTANEOUS pass. One value for everyone —
+        // a per-player window would make the phase resolve in submission order and stop being
+        // simultaneous. No answer → that player takes a random face-down card from their left.
+        [SerializeField] private float ConspiracyPassSeconds = 30f;
+
+        // Lead time for synchronized reveals: the host emits phase_resolve with a
+        // revealAt this many seconds in the future, then host + mirrors animate the
+        // reveal at that shared wall-clock moment (per the /reveal-tryal skill).
+        [SerializeField] private float revealLeadSeconds = 3f;
         [SerializeField] private TableLayoutController tableLayoutController;
-        [SerializeField] private ConfessionChoiceUI confessionChoiceUI;
         public static GamePhaseManager Instance { get; private set; }
         public GamePhase CurrentPhase { get; private set; }
+        /// <summary>True once witches have been revealed to each other at dawn.
+        /// The broadcaster includes fellow-witch names in private_state only after this.</summary>
+        public bool WitchesRevealed { get; private set; }
+
+        // Live tentative tally for the current witch round (acting player → tentative
+        // target). Relayed to fellow witches via private_state. Empty outside a round.
+        private readonly Dictionary<Player, Player> currentSecretTally = new();
+        public bool IsWitchVoteRoundActive { get; private set; }
+
+        /// <summary>The other witches' tentative picks for `recipient` (excludes self),
+        /// for the witch-only live tally. Empty outside a witch round.</summary>
+        public WitchVoteMsg[] BuildWitchTallyFor(Player recipient)
+        {
+            if (!IsWitchVoteRoundActive) return new WitchVoteMsg[0];
+            return currentSecretTally
+                .Where(kv => kv.Key != null && kv.Key != recipient)
+                .Select(kv => new WitchVoteMsg
+                {
+                    witch = kv.Key.PlayerNameText,
+                    target = kv.Value != null ? kv.Value.PlayerNameText : "",
+                })
+                .ToArray();
+        }
         public delegate void PhaseChangeHandler(GamePhase newPhase);
         public event PhaseChangeHandler OnPhaseChange;
+
+        /// <summary>
+        /// A confessor's tryal has just been flipped, AT the synchronized revealAt.
+        ///
+        /// Distinct from Player.TryalCardRevealed, which says a card turned but not WHY. Consumers
+        /// (the host reveal overlay, the public event log) need to distinguish "confessed and was
+        /// spared" from "was killed and exposed" — and inferring it from "targetId isn't the
+        /// victim" would silently break the day EmitSynchronizedReveal is reused for accusation or
+        /// conspiracy reveals, which its own docblock anticipates.
+        ///
+        /// PUBLIC by the rulebook: a confession flip is shown to the table. It fires at revealAt,
+        /// never during the masked confess window, so it cannot leak who confessed early.
+        /// </summary>
+        public static event System.Action<Player, TryalCard> OnConfessionRevealed;
+
+        /// <summary>
+        /// The constable's gavel token has been placed, announced AT the synchronized revealAt.
+        ///
+        /// PUBLIC by the rulebook. The moderator script (p11) has the token physically "put in
+        /// front of the player who the constable points to" and THEN everyone opens their eyes, and
+        /// p8 lists it beside confession and asylum as one of the three visible reasons a player
+        /// survives the night. It is therefore visible whether or not the witches targeted them.
+        ///
+        /// ⛔ Carries the RECIPIENT only. Never the constable — that identity is secret, and the
+        /// physical token does not reveal who placed it either. Emitted with actorId null.
+        /// </summary>
+        public static event System.Action<Player> OnGavelPlaced;
+
+        /// <summary>
+        /// Setup is complete: tryals dealt, Town Hall cards assigned, deck built. Fires ONCE, after
+        /// GameSetup.SetupNewGame and GameTurnManager.Initialize, immediately BEFORE the change to
+        /// Dawn — so the log opens with "The table is set" and only then "Dawn breaks over Salem".
+        ///
+        /// Carries NOTHING. That is deliberate and load-bearing: setup is the moment witch and
+        /// constable tryals are dealt, so any argument here would be an argument about who got what.
+        /// The renderer's copy is a fixed string, and a parameterless event cannot be "improved"
+        /// into a leak by a later call site.
+        ///
+        /// Distinct from a phase_changed on Setup: that phase renders as null (dropped) because the
+        /// interesting fact is the DEAL COMPLETING, not the phase being entered.
+        /// </summary>
+        public static event System.Action OnGameStarted;
+
         public KeyCode DebugAdvancePhaseKey = KeyCode.P;
 
         private GameSetup GameSetup;
@@ -86,6 +175,28 @@ namespace Salem.GameFlow
 
         void Start()
         {
+            // Local mode auto-starts. Networked mode waits for the host to press
+            // Start (NetworkGameCoordinator calls BeginGame() after the lobby).
+            if (PlayerService.Mode == GameMode.Networked)
+            {
+                Debug.Log("[GamePhaseManager] Networked mode — waiting for host to start the game.");
+                return;
+            }
+            StartGameInternal();
+        }
+
+        /// <summary>Begin the game (run Setup → Dawn → Day). Called by the host
+        /// in networked mode after players have joined; safe to call once.</summary>
+        public void BeginGame()
+        {
+            StartGameInternal();
+        }
+
+        private bool gameStarted;
+        private void StartGameInternal()
+        {
+            if (gameStarted) return;
+            gameStarted = true;
             StartCoroutine(ChangePhase(GamePhase.Setup, PhaseChangeDelay));
         }
         #endregion
@@ -167,22 +278,31 @@ namespace Salem.GameFlow
         {
             yield return GameSetup.SetupNewGame(PlayerService.All);
             GameTurnManager.Initialize();
+
+            // The deal is done and the board is in its opening state. Announced BEFORE the Dawn
+            // change so the log reads in chronological order.
+            OnGameStarted?.Invoke();
+
             yield return ChangePhase(GamePhase.Dawn, PhaseChangeDelay);
         }
 
         private void StartDawnPhase()
         {
-            //TODO: Reveal Witches to each other
             StartCoroutine(DawnPhaseRoutine());
         }
 
         private IEnumerator DawnPhaseRoutine()
         {
-            //Debug.Log("Dawn Phase Started: Witches vote on who receives the Black Cat.");
+            //Debug.Log("Dawn Phase Started: reveal witches, then witches vote on the Black Cat.");
 
             var witches = PlayerService.GetAliveWitches();
             var allPlayers = PlayerService.GetAlivePlayers();
             var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+
+            // Reveal witches to each other: flag on, then push private_state so each
+            // witch's phone receives their fellow-witch list (the //TODO at dawn).
+            WitchesRevealed = true;
+            FindFirstObjectByType<NetworkStateBroadcaster>()?.SendPrivateStates();
 
             // Retrieve the Black Cat card held during setup
             var blackCatCard = DeckManager != null ? DeckManager.GetHeldBlackCat() : null;
@@ -199,45 +319,24 @@ namespace Salem.GameFlow
                 yield break;
             }
 
-            // Collect a vote from each witch
+            // Masked black-cat placement: every player is prompted "Place the black
+            // cat"; only witches are acting. Collect all witch votes over the network.
             var votes = new Dictionary<Player, Player>();
+            yield return RunNetworkedSecretPhase(
+                "black_cat",
+                allPlayers,
+                p => p.IsWitch,
+                (witch, name) =>
+                {
+                    var target = ResolveByName(name);
+                    if (target != null) votes[witch] = target;
+                },
+                shareTally: true, timeoutSeconds: TimerSettings.Scale(dawnTimeout));
 
-            foreach (var witch in witches)
+            if (votes.Count == 0)
             {
-                if (witch.IsLocalPlayer && witch.IsHuman) // && !PlayerService.IsAirConsoleMode) AIRCONSOLE TEMP DISABLED 4/28/26
-                {
-                    // Human witch: show UI
-                    if (tableLayoutController != null)
-                    {
-                        bool done = false;
-
-                        tableLayoutController.BeginTargetSelection(
-                            witch,
-                            "Vote: Who receives the Black Cat?",
-                            target =>
-                                target != null &&
-                                !target.IsEliminated,
-                            target =>
-                            {
-                                votes[witch] = target;
-                                done = true;
-                            }
-                        );
-
-                        yield return new WaitUntil(() => done);
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[GamePhaseManager] Missing TableLayoutController. Black Cat vote defaulting to random.");
-                        votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
-                    }
-                }
-                else
-                {
-                    // AI witch: pick randomly
-                    yield return new WaitForSeconds(aiDecisionDelay);
-                    votes[witch] = allPlayers[rng.NextInt(0, allPlayers.Count)];
-                }
+                // No usable votes — fall back to a random placement so dawn still resolves.
+                votes[witches[0]] = allPlayers[rng.NextInt(0, allPlayers.Count)];
             }
 
             // Tally votes — majority wins, random tiebreak
@@ -296,6 +395,14 @@ namespace Salem.GameFlow
 
             // Step 1: Drawer chooses a Tryal to reveal on the Black Cat holder
             var blackCatHolder = alivePlayers.Find(p => p.IsBlackCatHolder);
+            // Mary Warren is immune to the Black Cat's ILL EFFECT: she may hold the card, but the
+            // Conspiracy reveal does not fire on her. Treat exactly as "no player has the black cat"
+            // (skip the reveal, no redirect to another player).
+            if (blackCatHolder != null && blackCatHolder.HasTownHall(TownhallName.MaryWarren))
+            {
+                Debug.Log($"[Conspiracy] Black Cat holder {blackCatHolder.PlayerNameText} is Mary Warren — immune; skipping reveal.");
+                blackCatHolder = null;
+            }
             if (blackCatHolder != null)
             {
                 var unrevealed = new List<int>();
@@ -304,21 +411,66 @@ namespace Salem.GameFlow
 
                 if (unrevealed.Count > 0)
                 {
-                    if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
+                    // CHOOSE first, FLIP later. Only the flip is deferred to the shared revealAt —
+                    // the drawer's decision happens before the countdown starts, so no screen is
+                    // waiting on a human while the clock runs.
+                    int chosenIndex = -1;
+
+                    if (drawer != null && drawer.Input is NetworkInput)
+                    {
+                        // Rulebook p6: "the person who drew conspiracy reveals one tryal card
+                        // belonging to the player with the black cat" — the DRAWER's choice.
+                        // Awaited INLINE rather than via the PendingTryalRevealTarget flag the
+                        // accusation path uses: conspiracy resolves AFTER the drawer's turn has
+                        // ended, so NetworkInput.RunTurn would never drain the flag. This is already
+                        // a coroutine, so it can simply wait.
+                        // abortOnTurnChange: FALSE — conspiracy runs on a detached coroutine AFTER
+                        // the drawer's turn ended, so the TurnId guard would abort this instantly.
+                        yield return drawer.Input.RequestTryal(
+                            drawer, blackCatHolder, "conspiracy_reveal",
+                            TimerSettings.Scale(ConspiracyTryalPickSeconds), false, idx => chosenIndex = idx);
+                    }
+                    else if (drawer != null && drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
                     {
                         bool done = false;
                         tableLayoutController.BeginTryalSelection(blackCatHolder, idx =>
                         {
-                            blackCatHolder.RevealTryalCard(idx);
+                            chosenIndex = idx;
                             done = true;
                         });
                         yield return new WaitUntil(() => done);
                     }
                     else
                     {
+                        // AI (or no drawer): random, as before.
                         yield return new WaitForSeconds(aiDecisionDelay);
-                        int pick = unrevealed[rng.NextInt(0, unrevealed.Count)];
-                        blackCatHolder.RevealTryalCard(pick);
+                        chosenIndex = unrevealed[rng.NextInt(0, unrevealed.Count)];
+                    }
+
+                    // Synchronized flip: host, mirrors and phones turn the card on the same
+                    // wall-clock beat instead of it popping into board state. No elimination —
+                    // a conspiracy reveal turns one card and kills no one.
+                    if (chosenIndex >= 0)
+                    {
+                        var holder = blackCatHolder;
+                        int revealIndex = chosenIndex;
+                        yield return EmitSynchronizedReveal(
+                            applyReveal: () => holder.RevealTryalCard(revealIndex),
+                            elimination: null);
+                    }
+
+                    // Anne Putnam: she just caused a tryal to be revealed on ANOTHER player.
+                    // This reveal fires on a detached coroutine AFTER her EndTurn, so it can't feed
+                    // the end-of-turn accusation tally — grant her the 2 cards here instead (timing
+                    // ≈ end of turn, since drawing Conspiracy ends her turn). Self-reveal excluded
+                    // (blackCatHolder == drawer → she revealed her OWN tryal), matching the
+                    // accusation path's owner != currentPlayer.
+                    if (drawer != null && blackCatHolder != drawer
+                        && drawer.HasTownHall(TownhallName.AnnePutnam))
+                    {
+                        var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+                        dm?.DrawMultipleCards(drawer.HandManager, 2);
+                        Debug.Log($"[TownHall] Anne Putnam ({drawer.PlayerNameText}) draws 2 from Conspiracy reveal on {blackCatHolder.PlayerNameText}.");
                     }
                 }
             }
@@ -327,29 +479,17 @@ namespace Salem.GameFlow
                 Debug.Log("[Conspiracy] No Black Cat in play — skipping Tryal reveal step.");
             }
 
-            // Step 2: Clockwise Tryal pass — each player takes one unrevealed Tryal from the player to their left
+            // ⚠ RE-READ the alive set: step 1's reveal can ELIMINATE the black-cat holder (it was
+            // their last witch card), and the list captured at the top of this routine would still
+            // include them — they would both give and receive a card while dead.
+            alivePlayers = PlayerService.GetAlivePlayers();
+
+            // Step 2: the simultaneous pass — rulebook p6: "All players SIMULTANEOUSLY CHOOSE a
+            // face-down (unrevealed) tryal card from the player on their left and add it to their own
+            // set." Every player picks; each is the source for exactly one taker (their right).
             if (alivePlayers.Count >= 2)
             {
-                // Build the pass: each player takes from the player to their left (previous index, wrapping)
-                var passedCards = new TryalCard[alivePlayers.Count];
-                for (int i = 0; i < alivePlayers.Count; i++)
-                {
-                    int leftIdx = (i - 1 + alivePlayers.Count) % alivePlayers.Count;
-                    var leftPlayer = alivePlayers[leftIdx];
-                    int? tryalIdx = leftPlayer.GetRandomUnrevealedTryalIndex(rng);
-                    if (tryalIdx.HasValue)
-                        passedCards[i] = leftPlayer.RemoveTryalAt(tryalIdx.Value);
-                }
-
-                // Distribute received cards
-                for (int i = 0; i < alivePlayers.Count; i++)
-                {
-                    if (passedCards[i] != null)
-                    {
-                        Debug.Log($"[Conspiracy] {alivePlayers[i].PlayerNameText} received a {passedCards[i].TryalCardType} from their left (private).");
-                        alivePlayers[i].AddTryalCardAndNotify(passedCards[i]);
-                    }
-                }
+                yield return RunConspiracyPass(alivePlayers, rng);
             }
 
             // Step 3: Rearrange face-down Tryals (auto-shuffle for now)
@@ -401,7 +541,11 @@ namespace Salem.GameFlow
                 return;
             }
 
-            NightResolver.Resolve(rng, null, witchesCanTargetWitches);
+            // Degenerate fallback (manager disabled / sequence already running): resolve
+            // with an empty plan and eliminate immediately — no synchronized reveal here.
+            var outcome = NightResolver.Resolve(rng, null, witchesCanTargetWitches);
+            if (outcome.Victim != null && outcome.Eliminated)
+                ApplyNightKill(outcome.Victim);
 
             if (heldNightCard != null && DeckManager != null)
             {
@@ -441,208 +585,626 @@ namespace Salem.GameFlow
 
             var plan = new NightResolver.NightPlan();
             var alivePlayers = PlayerService.GetAlivePlayers();
-            var localPlayer = PlayerService.GetLocalPlayer();
 
-            // Rules order: witches vote, then constable protects, then confession round
-            yield return ExecuteLocalWitchChoice(alivePlayers, localPlayer, plan, rng);
-            yield return ExecuteConstableChoice(alivePlayers, localPlayer, plan, rng);
-            yield return ExecuteConfessionRound(alivePlayers, localPlayer, plan, rng);
+            // Two masked rounds into ONE plan. Every player sees and taps through both;
+            // only the acting role is recorded each round (host-side discard). No
+            // intermediate broadcast → witches never learn the constable's pick and the
+            // constable never sees the kill tally. A dual-role evil constable is acting
+            // in BOTH rounds and gets both actions.
 
-            NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
-            GameManager.Instance.EvaluateEndGame();
+            // Round 1 — witch kill vote. Collects ALL witch votes over the network.
+            yield return RunNetworkedSecretPhase(
+                "night_vote",
+                alivePlayers,
+                p => p.IsWitch,
+                (witch, name) =>
+                {
+                    var target = ResolveByName(name);
+                    if (target != null) plan.SetWitchVote(witch, target);
+                },
+                shareTally: true, timeoutSeconds: TimerSettings.Scale(witchVoteTimeout));
+
+            // Round 2 — constable save.
+            yield return RunNetworkedSecretPhase(
+                "constable_save",
+                alivePlayers,
+                p => p.IsConstable,
+                (constable, name) =>
+                {
+                    var target = ResolveByName(name);
+                    // The constable may not give the gavel to themselves (rulebook p7).
+                    // The full target list is kept identical for all (masking); a
+                    // self-pick is simply void here as the authoritative backstop.
+                    // NOTE: the 2-3 player ghost variant DOES allow self-protect
+                    // (rulebook p17) — re-enable for that mode in Phase 6.
+                    if (target != null && target != constable) plan.ConstableTarget = target;
+                },
+                shareTally: false, timeoutSeconds: TimerSettings.Scale(constableTimeout));
+
+            // Masked, timed confess window. Every phone shows the same confess prompt; a
+            // confession reveals one of the player's OWN tryals for immunity, but the reveal
+            // is DEFERRED to revealAt (timing masked during the window). Records immunity into
+            // plan.Confessors and the chosen tryal index into pendingConfessions.
+            var pendingConfessions = new Dictionary<Player, int>();
+            yield return RunConfessWindow(alivePlayers, plan, pendingConfessions, rng);
+
+            // Resolve who the night targets, then reveal the outcome — confessed tryals and
+            // the elimination flip together, in sync across host + mirrors (phase_resolve).
+            // Win conditions are checked BEFORE the animation inside EmitSynchronizedReveal.
+            var outcome = NightResolver.Resolve(rng, plan, witchesCanTargetWitches);
+            yield return RevealNightOutcome(outcome, pendingConfessions, plan.ConstableTarget);
         }
 
-        private IEnumerator ExecuteConfessionRound(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
+        /// <summary>
+        /// Turn a NightResolver outcome into a synchronized reveal. Confessed tryals (from the
+        /// confess window, deferred) flip PUBLICLY alongside the night outcome at revealAt —
+        /// confession is a public act; only its TIMING was masked while the window was open.
+        /// An elimination reveals all of the victim's tryals (routed through TrialService so
+        /// the multiple-witch-card rule applies) and eliminates; a save emits a "no elimination"
+        /// result. With no victim and no confessions, nothing reveals.
+        /// </summary>
+        private IEnumerator RevealNightOutcome(NightResolver.NightOutcome outcome,
+                                               Dictionary<Player, int> pendingConfessions,
+                                               Player gavelTarget)
         {
-            Debug.Log("[GamePhaseManager] Confession round begins.");
+            bool hasConfessions = pendingConfessions != null && pendingConfessions.Count > 0;
 
-            foreach (var player in alivePlayers)
+            // A gavel placed on an UNTARGETED player still has to be announced — the token is
+            // visible once eyes open — so it alone is enough to warrant a synchronized reveal.
+            if (outcome.Victim == null && !hasConfessions && gavelTarget == null)
             {
-                if (player.IsEliminated) continue;
+                GameManager.Instance?.EvaluateEndGame();
+                yield break;
+            }
 
-                // Check if this player has any unrevealed Tryals to confess
-                bool hasUnrevealed = player.TryalCards.Any(c => !c.IsRevealed);
-                if (!hasUnrevealed) continue;
-
-                if (player == localPlayer && player.IsHuman && tableLayoutController != null)
+            // Flip every confessed tryal face-up (public). Routed through RevealTryalCard so
+            // the normal reveal side effects apply (a witch who confessed their last witch
+            // card is handled by TrialService, like any other reveal).
+            void RevealConfessions()
+            {
+                if (pendingConfessions == null) return;
+                foreach (var kv in pendingConfessions)
                 {
-                    bool choiceMade = false;
-                    ConfessionChoiceUI.ConfessionChoice choice = ConfessionChoiceUI.ConfessionChoice.Skip;
-
-                    confessionChoiceUI.Open(player, selectedChoice =>
+                    var cp = kv.Key; int idx = kv.Value;
+                    if (cp != null && idx >= 0 && idx < cp.TryalCards.Count &&
+                        cp.TryalCards[idx] != null && !cp.TryalCards[idx].IsRevealed)
                     {
-                        choice = selectedChoice;
-                        choiceMade = true;
+                        var card = cp.TryalCards[idx];
+                        cp.RevealTryalCard(idx);
+
+                        // Announce it AS A CONFESSION. RevealTryalCard already fired the generic
+                        // tryal_revealed; this says WHY, which the generic event cannot express.
+                        // Fires at revealAt — the flip is public by the rulebook at that moment, so
+                        // the masked confess-window timing is untouched.
+                        OnConfessionRevealed?.Invoke(cp, card);
+                    }
+                }
+            }
+
+            // Announced at revealAt, when eyes open and the token becomes visible — never during
+            // the constable's secret round, which would leak the save while it still matters.
+            void AnnounceGavel()
+            {
+                if (gavelTarget != null) OnGavelPlaced?.Invoke(gavelTarget);
+            }
+
+            if (outcome.Victim != null && outcome.Eliminated)
+            {
+                var victim = outcome.Victim;
+                yield return EmitSynchronizedReveal(
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); ApplyNightKill(victim); },
+                    elimination: new EliminationResultMsg { playerId = PublicIdOf(victim), eliminated = true, savedBy = "" });
+            }
+            else if (outcome.Victim != null)
+            {
+                // Targeted but saved (constable / confession). Still flip confessed tryals
+                // and announce the outcome in sync.
+                yield return EmitSynchronizedReveal(
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); },
+                    elimination: new EliminationResultMsg
+                    {
+                        playerId = PublicIdOf(outcome.Victim),
+                        eliminated = false,
+                        savedBy = outcome.SavedByLabel ?? "",
                     });
-
-                    yield return new WaitUntil(() => choiceMade);
-
-                    if (choice == ConfessionChoiceUI.ConfessionChoice.FakeConfess)
-                    {
-                        player.ConsumeTownHallCharge();
-                        plan.Confessors.Add(player);
-
-                        Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) used fake confession ability.");
-                    }
-                    else if (choice == ConfessionChoiceUI.ConfessionChoice.Confess)
-                    {
-                        bool tryalChosen = false;
-
-                        tableLayoutController.BeginTryalSelection(player, idx =>
-                        {
-                            player.RevealTryalCard(idx);
-                            plan.Confessors.Add(player);
-                            tryalChosen = true;
-                        });
-
-                        yield return new WaitUntil(() => tryalChosen);
-
-                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} confessed.");
-                    }
-                    else
-                    {
-                        Debug.Log($"[GamePhaseManager] {player.PlayerNameText} skipped confession.");
-                    }
-                }
-                else
-                {
-                    // AI or non-local: small chance to confess if they have a safe Tryal to reveal
-                    yield return new WaitForSeconds(aiDecisionDelay);
-
-                    // William Phipps AI: use fake confession to protect Witch tryals
-                    bool canFakeConfess = player.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && player.townHallAbilityCharges > 0;
-                    if (canFakeConfess && player.IsWitch && rng.NextInt(0, 100) < 50)
-                    {
-                        player.ConsumeTownHallCharge();
-                        plan.Confessors.Add(player);
-                        Debug.Log($"[TownHall] William Phipps ({player.PlayerNameText}) (AI) used fake confession.");
-                        continue;
-                    }
-
-                    bool hasNonWitchToReveal = player.TryalCards.Any(c =>
-                        !c.IsRevealed && c.TryalCardType != TryalCardType.Witch);
-
-                    if (hasNonWitchToReveal && rng.NextInt(0, 100) < (int)(confessionAiChance * 100))
-                    {
-                        if (player.TryConfessToSurvive())
-                        {
-                            plan.Confessors.Add(player);
-                            Debug.Log($"[GamePhaseManager] {player.PlayerNameText} (AI) confessed.");
-                        }
-                    }
-                }
-            }
-
-            Debug.Log("[GamePhaseManager] Confession round ends.");
-        }
-
-        private IEnumerator ExecuteConstableChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
-        {
-            var constable = alivePlayers.FirstOrDefault(p => p.IsConstable);
-            if (constable == null)
-                yield break;
-
-            var candidates = alivePlayers
-                .Where(p => constableCanSelfProtect || p != constable)
-                .ToList();
-
-            if (candidates.Count == 0)
-                yield break;
-
-            if (constable == localPlayer && constable.IsHuman && tableLayoutController != null)
-            {
-                bool done = false;
-                Player chosen = null;
-
-                tableLayoutController.BeginTargetSelection(
-                    constable,
-                    constablePrompt,
-                    target =>
-                        target != null &&
-                        !target.IsEliminated &&
-                        (constableCanSelfProtect || target != constable),
-                    target =>
-                    {
-                        chosen = target;
-                        done = true;
-                    }
-                );
-
-                yield return new WaitUntil(() => done);
-
-                if (done && chosen != null)
-                {
-                    plan.ConstableTarget = chosen;
-                }
-                else if (candidates.Count > 0)
-                {
-                    Debug.LogWarning("[GamePhaseManager] Constable selection cancelled; defaulting to random.");
-                    plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
-                }
             }
             else
             {
-                if (constable == localPlayer && tableLayoutController == null)
-                    Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; constable protection defaulting to random.");
-
-                yield return new WaitForSeconds(aiDecisionDelay);
-                plan.ConstableTarget = candidates[rng.NextInt(0, candidates.Count)];
+                // No victim, but confessions happened — reveal them publicly in sync.
+                yield return EmitSynchronizedReveal(
+                    applyReveal: () => { AnnounceGavel(); RevealConfessions(); }, elimination: null);
             }
         }
 
-        private IEnumerator ExecuteLocalWitchChoice(List<Player> alivePlayers, Player localPlayer, NightResolver.NightPlan plan, IRng rng)
+        /// <summary>
+        /// Synchronized reveal per the /reveal-tryal skill. The reveal is DEFERRED in
+        /// whole to a shared future wall-clock moment so the host screen, mirrors, and
+        /// phones all reveal together (the host renders from its own model, so the model
+        /// mutation itself is held until revealAt — otherwise the host would reveal early).
+        ///  1) emit phase_resolve { revealAt = now + revealLeadSeconds } to host + mirrors.
+        ///  2) wait until revealAt (REALTIME — a win sets Time.timeScale = 0).
+        ///  3) AT revealAt: applyReveal mutates the model (this fires the host's own UI
+        ///     and the auto game_state_update broadcast), EvaluateEndGame runs BEFORE the
+        ///     result is sent, then elimination_result and — only after the reveal —
+        ///     game_over. Reveal-then-game_over ordering is preserved.
+        /// The night routine awaits this coroutine, so nothing acts on the game between
+        /// (1) and (3). Reusable for confession reveals (Item 4) and accusation/conspiracy.
+        /// </summary>
+        /// <summary>
+        /// Conspiracy step 2 (rulebook p6): "All players SIMULTANEOUSLY choose a face-down
+        /// (unrevealed) tryal card from the player on their left and add it to their own set."
+        ///
+        /// 🔴 SIMULTANEOUS IS THE RULE, AND IT IS STRUCTURAL HERE. Every prompt goes out in the same
+        /// frame, on one shared deadline, and NOTHING moves until every answer is in. Resolving each
+        /// pick as it arrives would break the rulebook (a player could take from a neighbour whose
+        /// row had already changed) and would leak order of play.
+        ///
+        /// ATOMICITY: all takes are computed first, then applied — removals for every source, then
+        /// additions for every taker. Each player is the source for EXACTLY ONE taker (the player to
+        /// their right), so one card leaves each row and the captured indices stay valid across the
+        /// removal pass. Adding first would let a just-received card be passed onward in the same
+        /// round.
+        ///
+        /// MASKING: unlike the night vote there is no `acting` subset to hide — EVERY player picks,
+        /// so submission timing cannot separate anyone by role. The prompts are structurally
+        /// identical (same event, same shape, same window); only the neighbour and their face-down
+        /// COUNT differ, and that count is already publicly derivable from the board
+        /// (tryalTotal − revealedTryals). The chooser picks blind, exactly as at a table.
+        ///
+        /// The card's identity is revealed only to the RECEIVER, via AddTryalCardAndNotify's private
+        /// state — the giver learns nothing, and no public event names the card.
+        /// </summary>
+        private IEnumerator RunConspiracyPass(List<Player> alivePlayers, IRng rng)
         {
-            if (localPlayer == null || !localPlayer.IsWitch || localPlayer.IsEliminated)
-                yield break;
+            int n = alivePlayers.Count;
+            var chosen = new int[n];        // real TryalCards index on the LEFT neighbour, per taker
+            var pending = new bool[n];
+            for (int i = 0; i < n; i++) chosen[i] = -1;
 
-            var eligible = alivePlayers
-                .Where(p => !p.hasAsylum)
-                .ToList();
-
-            if (!witchesCanTargetWitches)
-                eligible = eligible.Where(p => !p.IsWitch).ToList();
-
-            eligible = eligible.Distinct().ToList();
-
-            if (eligible.Count == 0)
-                yield break;
-
-            if (tableLayoutController != null)
+            // Fire every prompt in the SAME frame so the window is genuinely shared.
+            for (int i = 0; i < n; i++)
             {
-                bool done = false;
-                Player voteTarget = null;
+                int taker = i;
+                var takerPlayer = alivePlayers[i];
+                var leftPlayer = alivePlayers[(i - 1 + n) % n];
+                pending[taker] = true;
+                StartCoroutine(AskConspiracyPick(takerPlayer, leftPlayer, rng, idx =>
+                {
+                    chosen[taker] = idx;
+                    pending[taker] = false;
+                }));
+            }
 
-                tableLayoutController.BeginTargetSelection(
-                    localPlayer,
-                    witchPrompt,
-                    target =>
-                        target != null &&
-                        eligible.Contains(target),
-                    target =>
+            // One shared deadline. Every RequestTryal carries the same window, so this resolves when
+            // the slowest answer lands or that window expires — never per-player.
+            float deadline = Time.realtimeSinceStartup + TimerSettings.Scale(ConspiracyPassSeconds) + 2f;
+            yield return new WaitUntil(() =>
+                System.Array.TrueForAll(pending, p => !p) || Time.realtimeSinceStartup >= deadline);
+
+            // ── Apply, atomically ──
+            var passedCards = new TryalCard[n];
+            for (int i = 0; i < n; i++)
+            {
+                if (chosen[i] < 0) continue;                     // left neighbour had nothing face-down
+                var leftPlayer = alivePlayers[(i - 1 + n) % n];
+                if (chosen[i] >= leftPlayer.TryalCards.Count) continue;   // defensive
+                passedCards[i] = leftPlayer.RemoveTryalAt(chosen[i]);
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                if (passedCards[i] == null) continue;
+                Debug.Log($"[Conspiracy] {alivePlayers[i].PlayerNameText} received a {passedCards[i].TryalCardType} from their left (private).");
+                alivePlayers[i].AddTryalCardAndNotify(passedCards[i]);
+            }
+        }
+
+        /// <summary>
+        /// One player's half of the simultaneous pass. Networked humans are prompted; AI and local
+        /// seats resolve immediately at random, exactly as the whole step did before.
+        /// `abortOnTurnChange: false` — conspiracy runs outside any turn.
+        /// </summary>
+        private IEnumerator AskConspiracyPick(Player taker, Player leftPlayer, IRng rng,
+                                              System.Action<int> onChosen)
+        {
+            if (taker == null || leftPlayer == null) { onChosen?.Invoke(-1); yield break; }
+
+            if (taker.Input is NetworkInput && taker.IsConnected)
+            {
+                yield return taker.Input.RequestTryal(taker, leftPlayer, "conspiracy_pass",
+                                                      TimerSettings.Scale(ConspiracyPassSeconds), false, onChosen);
+                yield break;
+            }
+
+            int? idx = leftPlayer.GetRandomUnrevealedTryalIndex(rng);
+            onChosen?.Invoke(idx ?? -1);
+        }
+
+        /// <summary>
+        /// Turn ONE tryal as a synchronized dramatic beat — the accusation-threshold and piety-loss
+        /// reveals. Await this from a coroutine; use <see cref="RevealTryalSynchronized"/> from a
+        /// synchronous call site.
+        ///
+        /// WHY IT EXISTS: these two paths used to call RevealTryalCard directly, so the card simply
+        /// appeared in board state with no beat on the host and no beat on any mirror. Night and
+        /// conspiracy reveals had one; these did not, which is the half of the Phase-7 checkpoint's
+        /// "dramatic and synchronized" line that was missing.
+        ///
+        /// `elimination: null` DELIBERATELY. Unlike a night kill, elimination here is a CONSEQUENCE
+        /// discovered while applying the reveal (the turned card was their last Witch), not something
+        /// known beforehand — so there is no outcome to announce up front. The death still reaches
+        /// every screen: `applyReveal` runs inside the shared beat, the public broadcast at revealAt
+        /// carries the eliminated flag, and `player_eliminated` still fires into the event log.
+        ///
+        /// OFFLINE IS UNCHANGED: EmitSynchronizedReveal applies immediately when not networked, so a
+        /// local/AI-only game behaves exactly as it did before this existed.
+        /// </summary>
+        public IEnumerator RevealTryalSynchronizedRoutine(Player owner, int index)
+        {
+            if (owner == null || index < 0 || index >= owner.TryalCards.Count) yield break;
+            if (owner.TryalCards[index] == null || owner.TryalCards[index].IsRevealed) yield break;
+
+            yield return EmitSynchronizedReveal(
+                applyReveal: () => owner.RevealTryalCard(index, fromAccusation: true),
+                elimination: null);
+        }
+
+        /// <summary>
+        /// Fire-and-forget form of <see cref="RevealTryalSynchronizedRoutine"/>, for the SYNCHRONOUS
+        /// reveal call sites (a local human's table pick, an AI's pick) that cannot yield.
+        ///
+        /// Self-driving on purpose — it starts its own coroutine rather than queueing work for
+        /// someone else to drain. A queue nobody drained would silently swallow a MANDATORY reveal,
+        /// which is a far worse failure than a reveal landing a beat late.
+        /// </summary>
+        public void RevealTryalSynchronized(Player owner, int index)
+        {
+            if (!isActiveAndEnabled) return;
+            StartCoroutine(RevealTryalSynchronizedRoutine(owner, index));
+        }
+
+        private IEnumerator EmitSynchronizedReveal(System.Action applyReveal, EliminationResultMsg elimination)
+        {
+            var nm = NetworkManager.Instance;
+            bool networked = nm != null && nm.IsConnected;
+
+            // Offline/local: no screens to synchronize — apply immediately and exit.
+            if (!networked)
+            {
+                applyReveal?.Invoke();
+                GameManager.Instance?.EvaluateEndGame();
+                yield break;
+            }
+
+            // (1) Emit the shared reveal timestamp FIRST. Nothing changes yet — the model
+            //     mutation, the host's own UI update, and the client broadcast all happen
+            //     together at revealAt.
+            long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // ⚠ DELIBERATELY NOT scaled by TimerSettings. Every other window is an INPUT deadline —
+            // scaling those is the whole point of the pace setting. This one is the shared lead-in
+            // to a reveal nobody interacts with; stretching it would just slow the drama, and it is
+            // the value host and mirrors both schedule against, so it is not a place to introduce a
+            // variable.
+            long revealAt = nowMs + (long)(revealLeadSeconds * 1000f);
+            nm.SendPhaseResolve(new PhaseResolveMsg { revealAt = revealAt });
+
+            // (2) Wait for the wall-clock moment using REALTIME — pauseOnGameEnd sets
+            //     Time.timeScale = 0 on a win, which would freeze scaled waits forever.
+            float delay = (revealAt - System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) / 1000f;
+            if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
+
+            // (3) AT revealAt: mutate the model (fires the host's UI), check win BEFORE
+            //     sending the result, push the now-revealed state to all clients, then send
+            //     elimination_result and — only after the reveal — game_over.
+            applyReveal?.Invoke();
+            GameManager.Instance?.EvaluateEndGame();
+            bool gameOver = GameManager.Instance != null && GameManager.Instance.IsGameOver;
+
+            // Propagate model changes that don't auto-broadcast (a save / confession-only
+            // night reveals tryals but fires no elimination event).
+            FindFirstObjectByType<NetworkStateBroadcaster>()?.BroadcastNow();
+
+            if (elimination != null) nm.SendEliminationResult(elimination);
+            if (gameOver) nm.SendGameOver(new GameOverMsg { winner = WinnerLabel() });
+        }
+
+        // Reveal the night victim's full identity and run elimination bookkeeping.
+        // Each tryal is revealed through RevealTryalCard → TrialService so the
+        // multiple-witch-card rule applies (a non-last witch card announces "second
+        // witch" and does not eliminate; the last witch / all-revealed triggers
+        // Eliminate). A night kill reveals EVERY card, so the victim dies regardless
+        // of how many witch cards they hold. The explicit Eliminate is an idempotent
+        // safety net (cause + matchmaker cascade) for the no-tryals edge.
+        // Shared by the synchronized night reveal and the immediate fallback.
+        private static void ApplyNightKill(Player victim)
+        {
+            if (victim == null) return;
+            for (int i = 0; i < victim.TryalCards.Count; i++)
+                if (victim.TryalCards[i] != null && !victim.TryalCards[i].IsRevealed)
+                    victim.RevealTryalCard(i);
+            if (!victim.IsEliminated)
+                PlayerService.Eliminate(victim, EliminationCause.NightKill);
+        }
+
+        // Public display id: NetworkId for human seats, synthetic PublicId for AI.
+        private static string PublicIdOf(Player p)
+            => p == null ? "" : (!string.IsNullOrEmpty(p.NetworkId) ? p.NetworkId : (p.PublicId ?? ""));
+
+        // game_over winner label per protocol ("witches" | "townspeople").
+        private static string WinnerLabel()
+        {
+            var r = GameManager.Instance?.LastEndResult;
+            if (r == null) return "";
+            return r.WinningTeam == Salem.Data.Team.Witches ? "witches" : "townspeople";
+        }
+
+        /// <summary>
+        /// THE masking-timing + timeout predicate, in exactly ONE place (shared by the
+        /// witch/constable/black-cat rounds and the confess window). Resolves when EVERY
+        /// connected human has Confirmed — never when only the acting players finish, so
+        /// resolution timing reveals nothing about who acted. IsConnected is read live so
+        /// a mid-phase disconnect drops that seat from the wait set immediately (no stall).
+        /// AI have no phone and cannot leak timing, so they are never waited on. The single
+        /// per-phase deadline fires on a wall-clock instant identical for everyone, so a
+        /// timeout never leaks who was being waited on. Reports timedOut via onResolved.
+        /// </summary>
+        private IEnumerator AwaitAllConfirmedOrTimeout(string promptType, List<Player> alivePlayers,
+                                                       HashSet<Player> allConfirmed, float timeoutSeconds,
+                                                       System.Action<bool> onResolved)
+        {
+            bool StillWaiting() => alivePlayers.Any(p =>
+                p != null && p.IsHuman && p.IsConnected && !allConfirmed.Contains(p));
+
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+            bool timedOut = false;
+
+            float nextLog = Time.realtimeSinceStartup + 5f;
+            while (StillWaiting())
+            {
+                if (Time.realtimeSinceStartup >= deadline)
+                {
+                    timedOut = true;
+                    break;
+                }
+                if (Time.realtimeSinceStartup >= nextLog)
+                {
+                    var pending = alivePlayers
+                        .Where(p => p != null && p.IsHuman && p.IsConnected && !allConfirmed.Contains(p))
+                        .Select(p => p.PlayerNameText);
+                    Debug.Log($"[SecretPhase] {promptType}: still waiting on confirm from [{string.Join(", ", pending)}] " +
+                              $"({deadline - Time.realtimeSinceStartup:0.0}s to timeout)");
+                    nextLog += 5f;
+                }
+                yield return null;
+            }
+
+            onResolved?.Invoke(timedOut);
+        }
+
+        /// <summary>
+        /// Run one masked secret-phase round (the host = the skill's "server").
+        /// Prompts EVERY non-AI player identically (acting flag per role); records a
+        /// submission into the round ONLY if the submitter is acting — non-acting
+        /// submissions are received and silently discarded. Acting AI choose directly.
+        /// Resolves once EVERY connected human has Confirmed (not just acting players) —
+        /// resolution timing must not reveal who acted; a mid-phase disconnect drops that
+        /// seat from the wait set (Player.IsConnected). Per-player prompts flow through
+        /// IPlayerInput.RequestSecretPhase (NetworkInput for phones).
+        /// </summary>
+        private IEnumerator RunNetworkedSecretPhase(string promptType, List<Player> alivePlayers,
+                                                    System.Func<Player, bool> isActing,
+                                                    System.Action<Player, string> recordActing,
+                                                    bool shareTally, float timeoutSeconds)
+        {
+            var rng = GameManager.Instance?.Rng ?? new XorShiftRng(1UL);
+            var targetNames = alivePlayers.Where(p => p != null).Select(p => p.PlayerNameText).ToArray();
+            var actingPlayers = alivePlayers.Where(p => p != null && isActing(p)).ToList();
+            var confirmed = new HashSet<Player>();      // acting players whose vote was RECORDED
+            var allConfirmed = new HashSet<Player>();    // ANY player who tapped Confirm (what we WAIT on)
+            var broadcaster = FindFirstObjectByType<NetworkStateBroadcaster>();
+
+            // Seed the live tally (witch rounds) so fellows see "Mary → —" up front.
+            if (shareTally)
+            {
+                currentSecretTally.Clear();
+                foreach (var a in actingPlayers) currentSecretTally[a] = null;
+                IsWitchVoteRoundActive = true;
+                broadcaster?.SendPrivateStates();
+            }
+
+            void OnSubmit(Player p, string name, bool isConfirm)
+            {
+                if (p == null) return;
+                if (allConfirmed.Contains(p)) return;      // already finalized this player
+
+                bool acting = isActing(p);
+
+                // Witch live tally is acting-only (private witch-coordination channel).
+                // Non-acting submits update nothing — silently discarded, as before.
+                if (acting && shareTally)
+                {
+                    currentSecretTally[p] = ResolveByName(name); // tentative or confirm → update
+                    broadcaster?.SendPrivateStates();             // relay live to fellow witches
+                }
+
+                if (isConfirm)
+                {
+                    // MASKING-TIMING FIX: every player's Confirm counts toward the wait,
+                    // regardless of role — resolution timing must not reveal who acted.
+                    allConfirmed.Add(p);
+                    if (acting)
                     {
-                        voteTarget = target;
-                        done = true;
+                        confirmed.Add(p);            // only acting selections are RECORDED
+                        recordActing?.Invoke(p, name);
                     }
-                );
-
-                yield return new WaitUntil(() => done);
-
-                if (done && voteTarget != null)
-                {
-                    plan.SetWitchVote(localPlayer, voteTarget);
-                }
-                else if (eligible.Count > 0)
-                {
-                    Debug.LogWarning("[GamePhaseManager] Witch vote selection cancelled; defaulting to random.");
-                    plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
                 }
             }
-            else
+
+            foreach (var p in alivePlayers)
             {
-                Debug.LogWarning("[GamePhaseManager] Night target picker not assigned; witch vote defaulting to random.");
-                yield return new WaitForSeconds(aiDecisionDelay);
-                plan.SetWitchVote(localPlayer, eligible[rng.NextInt(0, eligible.Count)]);
+                if (p == null) continue;
+                bool acting = isActing(p);
+
+                if (p is AIPlayer)
+                {
+                    if (acting)
+                    {
+                        // AI picks a random other player and confirms immediately;
+                        // NightResolver validates eligibility.
+                        var candidates = alivePlayers.Where(x => x != null && x != p).ToList();
+                        if (candidates.Count > 0)
+                            OnSubmit(p, candidates[rng.NextInt(0, candidates.Count)].PlayerNameText, true);
+                    }
+                    // non-acting AI has no phone — nothing to mask
+                }
+                else if (p.Input != null)
+                {
+                    // Human (network or local) — prompted regardless of acting (masking).
+                    var who = p;
+                    StartCoroutine(who.Input.RequestSecretPhase(who, promptType, targetNames, acting,
+                        (submitter, name, isConfirm) => OnSubmit(submitter, name, isConfirm)));
+                }
             }
+
+            // Wait for ALL connected humans to Confirm, or the timeout — the single
+            // masking-timing + timeout predicate, shared with the confess window.
+            bool timedOut = false;
+            yield return AwaitAllConfirmedOrTimeout(promptType, alivePlayers, allConfirmed,
+                                                    timeoutSeconds, t => timedOut = t);
+
+            if (shareTally)
+            {
+                IsWitchVoteRoundActive = false;
+                currentSecretTally.Clear();
+                broadcaster?.SendPrivateStates(); // clear witchVotes on phones
+            }
+
+            int humanCount = alivePlayers.Count(p => p != null && p.IsHuman);
+            int humansConfirmed = allConfirmed.Count(p => p != null && p.IsHuman);
+            string how = timedOut ? "TIMED OUT — resolving with recorded input" : "all connected humans confirmed";
+            Debug.Log($"[SecretPhase] {promptType}: {how} " +
+                      $"({humansConfirmed}/{humanCount} humans; " +
+                      $"{confirmed.Count}/{actingPlayers.Count} acting recorded).");
+        }
+
+        /// <summary>Resolve a submitted display name back to an alive Player (humans and AI).</summary>
+        private Player ResolveByName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            return PlayerService.GetAlivePlayers().FirstOrDefault(p => p != null && p.PlayerNameText == name);
+        }
+
+        // Confess-window selection sentinels (sent by AI / phone). A tryal index ("0".."n")
+        // means "reveal that tryal"; ConfessSkip means "don't confess"; ConfessFake is the
+        // William Phipps fake confession (Town Hall, AI-only in 4c — immune, reveals nothing).
+        private const string ConfessSkip = "skip";
+        private const string ConfessFake = "fake";
+
+        /// <summary>
+        /// Masked, timed confess window (replaces the legacy sequential ExecuteConfessionRound).
+        /// Every player is prompted identically; anyone may confess by revealing one of their
+        /// OWN tryals for immunity. The reveal is DEFERRED to the synchronized revealAt (see
+        /// RevealNightOutcome) so timing never exposes who confessed while the window is open —
+        /// immunity is applied now via plan.Confessors. Confessing players' chosen tryal index
+        /// is collected in pendingConfessions for the public reveal. Shares the wait-for-all +
+        /// timeout predicate with the other secret phases (AwaitAllConfirmedOrTimeout).
+        /// </summary>
+        private IEnumerator RunConfessWindow(List<Player> alivePlayers, NightResolver.NightPlan plan,
+                                             Dictionary<Player, int> pendingConfessions, IRng rng)
+        {
+            var allConfirmed = new HashSet<Player>();
+
+            void OnSubmit(Player p, string sel, bool isConfirm)
+            {
+                if (p == null) return;
+                if (allConfirmed.Contains(p)) return;       // already finalized this player
+                if (isConfirm)
+                {
+                    allConfirmed.Add(p);                    // every Confirm counts toward the wait
+                    RecordConfession(p, sel, plan, pendingConfessions);
+                }
+                // tentative submits carry no confess state — ignored (masking flow only)
+            }
+
+            foreach (var p in alivePlayers)
+            {
+                if (p == null) continue;
+
+                if (p is AIPlayer)
+                {
+                    // AI confess heuristic (preserves William Phipps fake-confess + confessionAiChance).
+                    OnSubmit(p, AiConfessSelection(p, rng), true);
+                }
+                else if (p.Input != null)
+                {
+                    // Human (network or local). The phone renders its OWN face-down tryals
+                    // (from private_state) + a "don't confess" option; targets is unused for
+                    // confess. Selection carries the tryal index or ConfessSkip. acting=true
+                    // for everyone — confession is genuinely identical (anyone may confess).
+                    var who = p;
+                    StartCoroutine(who.Input.RequestSecretPhase(who, "confess", System.Array.Empty<string>(), true,
+                        (submitter, sel, isConfirm) => OnSubmit(submitter, sel, isConfirm)));
+                }
+            }
+
+            bool timedOut = false;
+            yield return AwaitAllConfirmedOrTimeout("confess", alivePlayers, allConfirmed,
+                                                    TimerSettings.Scale(confessTimeout), t => timedOut = t);
+
+            Debug.Log($"[Confess] window closed ({(timedOut ? "TIMED OUT" : "all connected humans confirmed")}) — " +
+                      $"{plan.Confessors.Count} confessor(s), {pendingConfessions.Count} tryal(s) to reveal at revealAt.");
+        }
+
+        // Record one confession submission. Selection = own-tryal-index | ConfessSkip | ConfessFake.
+        // The actual tryal reveal is DEFERRED (recorded into pending) — only immunity is applied now.
+        private void RecordConfession(Player p, string sel, NightResolver.NightPlan plan,
+                                      Dictionary<Player, int> pending)
+        {
+            if (p == null || string.IsNullOrEmpty(sel) || sel == ConfessSkip) return;  // no confession
+
+            if (sel == ConfessFake)
+            {
+                // William Phipps ONLY: immune WITHOUT revealing a tryal, once per game. Any other
+                // player — or a Phipps with no charge — who submits "fake" is SILENTLY DISCARDED (no
+                // immunity, no charge). The "Confess without revealing" control exists on EVERY phone
+                // for masking; the EFFECT is server-enforced here (the client can't self-police). A
+                // discarded "fake" is functionally equivalent to "don't confess".
+                if (p.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && p.townHallAbilityCharges > 0)
+                {
+                    p.ConsumeTownHallCharge();
+                    plan.Confessors.Add(p);
+                }
+                return;
+            }
+
+            if (!int.TryParse(sel, out int idx)) return;                 // unrecognized selection
+            if (idx < 0 || idx >= p.TryalCards.Count) return;
+            var card = p.TryalCards[idx];
+            if (card == null || card.IsRevealed) return;                 // can't confess a revealed card
+
+            pending[p] = idx;            // reveal DEFERRED to revealAt (timing masked during window)
+            plan.Confessors.Add(p);      // immunity now — NightResolver early-returns for confessors
+        }
+
+        // AI confess decision → a confess-window selection string (index | ConfessSkip | ConfessFake).
+        private string AiConfessSelection(Player p, IRng rng)
+        {
+            // William Phipps AI: fake-confess to protect Witch tryals.
+            bool canFakeConfess = p.HasTownHall(Salem.Cards.TownhallName.WilliamsPhipps) && p.townHallAbilityCharges > 0;
+            if (canFakeConfess && p.IsWitch && rng.NextInt(0, 100) < 50)
+                return ConfessFake;
+
+            // Otherwise: small chance to confess a non-Witch tryal (reveal one for immunity).
+            int safeIdx = -1;
+            for (int i = 0; i < p.TryalCards.Count; i++)
+            {
+                var c = p.TryalCards[i];
+                if (c != null && !c.IsRevealed && c.TryalCardType != TryalCardType.Witch) { safeIdx = i; break; }
+            }
+            if (safeIdx >= 0 && rng.NextInt(0, 100) < (int)(confessionAiChance * 100))
+                return safeIdx.ToString();
+
+            return ConfessSkip;
         }
         #endregion
     }

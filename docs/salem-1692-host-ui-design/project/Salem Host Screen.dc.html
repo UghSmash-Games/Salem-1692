@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet"><style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#0f0d0b;font-family:"EB Garamond",Georgia,serif}
+a{color:#c98a3f}a:hover{color:#e6b268}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(255,255,255,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#e8dcc0;color:#17130f;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#e8dcc0}
+.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(232,220,192,.16);color:#e8dcc0;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(232,220,192,.6)}
+.dv-card{max-width:100%;background:#17130f;border:1px solid rgba(232,220,192,.14);border-radius:8px;overflow:hidden}
+.dv-opt:target .dv-oid{background:#c98a3f;color:#17130f}
+.dv-next{margin:22px 0 0;font:12px/1.6 system-ui,sans-serif;color:rgba(232,220,192,.45)}
+@keyframes riseIn{from{opacity:0;transform:translateY(8px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes flipUp{from{opacity:0;transform:translateY(30px) rotateX(70deg) scale(.7)}to{opacity:1;transform:none}}
+@keyframes emberPulse{0%,100%{opacity:.5}50%{opacity:1}}
+</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Salem 1692 — shared table screen, 12 seats</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Full board — ring of seats, center deck, event rail. Click a seat, click a sealed Tryal to flip, advance the phase.</div>
+<div class="dv-card" style="width:1400px">
+<div style="display:flex;height:1040px;background:radial-gradient(120% 90% at 50% 30%,#221a13 0%,#100c09 62%,#080605 100%);color:#e8dcc0;position:relative;overflow:hidden">
+
+<div style="flex:1;display:flex;flex-direction:column;padding:20px 22px;gap:14px;min-width:0">
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid rgba(232,220,192,.13);padding-bottom:12px">
+<div style="display:flex;align-items:baseline;gap:14px">
+<div style="font-family:'IM Fell English SC',Georgia,serif;font-size:26px;letter-spacing:.06em;color:#f0e6cd">Salem, 1692</div>
+<div style="font:400 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:rgba(232,220,192,.45)">table 0x2f · 12 souls</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid rgba(232,220,192,.2);border-radius:999px;background:rgba(232,220,192,.05)">
+<div style="width:7px;height:7px;border-radius:50%;background:#c98a3f;animation:emberPulse 2.6s ease-in-out infinite"></div>
+<div style="font:400 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase">{{ phaseLabel }}</div>
+</div>
+<div onClick="{{ nextPhase }}" style="cursor:pointer;padding:8px 16px;border-radius:999px;background:#c98a3f;color:#17130f;font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;user-select:none" style-hover="background:#e6b268">Advance ▸</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+<sc-for list="{{ rowTop }}" as="seat" hint-placeholder-count="4">
+<dc-import name="Seat" seat="{{ seat }}" hint-size="100%,148px"></dc-import>
+</sc-for>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:1fr minmax(0,2.1fr) 1fr;gap:16px;align-items:center;min-height:0">
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ rowLeft }}" as="seat" hint-placeholder-count="2">
+<dc-import name="Seat" seat="{{ seat }}" hint-size="100%,148px"></dc-import>
+</sc-for>
+</div>
+
+<div style="box-sizing:border-box;height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border:1px solid rgba(232,220,192,.1);border-radius:14px;background:radial-gradient(80% 70% at 50% 40%,rgba(201,138,63,.1),rgba(0,0,0,0) 70%);padding:18px">
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.3em;text-transform:uppercase;color:rgba(232,220,192,.4)">the meeting house</div>
+<div style="display:flex;align-items:flex-end;gap:26px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+<div onClick="{{ drawCard }}" style="cursor:pointer;position:relative;width:104px;height:146px;border-radius:8px;background-image:url('assets/deck-back.png');background-size:cover;background-position:center;box-shadow:0 2px 0 #4a3a26,0 4px 0 #3a2d1e,0 7px 0 #2c2117,0 14px 26px rgba(0,0,0,.6);border:1px solid rgba(0,0,0,.5)" style-hover="transform:translateY(-3px)"></div>
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(232,220,192,.5)">draw · {{ deckCount }}</div>
+</div>
+
+<div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+<div style="width:104px;height:146px;border-radius:8px;border:1px dashed rgba(232,220,192,.22);display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25);position:relative;overflow:hidden">
+<sc-if value="{{ discardTop }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;border-radius:8px;background-image:url('assets/parchment.png');background-size:200% 200%;background-position:60% 40%;display:flex;flex-direction:column;justify-content:space-between;padding:10px;color:#2c1d0f">
+<div style="font:400 8px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;opacity:.6">discarded</div>
+<div style="font-family:'IM Fell English SC',serif;font-size:15px;line-height:1.1">{{ discardTop }}</div>
+</div>
+</sc-if>
+</div>
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:rgba(232,220,192,.5)">discard · {{ discardCount }}</div>
+</div>
+</div>
+
+<div style="display:flex;gap:22px;padding-top:6px;border-top:1px solid rgba(232,220,192,.1);width:100%;justify-content:center">
+<div style="text-align:center"><div style="font-family:'IM Fell English SC',serif;font-size:22px;color:#f0e6cd">{{ witchesLeft }}</div><div style="font:400 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(232,220,192,.4)">witches revealed</div></div>
+<div style="text-align:center"><div style="font-family:'IM Fell English SC',serif;font-size:22px;color:#f0e6cd">{{ tryalsFlipped }}</div><div style="font:400 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(232,220,192,.4)">tryals flipped</div></div>
+<div style="text-align:center"><div style="font-family:'IM Fell English SC',serif;font-size:22px;color:#f0e6cd">{{ aliveCount }}</div><div style="font:400 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(232,220,192,.4)">still living</div></div>
+</div>
+<div style="display:flex;gap:20px;align-items:center;justify-content:center">
+<div style="display:flex;align-items:center;gap:7px"><div style="width:16px;height:22px;border-radius:3px;background-image:url('assets/tryal-back.png');background-size:cover;background-position:center"></div><div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(232,220,192,.5)">face down</div></div>
+<div style="display:flex;align-items:center;gap:7px"><div style="width:16px;height:22px;border-radius:3px;background-image:url('assets/not-witch-card.png');background-size:cover;background-position:center;border:2px solid #3f5a46;filter:saturate(.7) brightness(.92)"></div><div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:rgba(232,220,192,.5)">not a witch</div></div>
+<div style="display:flex;align-items:center;gap:7px"><div style="position:relative;width:16px;height:22px;border-radius:3px;background-image:url('assets/witch-card.png');background-size:cover;background-position:center;border:2px solid #a8231b;box-shadow:0 0 8px rgba(168,35,27,.7)"><div style="position:absolute;top:1px;right:1px;width:7px;height:7px;background:#a8231b;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(240,230,205,.85)"></div></div><div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#e6b268">witch</div></div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ rowRight }}" as="seat" hint-placeholder-count="2">
+<dc-import name="Seat" seat="{{ seat }}" hint-size="100%,148px"></dc-import>
+</sc-for>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+<sc-for list="{{ rowBottom }}" as="seat" hint-placeholder-count="4">
+<dc-import name="Seat" seat="{{ seat }}" hint-size="100%,148px"></dc-import>
+</sc-for>
+</div>
+</div>
+
+<div style="width:322px;flex:none;border-left:1px solid rgba(232,220,192,.13);background:rgba(0,0,0,.32);display:flex;flex-direction:column">
+<div style="padding:18px 18px 14px;border-bottom:1px solid rgba(232,220,192,.1)">
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.28em;text-transform:uppercase;color:rgba(232,220,192,.4);margin-bottom:12px">in effect</div>
+<sc-if value="{{ hasEffects }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ effects }}" as="fx" hint-placeholder-count="2">
+<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:7px;background:rgba(232,220,192,.06);border-left:2px solid #c98a3f">
+<div style="flex:1;min-width:0">
+<div style="font-family:'IM Fell English SC',serif;font-size:14px;color:#f0e6cd">{{ fx.name }}</div>
+<div style="font:400 11px/1.4 'EB Garamond',serif;color:rgba(232,220,192,.55)">{{ fx.text }}</div>
+</div>
+<div style="font:400 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:#c98a3f;padding-top:3px;white-space:nowrap">{{ fx.on }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ noEffects }}" hint-placeholder-val="{{ false }}">
+<div style="font:italic 12px/1.4 'EB Garamond',serif;color:rgba(232,220,192,.35)">No cards in play.</div>
+</sc-if>
+</div>
+
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div style="padding:16px 18px 10px;font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.28em;text-transform:uppercase;color:rgba(232,220,192,.4)">what has passed</div>
+<div style="flex:1;overflow-y:auto;padding:0 18px 18px;display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ log }}" as="entry" hint-placeholder-count="6">
+<div style="display:flex;gap:10px;align-items:baseline;animation:riseIn .3s ease both">
+<div style="font:400 9px/1.6 ui-monospace,Menlo,monospace;color:rgba(232,220,192,.3);white-space:nowrap">{{ entry.time }}</div>
+<div style="font:400 13px/1.45 'EB Garamond',serif;color:rgba(232,220,192,.8);text-wrap:pretty">{{ entry.text }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="padding:14px 18px;border-top:1px solid rgba(232,220,192,.1);display:flex;gap:8px">
+<div onClick="{{ reset }}" style="cursor:pointer;flex:1;text-align:center;padding:9px;border:1px solid rgba(232,220,192,.2);border-radius:6px;font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:rgba(232,220,192,.65);user-select:none" style-hover="border-color:#c98a3f;color:#e6b268">Reset table</div>
+</div>
+</div>
+
+<sc-if value="{{ reveal }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeReveal }}" style="position:absolute;inset:0;background:rgba(6,4,3,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:20;cursor:pointer">
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.34em;text-transform:uppercase;color:rgba(232,220,192,.5)">tryal card revealed · {{ revealName }}</div>
+<sc-if value="{{ revealIsWitch }}" hint-placeholder-val="{{ false }}">
+<div style="width:230px;height:322px;border-radius:12px;background-image:url('assets/witch-card.png');background-size:cover;background-position:center;box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.6);animation:flipUp .5s cubic-bezier(.2,.9,.25,1) both"></div>
+</sc-if>
+<sc-if value="{{ revealNotWitch }}" hint-placeholder-val="{{ true }}">
+<div style="width:230px;height:322px;border-radius:12px;background-image:url('assets/not-witch-card.png');background-size:cover;background-position:center;box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.6);animation:flipUp .5s cubic-bezier(.2,.9,.25,1) both"></div>
+</sc-if>
+<div style="font:400 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(232,220,192,.35)">click anywhere to return to the table</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "add the night phase" · "assign real character cards per seat" · "show the Constable badge"</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;playerCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:12,&quot;min&quot;:4,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Table&quot;},&quot;showLog&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Table&quot;}}">
+const NAMES = ["Goodwife Bishop","Rev. Parris","Giles Cory","Tituba","John Proctor","Abigail W.","Mary Warren","Sarah Good","Judge Hathorne","Ann Putnam","Martha Corey","Samuel Sewall"];
+const KINDS = [
+  {kind:"NOT A WITCH",color:"#3f5a46",blurb:"Innocent. The mob turns elsewhere — for now."},
+  {kind:"WITCH",color:"#7c2b23",blurb:"A witch stands revealed. The town must act before dawn."},
+  {kind:"CONSTABLE",color:"#2c1d0f",blurb:"The Constable's badge passes to this soul."}
+];
+const PHASES = ["Day","Trial","Night falls","Dawn — draw"];
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = {
+      players: this.build(),
+      selected: 2,
+      phase: 0,
+      reveal: null,
+      deckCount: 34,
+      discard: ["Accusation"],
+      log: [
+        {time:"19:04", text:"The table is set. Twelve souls draw their Tryal cards."},
+        {time:"19:11", text:"Abigail W. accuses Giles Cory of consorting with the Devil."},
+        {time:"19:12", text:"Giles Cory gives Goodwife Bishop Asylum."},
+        {time:"19:15", text:"Night falls. Players close their eyes."}
+      ]
+    };
+  }
+  build(){
+    const count = Math.max(4, Math.min(12, this.props.playerCount ?? 12));
+    return NAMES.slice(0,count).map((name,i)=>({
+      id:i, name,
+      hand: [2,4,3,5,4,3,2,4,3,3,5,2][i%12],
+      alive: i!==7,
+      effects: i===0 ? ["Asylum"] : [],
+      tryals: [0,1,2,3,4].map(j=>({
+        id:i+"-"+j,
+        revealed: (i===0&&j===1) || (i===7),
+        kindIndex: (i===7&&j===2) ? 1 : (i===0&&j===1) ? 0 : ((i*7+j*3)%9===0 ? 1 : 0)
+      }))
+    }));
+  }
+  stamp(){
+    const t = new Date();
+    return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
+  }
+  say(text){ this.setState(s=>({log:[...s.log,{time:this.stamp(),text}]})); }
+  select = (id) => this.setState({selected:id});
+  flip = (pid,tid) => {
+    const p = this.state.players[pid];
+    const t = p.tryals.find(x=>x.id===tid);
+    if(!t || t.revealed) return;
+    const k = KINDS[t.kindIndex];
+    this.setState(s=>({
+      selected:pid,
+      reveal:{name:p.name, kind:k.kind, color:k.color, blurb:k.blurb},
+      players: s.players.map(pl=>pl.id!==pid?pl:{...pl,tryals:pl.tryals.map(x=>x.id!==tid?x:{...x,revealed:true})})
+    }));
+    this.say(p.name+"'s Tryal card is turned: "+k.kind+".");
+  };
+  closeReveal = () => this.setState({reveal:null});
+  nextPhase = () => {
+    const next = (this.state.phase+1)%PHASES.length;
+    this.setState({phase:next});
+    this.say(PHASES[next]+".");
+  };
+  drawCard = () => {
+    this.setState(s=>({deckCount:Math.max(0,s.deckCount-1), discard:[...s.discard,"Accusation"]}));
+    this.say("A card is drawn from the deck.");
+  };
+  reset = () => this.setState({players:this.build(), phase:0, reveal:null, selected:2, deckCount:34, discard:["Accusation"], log:[{time:this.stamp(), text:"The table is reset. Tryal cards are dealt anew."}]});
+
+  seat(p){
+    const flipped = p.tryals.filter(t=>t.revealed).length;
+    return {
+      id:p.id, name:p.name, hand:String(p.hand)+" in hand",
+      alive:p.alive, dead:!p.alive,
+      isTurn: p.alive && p.id===(this.state.phase%2===0?4:1),
+      isSelected: p.id===this.state.selected,
+      effects: p.effects.map(name=>({name, color: name==="Asylum" ? "#2c4a7c" : "#7c2b23"})),
+      hasEffects: p.effects.length>0,
+      progress: flipped+"/5",
+      accusations: (p.id*3+1)%4,
+      played: (()=>{
+        const n = (p.id*3+1)%4;
+        const slots = [];
+        if(n>0) slots.push({filled:true, empty:false, count:"×"+n, stacked:n>1, bg:"url('assets/card-accusation.png')"});
+        if(p.effects.includes("Asylum")) slots.push({filled:true, empty:false, count:"", stacked:false, bg:"url('assets/card-asylum.png')"});
+        while(slots.length<5) slots.push({filled:false, empty:true, count:"", stacked:false, bg:"none"});
+        return slots;
+      })(),
+      onSelect: ()=>this.select(p.id),
+      tryals: p.tryals.map(t=>({
+        id:t.id,
+        revealed:t.revealed,
+        hidden:!t.revealed,
+        kind:KINDS[t.kindIndex].kind,
+        isWitch:KINDS[t.kindIndex].kind==="WITCH",
+        notWitch:KINDS[t.kindIndex].kind!=="WITCH",
+        onFlip: ()=>this.flip(p.id,t.id)
+      }))
+    };
+  }
+
+  renderVals(){
+    const seats = this.state.players.map(p=>this.seat(p));
+    const n = seats.length;
+    const top = seats.slice(0, Math.min(4,n));
+    const right = seats.slice(Math.min(4,n), Math.min(6,n));
+    const bottom = seats.slice(Math.min(6,n), Math.min(10,n));
+    const left = seats.slice(Math.min(10,n), Math.min(12,n));
+    const effects = [];
+    this.state.players.forEach(p=>p.effects.forEach(name=>effects.push({
+      name,
+      text: name==="Asylum" ? "Recipient cannot be eliminated during the night" : "In play",
+      on: p.name.split(" ").pop().toUpperCase()
+    })));
+    const r = this.state.reveal;
+    const flippedTotal = this.state.players.reduce((a,p)=>a+p.tryals.filter(t=>t.revealed).length,0);
+    const witches = this.state.players.reduce((a,p)=>a+p.tryals.filter(t=>t.revealed&&KINDS[t.kindIndex].kind==="WITCH").length,0);
+    return {
+      rowTop:top, rowBottom:bottom, rowLeft:left, rowRight:right,
+      phaseLabel: PHASES[this.state.phase],
+      nextPhase: this.nextPhase, drawCard: this.drawCard, reset: this.reset,
+      deckCount: this.state.deckCount,
+      discardCount: this.state.discard.length,
+      discardTop: this.state.discard[this.state.discard.length-1] || "",
+      effects, hasEffects: effects.length>0, noEffects: effects.length===0,
+      log: (this.props.showLog ?? true) ? this.state.log.slice(-14) : [],
+      reveal: !!r, revealIsWitch: !!r && r.kind==="WITCH", revealNotWitch: !!r && r.kind!=="WITCH", revealName: r?r.name:"", revealKind: r?r.kind:"", revealColor: r?r.color:"#2c1d0f", revealBlurb: r?r.blurb:"",
+      aliveCount: this.state.players.filter(p=>p.alive).length,
+      tryalsFlipped: flippedTotal,
+      witchesLeft: witches,
+      closeReveal: this.closeReveal
+    };
+  }
+}
+
+</script>
+</body>
+</html>

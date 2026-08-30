@@ -1,0 +1,49 @@
+# Fly.io deployment for the Salem 1692 relay.
+#
+# Rename `app` before the first deploy — app names are globally unique on Fly, and `fly launch`
+# will otherwise offer to generate one.
+app = "salem-1692-relay"
+primary_region = "ord"   # pick the region nearest your players; `fly platform regions` lists them
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # ⚠ CORS_ORIGIN is NOT set here on purpose. It is the deployed webclient's origin, which does not
+  # exist until Netlify is up, and getting it wrong silently blocks every browser. Set it once with:
+  #     fly secrets set CORS_ORIGIN=https://your-site.netlify.app
+  # The server logs a loud warning at boot if it is still the localhost default.
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # 🔴 auto_stop_machines = false IS LOAD-BEARING, not a cost oversight.
+  #
+  # Rooms live in memory (server/src/rooms.js). A stopped machine loses every active game: seats,
+  # tokens, the lot. Fly's scale-to-zero is built for stateless HTTP where a cold start costs a
+  # slow first request; here it costs the game people are playing. A relay idling at ~$2-4/month is
+  # the whole budget for this service — do not trade a live session for it.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # 🔴 ONE machine, deliberately. Socket.io rooms are per-process: two machines behind the load
+  # balancer means a phone can land on a different instance than its host and simply never see the
+  # game. Horizontal scaling requires the Redis adapter first (see docs/deployment-runbook.md).
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

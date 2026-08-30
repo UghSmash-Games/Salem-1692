@@ -11,11 +11,15 @@ import { sendPlayerAction, sendConfess } from '../socket/socketClient';
 import { HandList } from '../components/HandList';
 import { PlayerTargetList } from '../components/PlayerTargetList';
 import { ConfessPrompt } from '../components/ConfessPrompt';
+import { FellowWitchBanner } from '../components/FellowWitchBanner';
+import { RoleIndicator } from '../components/RoleIndicator';
 
 type Step = 'choose' | 'select_card' | 'select_target' | 'confess';
 
 export function ActionScreen() {
   const actions = useGameStore((s) => s.actionRequest?.actions ?? []);
+  // Host-computed: cards that can't legally be played right now (Robbery/Scapegoat need 3+ alive).
+  const unplayableCards = useGameStore((s) => s.actionRequest?.unplayableCards ?? []);
   const { hand, tryals } = useGameStore((s) => s.privateState);
   const { players } = useGameStore((s) => s.publicBoard);
   const myPlayerId = useGameStore((s) => s.session.playerId);
@@ -36,10 +40,33 @@ export function ActionScreen() {
   const canDraw = actions.includes('draw');
   const canPlay = actions.includes('play');
   const canConfess = actions.includes('confess');
+  const canEnd = actions.includes('end');
+  // Tituba: once/game, before drawing, rearrange the deck. Sends player_action
+  // {card:'tituba'} → host runs RunTitubaRearrange → deck_rearrange_request → the
+  // DeckRearrangeScreen. She still draws/plays this same turn afterward.
+  const canTituba = actions.includes('tituba');
+  // Samuel Parris: twice/game, draw up to 2 from the discard pile INSTEAD of the deck. Sends
+  // player_action {card:'parris'} → host runs RunParrisDiscardPick → card_pick_request → the
+  // CardPickScreen (with a Done button). TURN-ENDING, like Draw 2 (not a loop-back like Tituba).
+  const canParris = actions.includes('parris');
 
   const submitPlay = () => {
     if (cardIndex === null || target === null) return;
-    sendPlayerAction({ card: hand[cardIndex], targetPlayerId: target });
+    // `target` is a display name (what PlayerTargetList shows); the host expects
+    // the public playerId. Map it back before sending.
+    const targetPlayer = players.find(
+      (p) => p.displayName === target && p.playerId !== myPlayerId && !p.eliminated,
+    );
+    sendPlayerAction({
+      card: hand[cardIndex],
+      targetPlayerId: targetPlayer?.playerId ?? '',
+    });
+    resetLocal();
+  };
+
+  const submitEnd = () => {
+    // Signal the host the player is done playing cards this turn.
+    sendPlayerAction({ card: 'end', targetPlayerId: '' });
     resetLocal();
   };
 
@@ -57,10 +84,32 @@ export function ActionScreen() {
 
   return (
     <div className="flex min-h-dvh flex-col gap-5 bg-ink px-5 py-6">
-      <h2 className="text-xl font-semibold text-parchment">Your Turn</h2>
+      <FellowWitchBanner />
+      <header className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-parchment">Your Turn</h2>
+        <RoleIndicator />
+      </header>
 
       {step === 'choose' && (
         <div className="flex flex-col gap-3">
+          {canTituba && (
+            <button
+              type="button"
+              onClick={() => sendPlayerAction({ card: 'tituba', targetPlayerId: '' })}
+              className="rounded-md border border-candle bg-candle/20 px-4 py-3 text-lg font-semibold text-candle"
+            >
+              Rearrange the Deck
+            </button>
+          )}
+          {canParris && (
+            <button
+              type="button"
+              onClick={() => sendPlayerAction({ card: 'parris', targetPlayerId: '' })}
+              className="rounded-md border border-candle bg-candle/20 px-4 py-3 text-lg font-semibold text-candle"
+            >
+              Draw from Discard
+            </button>
+          )}
           {canDraw && (
             <button
               type="button"
@@ -88,6 +137,15 @@ export function ActionScreen() {
               Confess
             </button>
           )}
+          {canEnd && (
+            <button
+              type="button"
+              onClick={submitEnd}
+              className="rounded-md border border-parchment/40 px-4 py-3 text-lg font-semibold text-parchment"
+            >
+              End Turn
+            </button>
+          )}
         </div>
       )}
 
@@ -101,7 +159,16 @@ export function ActionScreen() {
             selectable
             selectedIndex={cardIndex}
             onSelect={setCardIndex}
+            disabledCards={unplayableCards}
           />
+          {unplayableCards.length > 0 && (
+            <p
+              className="text-xs italic text-parchment/50"
+              data-testid="unplayable-hint"
+            >
+              Greyed-out cards need 3+ players.
+            </p>
+          )}
           <div className="flex gap-3">
             <button
               type="button"

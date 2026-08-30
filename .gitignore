@@ -80,3 +80,7 @@ webclient/.env
 
 # Unity generated folder (project is at repo root)
 unity/
+
+# Local reference art (not needed in repo)
+docs/Salem_Town Hall Cards.pdf
+docs/Salem_Tryal Cards.pdf
