@@ -16,6 +16,30 @@ browser. Both are called out below.
 
 ---
 
+## Current deployment (live 2026-08-30)
+
+| Piece | Value |
+|---|---|
+| Relay | `https://salem-1692-relay.fly.dev` — Fly app `salem-1692-relay`, org Ughsmash Games, region **dfw**, 1 machine |
+| Web client | `https://salem-1692.netlify.app` — Netlify site `salem-1692`, deploying branch **dev** |
+| Unity host | `-server wss://salem-1692-relay.fly.dev` |
+
+**Verified end to end from the deployed site:**
+- `/`, `/join`, `/display` and an unknown path all return **200** — the SPA rewrite is live
+- the deployed bundle contains `salem-1692-relay.fly.dev` and **no** localhost fallback, so
+  `VITE_SERVER_URL` was genuinely baked in at build time
+- a WebSocket from the Netlify origin completes the socket.io handshake (real engine.io `sid`
+  returned) in ~170ms, and a `fetch` of `/health` from that origin is readable — CORS is right
+- the relay's boot log reads `CORS origin: https://salem-1692.netlify.app` with no warning
+
+⚠ **A Netlify site can be created with access control ON.** Every path returned **401** with a
+"Login Redirect" page pointing at `app.netlify.com/edge-access` — before routing is evaluated, so
+even `/` failed and it looked like a catastrophic build problem. It is a site setting, not config:
+**Site configuration → Access & security → Visitor access → Public.** Check this first if the whole
+site 401s.
+
+---
+
 ## 0. Before you start
 
 - **Deploying ends every game in progress.** Rooms live in memory (`server/src/rooms.js`), so a
