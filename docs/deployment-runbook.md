@@ -30,15 +30,23 @@ browser. Both are called out below.
 
 ```bash
 cd server
-fly launch --no-deploy      # answer NO to "overwrite fly.toml?" — the one in the repo is configured
+fly apps create <your-app-name>          # app names are globally unique across all of Fly
+fly deploy --config fly.toml --app <your-app-name> --ha=false
 ```
 
-Change `app` in [`fly.toml`](../server/fly.toml) to a name that is free (Fly app names are globally
-unique), then:
+`fly apps create` rather than `fly launch`, because launch is interactive and offers to overwrite the
+`fly.toml` in the repo, which is already configured. Set `app` in
+[`fly.toml`](../server/fly.toml) to the name you chose.
 
-```bash
-fly deploy
-```
+🔴 **`--ha=false` IS REQUIRED, on every deploy.** `fly deploy` defaults to high availability and
+creates **two** machines. Socket.io rooms are per-process, so the second machine would serve phones a
+room the host is not in — they would join successfully and see nothing. `fly.toml` cannot express
+this; it is a deploy-time flag. Confirm with `fly status`: exactly one machine.
+
+⚠ **Regions get deprecated.** `den` (Denver) is retired — Fly builds the image, pushes it, and only
+then refuses to create the machine, so this failure arrives late and looks like a deploy bug rather
+than a config one. `fly platform regions` lists what is live; as of this writing the US options are
+`iad`, `ord`, `dfw`, `lax`, `sjc`, `ewr`.
 
 Check it:
 

@@ -3,7 +3,7 @@
 # Rename `app` before the first deploy — app names are globally unique on Fly, and `fly launch`
 # will otherwise offer to generate one.
 app = "salem-1692-relay"
-primary_region = "den"   # Denver — closest region to the host
+primary_region = "dfw"   # Dallas — nearest LIVE region to Denver (den is deprecated; Fly refuses new machines there)
 
 [build]
   dockerfile = "Dockerfile"
@@ -32,6 +32,12 @@ primary_region = "den"   # Denver — closest region to the host
   # 🔴 ONE machine, deliberately. Socket.io rooms are per-process: two machines behind the load
   # balancer means a phone can land on a different instance than its host and simply never see the
   # game. Horizontal scaling requires the Redis adapter first (see docs/deployment-runbook.md).
+  #
+  # ⚠ THIS FILE CANNOT ENFORCE THAT — `fly deploy` defaults to HIGH AVAILABILITY and creates TWO
+  # machines unless told otherwise. Always deploy with:
+  #     fly deploy --ha=false
+  # and check `fly status` shows exactly one machine. HA is the right default for stateless web
+  # apps and precisely wrong here: the second machine would serve phones a room the host is not in.
   [http_service.concurrency]
     type = "connections"
     hard_limit = 200
