@@ -1,0 +1,38 @@
+# Netlify deployment for the Salem 1692 web client (player phones + mirror displays).
+
+[build]
+  base    = "webclient"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Node 22 (LTS) — matches the relay's runtime and avoids the Node 25 tooling breakage documented
+  # in CLAUDE.md → Testing.
+  NODE_VERSION = "22"
+
+# 🔴 THE SPA REWRITE — THE ONE RULE THIS FILE EXISTS FOR.
+#
+# The client uses BrowserRouter with real paths (/join, /display). Netlify serves static files, so
+# without this every direct visit to https://site/join asks for a FILE named "join", finds none, and
+# returns 404. That breaks the product's two published URLs — the ones printed on the host screen for
+# players to type — and it is invisible in development, because Vite's dev server rewrites for you.
+#
+# It also breaks RECONNECTION, which is the worse half: a phone that reloads (or is restored by the
+# browser after being backgrounded) would hit 404 instead of reclaiming its seat, and the stored seat
+# would never be replayed.
+#
+# 200, not 301: the URL must stay /join in the address bar so the router can read it. A redirect
+# would send the browser to / and lose the route.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# The seat token lives in localStorage on these origins, so keep the page out of frames it does not
+# control and stop the browser from guessing content types.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"

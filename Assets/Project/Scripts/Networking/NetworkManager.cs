@@ -21,11 +21,63 @@ namespace Salem.Networking
         // ΓöÇΓöÇΓöÇ Inspector Fields ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
         [Header("Server")]
-        [SerializeField] private string serverUrl = "ws://localhost:3000";
+        [SerializeField, Tooltip("Fallback server URL. A -server argument or SALEM_SERVER_URL " +
+                                 "environment variable overrides this, so a BUILT host can be " +
+                                 "pointed at a different relay without rebuilding.")]
+        private string serverUrl = "ws://localhost:3000";
         [SerializeField] private int maxReconnectAttempts = 5;
         [SerializeField] private float baseReconnectDelay = 1.0f;
 
         // ΓöÇΓöÇΓöÇ Public State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+        /// <summary>
+        /// The relay URL actually used, resolved once.
+        ///
+        /// ⚠ THE SERIALIZED FIELD IS ONLY A FALLBACK. It is baked into the scene at build time, so a
+        /// standalone host would otherwise be permanently pointed at whatever URL happened to be in
+        /// the Inspector the day it was built — and the fix would be a rebuild. A deployed relay can
+        /// move, and dev/prod are the same binary.
+        ///
+        /// Precedence, most specific first:
+        ///   1. `-server wss://host` on the command line (how you launch a built host)
+        ///   2. the SALEM_SERVER_URL environment variable
+        ///   3. the Inspector value
+        /// </summary>
+        private string ResolveServerUrl()
+        {
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "-server" && !string.IsNullOrWhiteSpace(args[i + 1]))
+                    return args[i + 1].Trim();
+            }
+
+            var fromEnv = Environment.GetEnvironmentVariable("SALEM_SERVER_URL");
+            if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv.Trim();
+
+            return serverUrl;
+        }
+
+        /// <summary>
+        /// Resolve the URL and warn about the one misconfiguration that fails confusingly: a plaintext
+        /// ws:// pointed at a remote host. Deployed relays terminate TLS (Fly's force_https), so ws://
+        /// is refused or redirected and the error surfaces as a bare connection failure with nothing
+        /// naming the scheme as the cause. Local development over ws:// is normal and not warned about.
+        /// </summary>
+        private string ServerUrlForConnect()
+        {
+            var url = ResolveServerUrl();
+
+            bool isLocal = url.Contains("localhost") || url.Contains("127.0.0.1") ||
+                           url.Contains("192.168.") || url.Contains("10.0.");
+            if (url.StartsWith("ws://") && !isLocal)
+            {
+                Debug.LogWarning($"[NetworkManager] {url} is plaintext ws:// but not local. A deployed " +
+                                 "relay serves TLS — use wss:// or the connection will simply fail.");
+            }
+
+            return url;
+        }
 
         public bool IsConnected => socketClient != null && socketClient.IsConnected;
         public string RoomCode { get; private set; }
@@ -162,7 +214,7 @@ namespace Salem.Networking
 
             try
             {
-                await socketClient.Connect(serverUrl);
+                await socketClient.Connect(ServerUrlForConnect());
             }
             catch (Exception e)
             {
@@ -531,7 +583,7 @@ namespace Salem.Networking
 
             try
             {
-                await socketClient.Connect(serverUrl);
+                await socketClient.Connect(ServerUrlForConnect());
             }
             catch (Exception e)
             {
