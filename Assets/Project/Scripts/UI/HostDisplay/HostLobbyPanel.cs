@@ -194,6 +194,11 @@ namespace Salem.UI.HostDisplay
 
         private void RenderUrls()
         {
+            // A launch-time override wins over the Inspector value, so a BUILT host can be pointed at
+            // the deployed web client without a rebuild (-clienturl / SALEM_CLIENT_URL). The scene
+            // field stays the fallback, which is what the Editor normally uses for LAN testing.
+            string baseUrl = Salem.Networking.DeploymentConfig.ClientBaseUrlOverride() ?? this.baseUrl;
+
             // An unset baseUrl leaves both blank rather than printing "/join" on a TV, which would
             // read as a broken address people then try to type.
             bool haveBase = !string.IsNullOrWhiteSpace(baseUrl);

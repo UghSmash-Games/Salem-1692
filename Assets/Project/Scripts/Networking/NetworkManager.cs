@@ -31,32 +31,11 @@ namespace Salem.Networking
         // ΓöÇΓöÇΓöÇ Public State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
         /// <summary>
-        /// The relay URL actually used, resolved once.
-        ///
-        /// ⚠ THE SERIALIZED FIELD IS ONLY A FALLBACK. It is baked into the scene at build time, so a
-        /// standalone host would otherwise be permanently pointed at whatever URL happened to be in
-        /// the Inspector the day it was built — and the fix would be a rebuild. A deployed relay can
-        /// move, and dev/prod are the same binary.
-        ///
-        /// Precedence, most specific first:
-        ///   1. `-server wss://host` on the command line (how you launch a built host)
-        ///   2. the SALEM_SERVER_URL environment variable
-        ///   3. the Inspector value
+        /// The relay URL actually used. The Inspector field is only the FALLBACK — see
+        /// <see cref="DeploymentConfig"/> for why, and for the argument/environment precedence it
+        /// shares with the web-client URL.
         /// </summary>
-        private string ResolveServerUrl()
-        {
-            var args = Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length - 1; i++)
-            {
-                if (args[i] == "-server" && !string.IsNullOrWhiteSpace(args[i + 1]))
-                    return args[i + 1].Trim();
-            }
-
-            var fromEnv = Environment.GetEnvironmentVariable("SALEM_SERVER_URL");
-            if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv.Trim();
-
-            return serverUrl;
-        }
+        private string ResolveServerUrl() => DeploymentConfig.ServerUrlOverride() ?? serverUrl;
 
         /// <summary>
         /// Resolve the URL and warn about the one misconfiguration that fails confusingly: a plaintext

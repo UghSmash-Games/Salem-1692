@@ -44,7 +44,14 @@ namespace Salem.UI.HostDisplay
 
         private void OnEnable()
         {
-            if (urlText != null) urlText.text = displayUrl;
+            // Same launch-time override as the lobby, so the two can never print different addresses
+            // (they were independent Inspector fields, edited by hand, with nothing keeping them in
+            // step). The override is a BASE url, so the join path is appended here.
+            if (urlText != null)
+            {
+                var overrideBase = Salem.Networking.DeploymentConfig.ClientBaseUrlOverride();
+                urlText.text = overrideBase != null ? overrideBase + "/join" : displayUrl;
+            }
 
             coordinator = FindFirstObjectByType<NetworkGameCoordinator>();
             if (coordinator != null)

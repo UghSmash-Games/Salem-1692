@@ -6360,7 +6360,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e622bc059c92414a9a98a862e91a440, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  serverUrl: ws://localhost:3000
+  serverUrl: wss://salem-1692-relay.fly.dev
   maxReconnectAttempts: 5
   baseReconnectDelay: 1
 --- !u!4 &1161218636

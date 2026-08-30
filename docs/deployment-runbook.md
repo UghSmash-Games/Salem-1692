@@ -144,17 +144,33 @@ establishes — often with nothing but a CORS error in the browser console. No e
 
 ---
 
-## 4. Unity host → point it at the relay
+## 4. Unity host → point it at BOTH URLs
 
-The `NetworkManager.serverUrl` Inspector field is only a **fallback**; a built host reads, in order:
+The host needs two deployment addresses, and they are easy to confuse:
 
-1. `-server wss://<your-app>.fly.dev` on the command line
-2. the `SALEM_SERVER_URL` environment variable
-3. the Inspector value baked into the scene
+| What | Where it goes | Value |
+|---|---|---|
+| The relay it CONNECTS to | `NetworkManager.serverUrl` | `wss://<your-app>.fly.dev` |
+| The web client it PRINTS for players | `HostLobbyPanel.baseUrl` **and** `HostHeader.displayUrl` | `https://<site>.netlify.app` |
+
+⚠ **The printed URL is not derived from the relay URL.** Pointing the host at the deployed relay does
+nothing to the address on the TV — that is separate scene text, and it will happily keep advertising
+`http://192.168.1.155:5173` while the game itself runs against production. Players then type a LAN
+address that only works in your house.
+
+All three Inspector fields are **fallbacks**. A built host reads, most specific first:
+
+1. command line: `-server wss://<app>.fly.dev -clienturl https://<site>.netlify.app`
+2. environment: `SALEM_SERVER_URL`, `SALEM_CLIENT_URL`
+3. the Inspector values baked into the scene
 
 ```bash
-Salem1692.exe -server wss://<your-app>.fly.dev
+Salem1692.exe -server wss://salem-1692-relay.fly.dev -clienturl https://salem-1692.netlify.app
 ```
+
+`-clienturl` is a BASE url with no path: the lobby appends `/join` and `/display`, and the in-game
+header appends `/join`. Using the override also removes the chance of the lobby and the header
+disagreeing, which two hand-edited fields allow.
 
 Use **`wss://`**, not `ws://` — Fly terminates TLS and a plaintext socket is refused. The host logs a
 warning if you point `ws://` at anything non-local, because that failure otherwise surfaces as a bare
