@@ -41,10 +41,12 @@ message arrival).
 
 ### 3. Non-witch submits during the night vote — discarded silently, phone still confirms
 **Asserts:** the masking model's core: a non-acting submission changes nothing and *looks* identical.
-**Status:** ✅ automated (client + server) / ◐ code-verified (host discard).
+**Status:** ✅ automated (client + server) / ◐ code-verified (host discard, traced 2026-08-28).
 The server forwards every submission without inspecting `acting` (`dispatch.test.js`), and the phone
-renders the same confirmation either way. The **discard itself** is Unity
-(`GamePhaseManager.RecordWitchVote` ignores non-acting submits) and is code-verified only.
+renders the same confirmation either way. The discard is `RunNetworkedSecretPhase.OnSubmit`: a
+non-acting submit updates the live tally not at all and never reaches `recordActing`, while
+**every** player's Confirm counts toward the wait — so resolution timing cannot separate who acted
+from who didn't. Both halves verified by reading; the behaviour still wants one live sitting.
 **Repro:** see item 4 — same sitting.
 
 ### 4. Every phone shows an identical masking screen at dawn/night
@@ -57,8 +59,12 @@ CLAUDE.md's masking line).
 the moment each becomes interactive.
 
 ### 5. Witch timeout — a random target after 45s
-**Status:** ◐ code-verified. `GamePhaseManager.witchVoteTimeout` (45s) resolves with whatever was
-recorded; `NightResolver` random-fills any witch with no valid vote.
+**Status:** ◐ code-verified (traced 2026-08-28). `witchVoteTimeout` (45s) resolves with whatever was
+recorded; `NightResolver` random-fills any witch with no valid vote, and dawn has its own fallback
+(`votes.Count == 0` → a random placement) so the black cat still lands.
+⚠ **The window is not shortened by everyone else finishing.** The phase waits for every CONNECTED
+human to confirm, by design — so this test takes the full 45s even if the witch is the only one
+idle. Use the lobby's timer setting to shorten it rather than assuming something has hung.
 **Repro:** ⚠ needs a witch who deliberately does nothing — easiest with an AI-filled game where you
 hold the only witch phone and never tap.
 
@@ -74,8 +80,17 @@ so `NightResolver` places nothing.
 ### 8. Conspiracy turns the last townsperson into a witch — that player LOSES
 **Asserts:** the rulebook's "in which case that player loses" — they are excluded from the winning
 witch team.
-**Status:** ◐ code-verified. `AddTryalCardAndNotify` → `EvaluateEndGame` records that player as the
-loser. See CLAUDE.md → Win Conditions.
+**Status:** ◐ code-verified (traced 2026-08-28). `AddTryalCardAndNotify` → `EvaluateEndGame(this)`
+excludes that player from the winners. See CLAUDE.md → Win Conditions.
+**Checked specifically — the mid-loop evaluation is SAFE.** Conspiracy step 2 applies as all removals
+then all additions, so the win check can fire while other players' cards are still in flight, held in
+`passedCards` and belonging to nobody's `TryalCards`. That could in principle make the villagers'
+"all witch tryals revealed" test true spuriously. It cannot here: the check only runs when a player
+JUST became a witch, and their witch card is added *before* the evaluation — so at least one
+unrevealed witch card is always visible at that moment.
+⚠ **Known arbitrary edge:** if two players turn witch in the same conspiracy round and the second is
+the last non-witch, the loop order decides which one is the loser. They turned simultaneously in
+fiction; nothing in the rulebook breaks that tie.
 **Repro:** needs a hand-built end state → **seat setup** (below).
 
 ### 9. Constable is also a witch — the evil-constable path
@@ -94,8 +109,13 @@ witch card. `gameEventCopy.test.ts` locks the announcement copy.
 **Repro:** `TestManager → Link Matchmaker Seat<->SeatB`, then eliminate one.
 
 ### 12. Piety removed at 7+ accusations — immediate tryal reveal
-**Status:** ◐ code-verified. `Player.TriggerPietyLossReveal`, fired from the Curse handler only when
-the removed blue card was Piety.
+**Status:** ◐ code-verified (traced 2026-08-28). The Curse handler orders it correctly — remove the
+card, `RecomputeStatusFromStatusCards` (so the limit is back to the un-doubled base), *then*
+`TriggerPietyLossReveal`. A networked remover chooses which tryal for real, over
+`PendingTryalRevealTarget` with reason `"piety_loss_reveal"`.
+🐛 The method's own doc comment still claimed networked removers fell back to random — a gap closed
+in the Phase 5 close-out. Corrected, since a stale comment is how the next reader "re-discovers" a
+bug that no longer exists.
 **Repro:** seat setup — add Piety, drive accusations to ≥7, then Curse the Piety away.
 
 ### 13. George Burroughs accusation math with piety (16 normal / 14 vs Danforth)

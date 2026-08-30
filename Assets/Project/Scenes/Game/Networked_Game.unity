@@ -14646,6 +14646,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1569411958}
     - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: debugStatusCard
+      value: 
+      objectReference: {fileID: 11400000, guid: f118581e08ef5104f82f0fb0008ac0ea, type: 2}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: autoStartOnEnable
       value: 0
       objectReference: {fileID: 0}
@@ -14662,6 +14666,10 @@ PrefabInstance:
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: debugAccusationCard
+      value: 
+      objectReference: {fileID: 11400000, guid: 9f06c693227b37f43b3e603107953dd3, type: 2}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: debugMatchmakerCard
       value: 
       objectReference: {fileID: 11400000, guid: dfbc7e3a840661b4085df3110c897aa1, type: 2}
@@ -14669,6 +14677,18 @@ PrefabInstance:
       propertyPath: autopilotLocalPlayer
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'debugTryalTemplates.Array.data[0]'
+      value: 
+      objectReference: {fileID: 11400000, guid: ad865bcd6243810478a888739223829a, type: 2}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'debugTryalTemplates.Array.data[1]'
+      value: 
+      objectReference: {fileID: 11400000, guid: c8009f4c9b5a6f446bb1cbf6dfb88e4e, type: 2}
+    - target: {fileID: 3367054000243017449, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
+      propertyPath: 'debugTryalTemplates.Array.data[2]'
+      value: 
+      objectReference: {fileID: 11400000, guid: cb372f1797ef6ed4b8d595f454f96848, type: 2}
     - target: {fileID: 3695826593631295867, guid: 9c40699a049bbf1419a7c94b5a3687e1, type: 3}
       propertyPath: m_LocalPosition.x
       value: 687.24023

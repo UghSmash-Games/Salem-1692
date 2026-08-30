@@ -929,8 +929,11 @@ namespace Salem.Players
         /// the SAME path as the normal accusation reveal (the <see cref="OnAccusationRevealNeeded"/>
         /// chooser → local human picks / random fallback; <see cref="RevealTryalCard"/> with
         /// <c>fromAccusation:true</c>), so Rebecca Nurse, the multiple-witch-card rule, and win-checks are
-        /// all reused. Networked removers currently fall to the random fallback — the same shared gap as
-        /// the normal accusation reveal (see HandleAccusationRevealChoice).
+        /// all reused. A NETWORKED remover chooses for real: HandleAccusationRevealChoice hands them off via
+        /// PendingTryalRevealTarget, drained a beat later by NetworkInput.RunTurn, and the prompt carries
+        /// reason "piety_loss_reveal" so the phone's copy differs from a normal accusation reveal.
+        /// (This comment used to say networked removers fell back to random — that gap was closed in the
+        /// Phase 5 close-out; only AI and local-host choosers still pick randomly.)
         /// </summary>
         public void TriggerPietyLossReveal(Player remover)
         {
