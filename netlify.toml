@@ -1,4 +1,10 @@
 # Netlify deployment for the Salem 1692 web client (player phones + mirror displays).
+#
+# ⚠ THIS FILE MUST LIVE AT THE REPO ROOT, not in webclient/. Netlify looks for netlify.toml at the
+# root of the repository it clones; a copy inside webclient/ is only read AFTER a base directory has
+# already been set in the UI — so the config that is supposed to configure the site would depend on
+# someone having configured the site by hand first. `base` below is what points the build at the
+# webclient subdirectory; `command` and `publish` are then resolved relative to it.
 
 [build]
   base    = "webclient"

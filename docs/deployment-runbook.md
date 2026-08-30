@@ -62,8 +62,13 @@ expected here; step 3 fixes it.
 
 ## 2. Web client → Netlify
 
-Connect the repo in the Netlify UI and let it read [`netlify.toml`](../webclient/netlify.toml)
-(base `webclient`, build `npm run build`, publish `dist`). Then set the one required variable —
+Connect the repo in the Netlify UI and let it read [`netlify.toml`](../netlify.toml) from the REPO
+ROOT (base `webclient`, build `npm run build`, publish `dist`) — you should not have to type any
+of those into the UI. If Netlify asks you for a build command or publish directory, it did not find
+the file: check that it is at the root and not inside `webclient/`, because Netlify reads a
+subdirectory copy only after a base directory has already been set by hand.
+
+Then set the one required variable —
 **Site configuration → Environment variables**:
 
 ```
