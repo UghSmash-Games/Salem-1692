@@ -540,6 +540,24 @@ namespace Salem.Players
             target.RecomputeStatusFromStatusCards();
         }
 
+        /// <summary>
+        /// Play the Black Cat from hand onto <paramref name="target"/>.
+        ///
+        /// The Black Cat is an ordinary BLUE card that happens to carry holder bookkeeping, so this
+        /// mirrors <see cref="PlayStatusCardOnTarget"/> — taken from hand WITHOUT discarding, since it
+        /// is transferred, not spent — and then routes through <see cref="AssignBlackCat"/> so
+        /// IsBlackCatHolder and the status row stay in step. Going through AddStatusCard alone would
+        /// put the card on the table with nobody registered as its holder, and Conspiracy step 1 looks
+        /// up the holder, not the card.
+        /// </summary>
+        public void GiveBlackCatTo(Card card, Player target)
+        {
+            if (card == null || target == null) return;
+
+            HandManager.TakeCard(card);
+            target.AssignBlackCat(card);
+        }
+
         public bool HasStatus(string name) => StatusCards.Any(c => c.Name == name);
         
         public void ClearStatusCardsAndRecompute()

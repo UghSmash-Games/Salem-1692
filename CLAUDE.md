@@ -227,7 +227,7 @@ the enum's default), so playing them routed to the Accusation handler and never 
 `PlayStatusCardOnTarget`/`AddStatusCard`. The effect map (CardEffectManager `_ops`),
 `PlayStatusCardOnTarget`, and the piety/asylum threshold/flag logic were all correct.
 Fixed by setting each SO's `Op` to its real value (Piety 13, Asylum 11, Matchmaker 12,
-Stocks 1, Scapegoat 10, Black Cat 5 — Black Cat was insulated via name-handling at draw).
+Stocks 1, Scapegoat 10, Black Cat 5 — Black Cat used to be insulated via name-handling at draw; that interception is GONE, it is now drawn into hand and played like any blue card, see docs/character-spec.md).
 **Asylum night-immunity and matchmaker (linking + the cascade exceptions) must be
 RE-VERIFIED now that cards actually attach** — this directly affects Mary Warren (#7,
 matchmaker-based). Lesson: dispatch keys on `ActionCardSO.Op`, but several places match by

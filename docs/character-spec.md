@@ -505,6 +505,18 @@ Status legend: ✅ done · ◐ partial · ⊘ stub · ✗ bug · ✗✗ not buil
   Warren + both-teams-lose exceptions → see #7 (guards land at `mmPartner.EliminateNow()`). A SPARED
   partner keeps their now-partnerless Matchmaker card (blue cards persist; bond cleared by `ClearMatch`;
   free to re-link) — NOT auto-discarded.
+- **Black Cat is an ordinary BLUE card that carries holder bookkeeping** (`Type: Blue`, `Op: 5`,
+  `LogMessage: "{source} played {card} on {target}."` — it was always authored as playable). It is
+  held out of the deck at setup and PLACED at dawn, but it can return to circulation (a Curse
+  discards it, the deck later re-forms from the discard) and then be DRAWN — at which point it goes
+  to the hand and is played on a target like Piety or Asylum, via `ActionOp.BlackCat` →
+  `Player.GiveBlackCatTo`.
+  - 🐛 **Was intercepted at draw and assigned immediately**, which in networked play meant a RANDOM
+    recipient: the "let the drawer choose" branch was gated on `IsLocalPlayer`, and no human is local
+    when every player is remote. Owner decision (2026-08-28): it goes to hand — a blue card is
+    played, not resolved on draw. Both interceptions (`DeckManager.DrawCard` and
+    `CardEffectManager.HandleCardDrawn`) are gone.
+  - Dawn placement is untouched, and so is Mary Warren's held-but-inert immunity.
 - **Black Cat:** witches may self-give at dawn (✅ 4b); the owner who draws conspiracy chooses
   which of their tryals is revealed (verify in the conspiracy path); Mary Warren held-but-inert (✅ #7 —
   she holds the card but the Conspiracy step-1 reveal is skipped for her; NOT refused at assignment).

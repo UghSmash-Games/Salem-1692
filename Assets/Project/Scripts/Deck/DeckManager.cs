@@ -142,20 +142,13 @@ namespace Salem.Deck
                 return;
             }
 
-            if (drawnCard != null && drawnCard.Name == "Black Cat")
-            {
-                if (owningPlayer != null)
-                {
-                    owningPlayer.AssignBlackCat(drawnCard);
-                }
-                else
-                {
-                    Debug.LogWarning("[DeckManager] Drew Black Cat but could not determine owning player. Sending to discard.");
-                    AddToDiscardPile(drawnCard);
-                }
-                return;
-            }
-
+            // ⚠ The Black Cat is NOT intercepted here. It used to be assigned to a player the moment
+            // it was drawn, which in networked play meant a RANDOM recipient — the "let the drawer
+            // choose" branch in CardEffectManager was gated on IsLocalPlayer, and no human is local
+            // when every player is remote. It is an ordinary BLUE card: it goes to the hand and is
+            // played on a target like Piety or Asylum (ActionOp.BlackCat → Player.GiveBlackCatTo).
+            // Dawn placement is unaffected — GameSetup holds the cat out of the deck before dealing,
+            // so it only reaches a hand if a Curse discards it and the deck later re-forms.
             handManager.AddCard(drawnCard);
         }
 

@@ -209,32 +209,38 @@ cheapest way to see WHICH win condition fired, and the two are easy to mistake f
 
 ## Findings from the Phase 10 traces
 
-### Finding 1 — a drawn Black Cat is assigned AT RANDOM in networked play ⚠ OPEN (needs a rules call)
+### Finding 1 — a drawn Black Cat was assigned AT RANDOM in networked play ✅ FIXED (owner decision)
 
-`CardEffectManager.HandleCardDrawn` offers the drawer a choice of recipient only when
+`CardEffectManager.HandleCardDrawn` offered the drawer a choice of recipient only when
 `drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null`. **In networked mode no
-player is ever `IsLocalPlayer`** — every human is remote — so the branch is dead and every networked
-draw falls through to `AITargetingHelper.SelectRandomTarget`. The cat lands on a random player with
-no agency from anyone.
+player is ever `IsLocalPlayer`** — every human is remote — so the branch was dead and every networked
+draw fell through to `AITargetingHelper.SelectRandomTarget`. The cat landed on a random player with
+no agency from anyone. Same bug class as the Robbery recipient, the Curse blue-card pick and Will
+Grigs' mode choice, all already fixed by routing through `IPlayerInput`.
 
-This is the same bug class as the Robbery recipient, the Curse blue-card pick and Will Grigs' mode
-choice — all three already fixed by routing through `IPlayerInput`. The two neighbouring gates were
-checked and are FINE: the accusation reveal (`HandleAccusationRevealChoice`) and conspiracy step 1
-both handle the networked chooser first and use `IsLocalPlayer` only as the local-host fallback.
+The two neighbouring gates were checked and are FINE: the accusation reveal
+(`HandleAccusationRevealChoice`) and conspiracy step 1 both handle the networked chooser first and
+use `IsLocalPlayer` only as the local-host fallback.
 
-**Reachability is narrow.** `GameSetup` extracts the Black Cat before dealing and holds it for dawn,
-so it is not in the draw deck at the start. It returns only if it reaches the discard pile (a Curse
-discards it) AND the deck later re-forms from the discard. So: a long game, after a Curse.
+**Owner decision (2026-08-28): it goes to the HAND** — a blue card is played, not resolved on draw.
+Both interceptions are gone (`DeckManager.DrawCard` and `HandleCardDrawn`), and `ActionOp.BlackCat`
+— previously a no-op that logged *"Assigned at Dawn, not played"* — now transfers the card via
+`Player.GiveBlackCatTo`, which routes through `AssignBlackCat` so `IsBlackCatHolder` and the status
+row stay in step. Without that, the card would sit on the table with nobody registered as its holder,
+and Conspiracy step 1 looks up the HOLDER, not the card.
 
-**Why it is NOT fixed here:** the fix depends on a rules answer this document should not invent.
-Drawing the Black Cat mid-game has no explicit rulebook entry (the glossary covers giving it at dawn,
-cursing it, and moving it with scapegoat). Two readings:
-1. **It is a blue card you drew** → it should go to your HAND and be played on a target later, like
-   any blue card. That would mean deleting the immediate-assign path entirely.
-2. **It resolves on draw** → the drawer chooses a recipient now, over `RequestTarget`, exactly like
-   the Robbery recipient.
+The card asset supports this reading: it was always authored `Type: Blue`, `Op: 5`,
+`RequiresSecondTarget: 0`, with `LogMessage: "{source} played {card} on {target}."` — i.e. as a
+playable card whose play handler had simply never been written.
 
-Either is defensible; they differ in feel and in timing. **Decision needed before implementing.**
+**Reachability is narrow** and unchanged: `GameSetup` extracts the Black Cat before dealing and holds
+it for dawn, so it reaches a hand only after a Curse discards it AND the deck later re-forms from the
+discard pile.
+
+⚠ **Not yet playtested.** Dawn placement, Mary Warren's held-but-inert immunity and the Curse
+interaction are all untouched, but the new play path has only been compile-checked. Worth one live
+run: Curse the cat off a holder, exhaust the deck, draw it, play it on someone, then draw Conspiracy
+and confirm step 1 reveals a tryal of the NEW holder.
 
 ### Finding 2 — the phone showed the name the player TYPED, not the one the table uses ✅ FIXED
 

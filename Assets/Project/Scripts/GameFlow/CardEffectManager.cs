@@ -165,7 +165,14 @@ namespace Salem.GameFlow
                         Player.TryFormMatchmakerLink();
                     }},
                     { ActionOp.Conspiracy, (s,_,_,_,_) => Debug.LogWarning("[Conspiracy] Triggered on draw, not played.") },
-                    { ActionOp.BlackCat,   (s,_,_,_,_) => Debug.LogWarning("[Black Cat] Assigned at Dawn, not played.") },
+                    // The Black Cat is dealt out of the deck at setup and PLACED at dawn — but it can
+                    // return to the deck (a Curse discards it, the deck later re-forms from the
+                    // discard) and then be drawn into a hand, at which point it is played like the
+                    // blue card it is. Before this it was intercepted at draw and assigned
+                    // immediately, which in networked play meant a RANDOM recipient: the "let the
+                    // drawer choose" branch was gated on IsLocalPlayer, and no one is local when
+                    // every human is remote.
+                    { ActionOp.BlackCat,   (s,t,_,_,c) => s.GiveBlackCatTo(c, t) },
                 };
         }
 
@@ -184,47 +191,6 @@ namespace Salem.GameFlow
                 return true;
             }
 
-            if (card.Name == "Black Cat")
-            {
-                if (drawer == null)
-                {
-                    Debug.LogWarning("[Effect] Black Cat drawn but no player was provided. Card will be discarded.");
-                    DeckManager?.AddToDiscardPile(card);
-                    return true;
-                }
-
-                if (drawer.IsHuman && drawer.IsLocalPlayer && tableLayoutController != null)
-                {
-                    tableLayoutController.BeginTargetSelection(
-                        drawer,
-                        "Choose a player to receive Black Cat.",
-                        target =>
-                            target != null &&
-                            !target.IsEliminated &&
-                            target != drawer, // Mary Warren CAN be given the Black Cat (immune to its effect, not refused)
-                        target =>
-                        {
-                            target.AssignBlackCat(card);
-                            Debug.Log($"[Black Cat] {drawer.PlayerNameText} assigned Black Cat to {target.PlayerNameText}.");
-                        }
-                    );
-                }
-                else
-                {
-                    Player target = AITargetingHelper.SelectRandomTarget(drawer);
-
-                    if (target != null)
-                    {
-                        target.AssignBlackCat(card);
-                    }
-                    else
-                    {
-                        DeckManager?.AddToDiscardPile(card);
-                    }
-                }
-
-                return true;
-            }
 
             if (card.Name == "Conspiracy")
             {
