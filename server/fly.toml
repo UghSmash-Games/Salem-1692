@@ -3,7 +3,7 @@
 # Rename `app` before the first deploy — app names are globally unique on Fly, and `fly launch`
 # will otherwise offer to generate one.
 app = "salem-1692-relay"
-primary_region = "ord"   # pick the region nearest your players; `fly platform regions` lists them
+primary_region = "den"   # Denver — closest region to the host
 
 [build]
   dockerfile = "Dockerfile"
