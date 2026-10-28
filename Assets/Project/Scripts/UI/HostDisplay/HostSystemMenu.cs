@@ -1,8 +1,10 @@
-using Salem.Networking; // PUBLIC DTOs only (GameOverMsg carries a winner label and nothing else).
+using Salem.Networking; // PUBLIC DTOs + NetworkGameCoordinator lobby data ONLY.
 using Salem.Systems;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 // See the masking-boundary banner in HostTableView.cs: no file in this folder may reference the seat
@@ -14,8 +16,8 @@ namespace Salem.UI.HostDisplay
     /// The host application's only way out, and its end-of-game screen.
     ///
     /// Two states on one overlay:
-    ///  • **Quit confirmation** — Escape, at any time.
-    ///  • **Game over** — the winner, with NEW GAME and QUIT.
+    ///  • **Escape menu** — KEEP PLAYING / RESTART (mid-game only) / QUIT, at any time.
+    ///  • **Game over** — the winner, with NEW GAME / QUIT.
     ///
     /// 🔴 WHY THIS EXISTS AT ALL. Before this the host could only be closed with Alt+F4, and when a
     /// game ended the TV simply kept showing the final board — the result appeared only as one line
@@ -43,16 +45,19 @@ namespace Salem.UI.HostDisplay
         private static readonly Color Ground = new(0.09f, 0.075f, 0.059f, 0.96f);
         private static readonly Color Parchment = new(0.91f, 0.863f, 0.753f, 1f);
         private static readonly Color Ember = new(0.902f, 0.698f, 0.408f, 1f);
+        private static readonly Color Amber = new(0.788f, 0.541f, 0.247f, 1f);
         private static readonly Color Crimson = new(0.659f, 0.137f, 0.106f, 1f);
         private static readonly Color PanelFill = new(0.13f, 0.11f, 0.09f, 1f);
+
+        private const float ButtonWidth = 320f;
+        private const float ButtonGap = 40f;
+        private const int MaxButtons = 3;
 
         private GameObject root;
         private TMP_Text titleText;
         private TMP_Text bodyText;
-        private Button primaryButton;
-        private TMP_Text primaryLabel;
-        private Button secondaryButton;
-        private TMP_Text secondaryLabel;
+        private readonly Button[] buttons = new Button[MaxButtons];
+        private readonly TMP_Text[] buttonLabels = new TMP_Text[MaxButtons];
 
         private bool gameOverShown;
 
@@ -79,13 +84,39 @@ namespace Salem.UI.HostDisplay
             Hide();
         }
 
-        private void OnEnable() => NetworkManager.OnGameOverSent += HandleGameOver;
-        private void OnDisable() => NetworkManager.OnGameOverSent -= HandleGameOver;
+        private void OnEnable()
+        {
+            NetworkManager.OnGameOverSent += HandleGameOver;
+            SceneManager.sceneLoaded += HandleSceneLoaded;
+        }
+
+        private void OnDisable()
+        {
+            NetworkManager.OnGameOverSent -= HandleGameOver;
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
+        }
+
+        /// <summary>
+        /// 🐛 THE RESTART FIX. This object is DontDestroyOnLoad, so it survives the scene reload that
+        /// a restart performs — and without this it came back up with the end-of-game panel STILL ON
+        /// SCREEN over the new lobby. Worse than the visible symptom: `gameOverShown` also survived,
+        /// and Escape is ignored while it is true, so the menu would have been dead for the rest of
+        /// the session.
+        ///
+        /// Keyed on any scene load rather than on the restart call, so it holds for every path that
+        /// swaps scenes, not just the one button that does it today.
+        /// </summary>
+        private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            gameOverShown = false;
+            Hide();
+        }
 
         private void Update()
         {
-            // The old input API, matching DebugManager. Player Settings has activeInputHandler = Both,
-            // so this is live; if the project ever goes new-input-only this is the one line to port.
+            // The old input API, matching DebugManager. The project's input settings use
+            // activeInputHandler = Both, so this is live; if it ever goes new-input-only, this is the
+            // one line to port. (Worded to keep the §8 boundary grep free of comment-only hits.)
             if (!Input.GetKeyDown(KeyCode.Escape)) return;
 
             // Escape never dismisses the game-over panel — there is nothing to go back TO, and
@@ -93,26 +124,42 @@ namespace Salem.UI.HostDisplay
             if (gameOverShown) return;
 
             if (root.activeSelf) Hide();
-            else ShowQuitConfirm();
+            else ShowEscapeMenu();
         }
 
         // ─── States ───────────────────────────────────────────────
 
-        private void ShowQuitConfirm()
+        /// <summary>
+        /// The in-game menu. RESTART appears only once a game is actually running: in the lobby it
+        /// would be a pure footgun — people have already joined and typed a code, and restarting
+        /// would throw them all back to the join screen to retype a new one for no gain.
+        /// </summary>
+        private void ShowEscapeMenu()
         {
-            titleText.text = "QUIT SALEM?";
-            bodyText.text = "The game in progress will end for everyone, and every phone will return " +
-                            "to the join screen.";
+            var coordinator = FindFirstObjectByType<NetworkGameCoordinator>();
+            bool midGame = coordinator != null && coordinator.HasStarted;
 
-            primaryLabel.text = "KEEP PLAYING";
-            SetButton(primaryButton, Ember, Hide);
+            titleText.text = midGame ? "GAME PAUSED?" : "QUIT SALEM?";
+            bodyText.text = midGame
+                ? "The town waits. Restarting or quitting ends this game for everyone, and every " +
+                  "phone returns to the join screen."
+                : "Quitting closes the game for everyone, and every phone returns to the join screen.";
 
-            secondaryLabel.text = "QUIT";
-            SetButton(secondaryButton, Crimson, AppLifecycle.Quit);
+            if (midGame)
+            {
+                ShowButtons(
+                    ("KEEP PLAYING", Ember, Hide),
+                    ("RESTART", Amber, AppLifecycle.RestartGame),
+                    ("QUIT", Crimson, AppLifecycle.Quit));
+            }
+            else
+            {
+                ShowButtons(
+                    ("KEEP PLAYING", Ember, Hide),
+                    ("QUIT", Crimson, AppLifecycle.Quit));
+            }
 
-            secondaryButton.gameObject.SetActive(true);
-            root.SetActive(true);
-            EventSystem.current?.SetSelectedGameObject(primaryButton.gameObject);
+            Show();
         }
 
         /// <summary>
@@ -132,15 +179,19 @@ namespace Salem.UI.HostDisplay
             };
             bodyText.text = "Every tryal card is revealed on the board behind this panel.";
 
-            primaryLabel.text = "NEW GAME";
-            SetButton(primaryButton, Ember, AppLifecycle.RestartGame);
+            ShowButtons(
+                ("NEW GAME", Ember, AppLifecycle.RestartGame),
+                ("QUIT", Crimson, AppLifecycle.Quit));
 
-            secondaryLabel.text = "QUIT";
-            SetButton(secondaryButton, Crimson, AppLifecycle.Quit);
+            Show();
+        }
 
-            secondaryButton.gameObject.SetActive(true);
+        private void Show()
+        {
             root.SetActive(true);
-            EventSystem.current?.SetSelectedGameObject(primaryButton.gameObject);
+            // Focus the first (always safe) option, so a keyboard or controller lands on KEEP
+            // PLAYING / NEW GAME rather than on something destructive.
+            EventSystem.current?.SetSelectedGameObject(buttons[0].gameObject);
         }
 
         private void Hide()
@@ -148,11 +199,29 @@ namespace Salem.UI.HostDisplay
             if (root != null) root.SetActive(false);
         }
 
-        private static void SetButton(Button button, Color colour, UnityEngine.Events.UnityAction action)
+        /// <summary>
+        /// Lay out and wire the row. Unused buttons are switched off, and the used ones are centred as
+        /// a group, so two and three options both look deliberate rather than leaving a gap.
+        /// </summary>
+        private void ShowButtons(params (string label, Color colour, UnityAction action)[] specs)
         {
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(action);
-            button.image.color = colour;
+            float total = specs.Length * ButtonWidth + (specs.Length - 1) * ButtonGap;
+            float startX = -total / 2f + ButtonWidth / 2f;
+
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                bool used = i < specs.Length;
+                buttons[i].gameObject.SetActive(used);
+                if (!used) continue;
+
+                ((RectTransform)buttons[i].transform).anchoredPosition =
+                    new Vector2(startX + i * (ButtonWidth + ButtonGap), 90f);
+
+                buttonLabels[i].text = specs[i].label;
+                buttons[i].image.color = specs[i].colour;
+                buttons[i].onClick.RemoveAllListeners();
+                buttons[i].onClick.AddListener(specs[i].action);
+            }
         }
 
         // ─── Construction ─────────────────────────────────────────
@@ -184,8 +253,9 @@ namespace Salem.UI.HostDisplay
             var scrim = root.AddComponent<Image>();
             scrim.color = Ground;   // also swallows clicks aimed at the board underneath
 
+            // Wide enough for three buttons plus their gaps (3 x 320 + 2 x 40 = 1040).
             var panel = NewRect("Panel", root.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                                new Vector2(980, 460));
+                                new Vector2(1140, 460));
             panel.AddComponent<Image>().color = PanelFill;
 
             var outline = panel.AddComponent<Outline>();
@@ -194,15 +264,16 @@ namespace Salem.UI.HostDisplay
 
             titleText = NewText("Title", panel.transform, 72, FontStyles.Bold, Parchment,
                                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -130), new Vector2(-120, 120));
-            titleText.alignment = TextAlignmentOptions.Center;
 
             bodyText = NewText("Body", panel.transform, 30, FontStyles.Normal,
                                new Color(Parchment.r, Parchment.g, Parchment.b, 0.75f),
-                               new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -240), new Vector2(-180, 110));
+                               new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -240), new Vector2(-220, 110));
             bodyText.alignment = TextAlignmentOptions.Top;
 
-            (primaryButton, primaryLabel) = NewButton("Primary", panel.transform, new Vector2(-180, 90));
-            (secondaryButton, secondaryLabel) = NewButton("Secondary", panel.transform, new Vector2(180, 90));
+            for (int i = 0; i < MaxButtons; i++)
+            {
+                (buttons[i], buttonLabels[i]) = NewButton($"Button{i}", panel.transform);
+            }
         }
 
         private static GameObject NewRect(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax,
@@ -234,17 +305,16 @@ namespace Salem.UI.HostDisplay
             return text;
         }
 
-        private static (Button, TMP_Text) NewButton(string name, Transform parent, Vector2 position)
+        private static (Button, TMP_Text) NewButton(string name, Transform parent)
         {
             var go = NewRect(name, parent, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                             new Vector2(320, 96), position);
+                             new Vector2(ButtonWidth, 96));
             var image = go.AddComponent<Image>();
             var button = go.AddComponent<Button>();
             button.targetGraphic = image;
 
             var label = NewText("Label", go.transform, 34, FontStyles.Bold, new Color(0.06f, 0.05f, 0.04f),
                                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            label.alignment = TextAlignmentOptions.Center;
 
             return (button, label);
         }
