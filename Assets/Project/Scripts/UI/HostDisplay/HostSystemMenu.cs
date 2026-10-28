@@ -228,7 +228,9 @@ namespace Salem.UI.HostDisplay
             text.fontStyle = style;
             text.color = colour;
             text.alignment = TextAlignmentOptions.Center;
-            text.textWrappingMode = TextWrappingModes.Normal;
+            // Word wrapping is on by default; setting it explicitly would mean picking between
+            // `textWrappingMode` (TMP 3.2+) and the older `enableWordWrapping`, and this is the only
+            // place in the project that would depend on which one this TMP version exposes.
             return text;
         }
 

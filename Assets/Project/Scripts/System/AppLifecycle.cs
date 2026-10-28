@@ -1,3 +1,4 @@
+using Salem.Characters;
 using Salem.Data;
 using Salem.Networking;
 using UnityEngine;
