@@ -4364,7 +4364,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   roomCodeText: {fileID: 0}
   urlText: {fileID: 0}
-  displayUrl: 
+  displayUrl: https://salem-1692.netlify.app/join
   tableLineText: {fileID: 878423797}
   tableLineFormat: "TABLE {0} \xB7 {1} SOULS"
   tableLineFormatNoCount: TABLE {0}
@@ -8400,7 +8400,7 @@ MonoBehaviour:
   content: {fileID: 2021071839}
   roomCodeText: {fileID: 1346728571}
   roomCodePlaceholder: ----
-  baseUrl: http://192.168.1.155:5173
+  baseUrl: https://salem-1692.netlify.app
   joinUrlFormat: '{0}/join'
   displayUrlFormat: '{0}/display'
   joinUrlText: {fileID: 271115749}

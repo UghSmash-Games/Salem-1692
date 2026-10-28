@@ -43,6 +43,22 @@ namespace Salem.Characters
         public bool IsDraftRunning => _draftRunning;
         public int QueuedDraftCount => _draftQueue.Count;
 
+        /// <summary>
+        /// Drop everything left over from the game that just ended. Called by AppLifecycle.RestartGame
+        /// BEFORE the scene reloads.
+        ///
+        /// ⚠ This object is DontDestroyOnLoad, so without it a draft coroutine awaiting an answer
+        /// from a phone would keep running straight into the next game, holding seats that were
+        /// destroyed with the old scene — and `_draftRunning` would stay true, so the first real
+        /// elimination of the new game would enqueue and never drain.
+        /// </summary>
+        public void ResetForNewGame()
+        {
+            StopAllCoroutines();
+            _draftQueue.Clear();
+            _draftRunning = false;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
         {

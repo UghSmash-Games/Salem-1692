@@ -355,6 +355,9 @@ namespace Salem.Networking
         public static event System.Action<EliminationResultMsg> OnEliminationResultSent;
         public static event System.Action<PublicRevealMsg> OnPublicRevealSent;
         public static event System.Action<GameEventMsg> OnGameEventSent;
+        // The server does not echo game_over back to the host, so this send-event is the host
+        // display's only signal that the game ended. Carries the PUBLIC winner label only.
+        public static event System.Action<GameOverMsg> OnGameOverSent;
 
         public void SendPhaseResolve(PhaseResolveMsg msg)
         {
@@ -390,6 +393,7 @@ namespace Salem.Networking
         {
             if (!GuardConnected("SendGameOver")) return;
             _ = socketClient.Emit("game_over", JsonUtility.ToJson(msg));
+            OnGameOverSent?.Invoke(msg);
         }
 
         // ΓöÇΓöÇΓöÇ Handler Registration ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
