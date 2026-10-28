@@ -35,8 +35,35 @@ namespace Salem.Rules
         public static bool ValidateSecondary(Player source, Player primary, Player secondary, ActionOp op, out string reason)
         {
             if (secondary == null) { reason = "Second target required."; return false; }
+            // Defense-in-depth: an eliminated player can never be a recipient. In practice the host
+            // builds the eligible list excluding eliminated players and RequestTarget re-verifies, but
+            // guard here too so no future caller can slip an eliminated recipient past validation.
+            if (secondary.IsEliminated) { reason = "Recipient is no longer in the game."; return false; }
             if (secondary == source && !AllowsSelf(op)) { reason = "You cannot select yourself as recipient."; return false; }
             if (secondary == primary) { reason = "Recipient must be different from the victim."; return false; }
+            reason = null; return true;
+        }
+
+        /// <summary>
+        /// Robbery and Scapegoat move cards BETWEEN TWO OTHER players, so they need a source, a victim
+        /// and a recipient — three living players. Rulebook p13: "They may only involve two other
+        /// players... Therefore, when only two players remain, robbery and scapegoat may not be played."
+        /// </summary>
+        public static bool NeedsThreePlayers(ActionOp op) =>
+            op == ActionOp.Robbery || op == ActionOp.Scapegoat;
+
+        /// <summary>
+        /// Can this op legally be played at all right now, independent of targets? The single source of
+        /// truth for the 2-player disable — used BOTH to gate what the phone is offered (greyed-out
+        /// cards in the hand) and to refuse the play host-side if a client sends it anyway.
+        /// </summary>
+        public static bool ValidatePlayable(ActionOp op, int aliveCount, out string reason)
+        {
+            if (NeedsThreePlayers(op) && aliveCount < 3)
+            {
+                reason = "Needs 3+ players (moves cards between two other players).";
+                return false;
+            }
             reason = null; return true;
         }
     }

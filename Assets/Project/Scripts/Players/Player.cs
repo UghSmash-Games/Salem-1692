@@ -31,7 +31,7 @@ using UnityEngine;
 namespace Salem.Players
 {
     [RequireComponent(typeof(HandManager))]
-    public class Player : MonoBehaviour, IPlayerController
+    public class Player : MonoBehaviour
     {
         #region Vars
         [Header("Control")]
@@ -42,23 +42,93 @@ namespace Salem.Players
         public IRng Rng { get; private set; }
         public bool IsHuman => isHuman;
 
+        // Network connection state. Defaults true; flipped false when the server
+        // reports this seat's socket dropped (NetworkManager.OnPlayerLeft, consumed
+        // mid-game by NetworkGameCoordinator.HandlePlayerLeft). Read live by the
+        // secret-phase wait set so a dropped human can't stall a phase to its
+        // timeout. NOTE (4c scope): this is ONLY the wait-set signal — seat
+        // cleanup / reconnect / turn-order removal remain post-4a.
+        public bool IsConnected = true;
+
         public static event Action<Player, byte, byte> AccusationCountChanged;
         public static event Action<Player, byte, byte> AccusationThresholdReached;
         public static event Action<Player, TryalCard> TryalCardRevealed;
-        // Fired when accusation limit is reached: (accused, accuser). Listener should reveal a Tryal on accused.
-        public static event Action<Player, Player> OnAccusationRevealNeeded;
+        // Fired when a tryal must be revealed and someone gets to CHOOSE which:
+        // (accused, chooser, reason). The listener (CardEffectManager) reveals a face-down tryal on
+        // `accused`. `reason` is the machine code passed through to the chooser's phone —
+        // "accusation_reveal" (threshold crossed) or "piety_loss_reveal" (Curse stripped Piety at or
+        // over the un-doubled base). Both are the SAME reveal path deliberately, so Rebecca Nurse,
+        // the multiple-witch-card rule and the win-check are shared; only the copy differs.
+        public static event Action<Player, Player, string> OnAccusationRevealNeeded;
 
         public bool IsLocalPlayer; //=> isLocalPlayer;
         public event Action OnStatusCardsChanged;
         public event Action OnTryalCardsChanged;
-        
+
+        // Network playerId (e.g. "p0") for networked-mode seats; empty for local/AI.
+        public string NetworkId;
+
+        // Public DISPLAY identity for game_state_update. For human seats this is
+        // the NetworkId; for AI seats it's a synthetic id (e.g. "ai0") so boards
+        // stay unique on the client. AI keep NetworkId empty (no private_state).
+        public string PublicId;
+
+        // Where this player's decisions come from. Lazily defaults to LocalUIInput
+        // so the local/AI game works with no coordinator; the network coordinator
+        // assigns a NetworkInput for remote seats. AI players never use this
+        // (GameTurnManager runs AIPlayer via AITurnSequencer).
+        private IPlayerInput _input;
+        public IPlayerInput Input
+        {
+            get => _input ??= new LocalUIInput();
+            set => _input = value;
+        }
+
+        // Abigail Williams: set when she places a threshold-crossing accusation, meaning she owes a
+        // "may I discard my accusations?" decision. Set in CheckAccusations (which is synchronous and
+        // so cannot await a prompt) and consumed by NetworkInput.RunTurn on its next loop tick, still
+        // within her turn. Only ever set for a NetworkInput seat; AI/local auto-clear instead.
+        public bool PendingAbigailDiscardChoice;
+
+        // "Which face-down tryal do you flip on them?" owed by THIS player (the chooser) — set when
+        // an accusation crosses the threshold or a Curse strips Piety at/over it. Both triggers are
+        // SYNCHRONOUS (ApplyAccusation ← CardEffectManager ← ExecuteCardEffect) and so cannot await a
+        // phone, exactly like PendingAbigailDiscardChoice above; NetworkInput.RunTurn consumes this
+        // on its next loop tick — still the chooser's turn, before they can act again.
+        // Only ever set for a NetworkInput seat: AI and local-host seats resolve inline instead
+        // (random / the table's own tryal selection), which is why the reveal is never lost.
+        // ⚠ Conspiracy step 1 does NOT use this — it runs in a coroutine AFTER the drawer's turn has
+        // ended, so RunTurn would never drain it; it awaits RequestTryal directly.
+        public Player PendingTryalRevealTarget;
+        public string PendingTryalRevealReason;
+
+        // Will Grigs: the resolved MODE for the Alibi he is currently playing — true = use as a Witness
+        // (+7 persistent), false = normal defensive Alibi. Transient: the input layer sets it right
+        // before ExecuteCardEffect (networked = after a mode prompt; AI = true; local = left false), and
+        // CardEffectManager._ops[Alibi] reads it. Reset to false after the play. Only read when the
+        // source HasTownHall(WillGrigs).
+        [System.NonSerialized] public bool GrigsAlibiAsWitness;
+
+        // Curse: the resolved BLUE card the CURRENT Curse play should discard from the victim.
+        // Transient: the input layer sets it right before ExecuteCardEffect (networked = after a
+        // card_pick prompt; AI/local = left null → the op picks a deterministic default), and
+        // CardEffectManager._ops[Curse] reads it. Reset to null after the play.
+        [System.NonSerialized] public Card CurseChosenBlueCard;
+
         public String PlayerNameText;
         public TownHallCard townhallCard { get; private set; }
         public Sprite townHallCardIcon { get; private set; }
         public List<TryalCard> TryalCards = new List<TryalCard>();
         public List<Card> StatusCards { get; private set; } = new();
         public bool IsWitch { get; private set; }  // Now determined dynamically
-        public bool IsConstable => TryalCards.Any(card => card.TryalCardType == TryalCardType.Constable);
+        // Reveal-aware: once the (single) constable tryal is REVEALED — by any means (accusation, night
+        // kill, confession, the piety-loss reveal) — the constable role is no longer used in the game
+        // (rulebook p12). Because there is exactly one constable card at every player count (GameSetup
+        // TryalDistribution), "I hold an UNREVEALED constable tryal" is equivalent to the global rule.
+        // This one property is the single source of truth for BOTH the night gavel-prompt eligibility
+        // (GamePhaseManager constable_save round) AND the phone "Constable" tag (NetworkStateBroadcaster).
+        public bool IsConstable => TryalCards.Any(card =>
+            !card.IsRevealed && card.TryalCardType == TryalCardType.Constable);
         public bool IsEliminated;
         //Added by Alex Craig-Hastings
         //the amount of accusations needed to reveal a tryal. This is modified by town hall cards at the beginning of the game, but not by cards like piety
@@ -75,6 +145,14 @@ namespace Salem.Players
         public Player MatchedPlayer;
         //the amount of uses a town hall ability has currently
         public byte townHallAbilityCharges { get; private set; }
+        // Martha Corey copy re-resolve (Phase 5 #6): _intrinsicBase is Martha's own (uncopied)
+        // accusation base, captured once at setup; _appliedCopySource is the ability her copied
+        // charges/limits currently reflect. Together they let a mid-game source change (a right
+        // neighbour dying) reset-then-reapply EXACTLY once — never double-incrementing George's +1
+        // and never resurrecting a spent Tituba/Parris charge (we only reset when the source
+        // actually changes). Unused for non-Martha players.
+        private byte _intrinsicBase;
+        private TownhallName? _appliedCopySource;
         // Black Cat holder flag (keep separate from StatusCards to avoid Scapegoat moving it)
         public bool IsBlackCatHolder { get; private set; }
         public HandManager HandManager => handManager ??= GetComponent<HandManager>();
@@ -116,6 +194,16 @@ namespace Salem.Players
         {
             if (townhallCard == null) return;
 
+            // Reset ability-modified stats to defaults FIRST so re-assigning a town hall card cleanly
+            // REPLACES the prior card's effects instead of stacking on them. This matters because the
+            // Phase-5 forced-seat debug override calls setTownhall a SECOND time: a seat whose random
+            // deal was George (base→8) then forced to another character used to keep the stray +1,
+            // corrupting that character's base AND Martha's _intrinsicBase capture (the root cause of the
+            // base-9 double-count). Harmless for the normal single-assignment path (defaults == initial).
+            baseAccusationLimit = 7;
+            currentAccusationLimit = 7;
+            townHallAbilityCharges = 0;
+
             switch (townhallCard.CardName)
             {
                 case TownhallName.GeorgeBurroughs:
@@ -130,6 +218,16 @@ namespace Salem.Players
                     townHallAbilityCharges = 2;
                     break;
             }
+
+            // Capture each player's TRUE intrinsic (uncopied) accusation base ONCE per card assignment,
+            // before any Martha copy. Martha's stays 7 (no bump); George's is 8. ReResolveMarthaCopy
+            // resets to this — capturing here (not in ApplyMarthaCoreyCopy) makes the baseline immune to
+            // the re-capture pollution that produced base 9.
+            _intrinsicBase = baseAccusationLimit;
+
+            // DIAGNOSTIC (Tituba option trace): confirm the charge was set at setup.
+            Debug.Log($"[Tituba?] ApplyTownHallAbility {PlayerNameText}: card={townhallCard.CardName}, " +
+                      $"charges={townHallAbilityCharges}");
         }
 
          /// <summary>
@@ -177,15 +275,51 @@ namespace Salem.Players
         }
 
         /// <summary>
-        /// Applies passive effects for Martha Corey based on the copied ability.
-        /// Must be called after all players have their Town Hall cards assigned.
+        /// SETUP entry point for Martha Corey's copy. Captures her intrinsic (uncopied) base once,
+        /// then resolves the copied charge/limit through <see cref="ReResolveMarthaCopy"/>. This is the
+        /// SAME code path used mid-game on every elimination, so setup and neighbour-death re-resolves
+        /// can never drift. Must be called after all players have their Town Hall cards assigned.
         /// </summary>
         public void ApplyMarthaCoreyCopy()
         {
-            var effective = GetEffectiveTownHallName();
-            if (effective == null) return;
+            // _intrinsicBase is captured in ApplyTownHallAbility (once, before any copy) — NOT here,
+            // so a re-run can never re-capture an already-copied base.
+            _appliedCopySource = null;            // force the first resolve to apply
+            ReResolveMarthaCopy();
+        }
 
-            switch (effective.Value)
+        /// <summary>
+        /// Restores Martha's copied stat modifiers to her intrinsic baseline: base accusation limit
+        /// back to <c>_intrinsicBase</c> and copied charges cleared. <see cref="ReResolveMarthaCopy"/>
+        /// re-applies the current source's fresh modifiers afterward. Reuses
+        /// <see cref="RecomputeStatusFromStatusCards"/> so <c>currentAccusationLimit</c> and Piety ×2
+        /// are re-derived from the reset base.
+        /// </summary>
+        private void ResetCopiedModifiers()
+        {
+            baseAccusationLimit = _intrinsicBase;
+            townHallAbilityCharges = 0;         // clear copied charges; the reapply re-grants fresh if applicable
+            RecomputeStatusFromStatusCards();   // currentAccusationLimit = base, then Piety ×2 if present
+        }
+
+        /// <summary>
+        /// Re-resolves Martha Corey's copied charge/limit to her current effective source (the first
+        /// living player to her right, via <see cref="GetEffectiveTownHallName"/>). Called at setup and
+        /// on every elimination (by the character dispatcher). "Fresh charges on switch only": if the
+        /// effective source is UNCHANGED we return immediately, preserving any consumed charges; only a
+        /// real source change resets-then-reapplies (so George's +1 never double-counts and a spent
+        /// Tituba/Parris charge is never resurrected). No-op for non-Martha holders.
+        /// </summary>
+        public void ReResolveMarthaCopy()
+        {
+            if (townhallCard == null || townhallCard.CardName != TownhallName.MarthaCorey) return;
+
+            var src = GetEffectiveTownHallName();
+            if (src == _appliedCopySource) return; // unchanged → keep consumed-charge state as-is
+
+            ResetCopiedModifiers();
+
+            switch (src)
             {
                 case TownhallName.GeorgeBurroughs:
                     baseAccusationLimit++;
@@ -199,7 +333,8 @@ namespace Salem.Players
                     townHallAbilityCharges = 2;
                     break;
             }
-            Debug.Log($"[Player] Martha Corey ({PlayerNameText}) copies ability of {effective.Value}.");
+
+            _appliedCopySource = src;
         }
 
         public void ConsumeTownHallCharge()
@@ -236,7 +371,7 @@ namespace Salem.Players
                 card.Reveal();
                 Debug.Log($"{PlayerNameText} revealed a {card.Type} card!");
 
-                TrialService.OnTrialCardRevealed(this, card);
+                TrialService.OnTrialCardRevealed(this, card, fromAccusation);
                 TryalCardRevealed?.Invoke(this, card);
             }
             //TODO:arent we going to need a check if they try to reveal an already revealed card?
@@ -290,147 +425,70 @@ namespace Salem.Players
         }
         #endregion
 
-        #region IPlayerController Implementation
-        public virtual Card SelectCard()
-        {
-            if (HandManager != null && HandManager.Hand.Count > 0)
-            {
-                return HandManager.Hand[0];
-            }
-
-            return null;
-        }
-
-        public virtual void PerformTurnAction(ActionCardSO selectedCard)
-        {
-            if (selectedCard == null)
-            {
-                return;
-            }
-
-            if (CardEffectManager.Instance == null)
-            {
-                Debug.LogError("CardEffectManager.Instance is null!");
-                return;
-            }
-
-            Player primary = selectedCard.RequiresTarget ? selectedCard.target : null;
-            Player secondary = selectedCard.RequiresSecondTarget ? selectedCard.target : null;
-            CardEffectManager.Instance.ExecuteCardEffect(selectedCard, primary);
-            HandManager?.RemoveCard(selectedCard);
-        }
-        #endregion
-
         #region Helper Functions
-        //Called in Hand Manager.
-        //leave for backwards compatibiltiy as of 8/31/25
-        public virtual void ApplyCardEffect(Card card)
-        {
-            switch (card.Type)
-            {
-                case Card.CardColor.Green:
-                    //played then discarded
-                    switch (card.name)
-                    {
-                        case "Arson":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
-                            HandManager.ClearHand();
-                            break;
-                        case "Robbery":
-                            if (PlayerNameText == "Sarah Good") { return; } //sarah good's ability makes her immune to this
-                            //card.target.HandManager.AddCard(HandManager.GetCards());
-                            HandManager.ClearHand();
-                            break;
-                        case "Alibi":
-                            currentAccusationCount -= 3;
-                            if (currentAccusationCount < 0) { currentAccusationCount = 0; }
-                            NotifyAccusationChanged();
-                            break;
-                        case "Stocks":
-                            skipTurn = true;
-                            break;
-                        case "Scapegoat":
-                            card.target.StatusCards.AddRange(StatusCards);
-                            StatusCards.Clear();
-                            break;
-                    }
-                    break;
-                case Card.CardColor.Blue:
-                    // Remain in play
-                    switch (card.name)
-                    {
-                        case "Piety":
-                            currentAccusationLimit = (byte)(baseAccusationLimit * 2);
-                            break;
-                        case "Asylum":
-                            hasAsylum = true;
-                            break;
-                        case "Matchmaker":
-                            //the target of the card will be the other player that has the matchmaker card
-                            MatchedPlayer = card.target;
-                            if (MatchedPlayer != null)
-                            {
-                                MatchedPlayer.MatchedPlayer = this; //create a 2 way link between the 2 players in the case either die
-                            }
-                            break;
-                    }
-                    break;
-                case Card.CardColor.Red:
-                    //played, then check for tryal reveal
-                    switch (card.name)
-                    {
-                        case "Accusations":
-                            currentAccusationCount++;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Evidence":
-                            currentAccusationCount += 3;
-                            if (PlayerNameText == "Cotton Mather") { currentAccusationCount -= 2; } //Cotton mather's ability has evidence only count as 1, so fix the number to reflect that
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                        case "Witness":
-                            currentAccusationCount += 7;
-                            NotifyAccusationChanged();
-                            CheckAccusations();
-                            break;
-                    }
-                    break;
-            }
-        }
-
         //Called in CardEffectManager
         // Accusations & turn effects
          public void ApplyAccusation(int bonusAmount, Player accuser = null)
         {
             RecomputeStatusFromStatusCards();
-            // bonusAmount adds accusations beyond what's tracked by physical cards
-            // (e.g., Will Griggs offensive Alibi). Normal card ops pass 0.
+            // bonusAmount adds accusations NOT backed by a physical card. It is TRANSIENT — the next
+            // RecomputeStatusFromStatusCards recomputes purely from status cards and wipes it. Normal
+            // card ops pass 0. Will Grigs' Alibi-as-Witness no longer uses this (it places a real
+            // persistent Witness via CardEffectManager.PlaceWitnessProxy); the only remaining user is
+            // that method's degraded fallback when witnessTemplate isn't wired.
             if (bonusAmount > 0)
                 currentAccusationCount = (byte)Math.Min(255, currentAccusationCount + bonusAmount);
             Debug.Log($"Acc limit:{currentAccusationLimit} Acc count:{currentAccusationCount}");
             CheckAccusations(accuser);
         }
-        public void ApplyAlibi(int removeCount)
+        /// <summary>
+        /// Alibi: "DISCARD UP TO THREE ACCUSATIONS CURRENTLY IN FRONT OF ANOTHER PLAYER."
+        ///
+        /// `accusationBudget` is a POINT budget (3), NOT a card count — "accusations" is the game's
+        /// point unit (Evidence = 3, Witness = 7; see AccusationValueOf). So one Alibi discards either
+        /// up to three Accusation cards, OR a single Evidence card, and can NEVER remove a Witness
+        /// (worth 7, over budget). Against Cotton Mather, Evidence is worth 1, so three of them fit.
+        ///
+        /// Removes highest-value-first among the cards that fit the remaining budget, which is
+        /// point-optimal for a budget of 3 — so letting the player choose could not improve the
+        /// outcome, and no prompt is needed. (Contrast Curse, where WHICH blue card matters and the
+        /// player choice is still deferred.)
+        /// </summary>
+        public void ApplyAlibi(int accusationBudget)
         {
-            // Remove up to N Accusation cards from in front of this player
-            int removed = 0;
             var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-            for (int i = StatusCards.Count - 1; i >= 0 && removed < removeCount; i--)
+            int budget = accusationBudget;
+            bool removedAny = false;
+
+            while (budget > 0)
             {
-                if (StatusCards[i] is ActionCardSO ac && ac.Op == ActionOp.Accusation)
+                // Best card that still fits the remaining budget (highest value first).
+                int bestIndex = -1;
+                int bestValue = 0;
+                for (int i = 0; i < StatusCards.Count; i++)
                 {
-                    dm?.AddToDiscardPile(StatusCards[i]);
-                    StatusCards.RemoveAt(i);
-                    removed++;
+                    int value = AccusationValueOf(StatusCards[i]);
+                    if (value <= 0 || value > budget) continue;   // not an accusation, or over budget
+                    if (value > bestValue)
+                    {
+                        bestValue = value;
+                        bestIndex = i;
+                    }
                 }
+
+                if (bestIndex < 0) break;                          // nothing else fits
+
+                dm?.AddToDiscardPile(StatusCards[bestIndex]);
+                StatusCards.RemoveAt(bestIndex);
+                budget -= bestValue;
+                removedAny = true;
             }
-            if (removed > 0)
+
+            if (removedAny)
                 OnStatusCardsChanged?.Invoke();
             RecomputeStatusFromStatusCards();
             NotifyAccusationChanged();
-        }     
+        }
         public void ApplyStocks(int turns = 1) => RecomputeStatusFromStatusCards();
         
         /// <summary>
@@ -449,11 +507,20 @@ namespace Salem.Players
             RecomputeStatusFromStatusCards();
         }
 
-        // Hand
-        public void ClearHand()
+        /// <summary>
+        /// Destroy this player's hand the way the rules mean it: every card goes to the DISCARD PILE,
+        /// then the hand is emptied. Cards stay in circulation (the deck re-forms from the discard
+        /// pile), unlike a bare <see cref="ClearHand"/>. Used by Arson and by elimination when no
+        /// John Proctor drafter is alive to claim the hand.
+        /// </summary>
+        public void BurnHand()
         {
-            HandManager.ClearHand(); // already raises OnHandChanged
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
+            foreach (var c in HandManager.GetCards())   // GetCards() returns a copy — safe to clear after
+                if (c != null) dm?.AddToDiscardPile(c);
+            HandManager.ClearHand();
         }
+
         public void TransferEntireHandTo(Player recipient)
         {
             var cards = HandManager.GetCards();
@@ -471,6 +538,24 @@ namespace Salem.Players
             // Add to target's statuses and recompute (fires OnStatusCardsChanged + updates derived flags)
             target.AddStatusCard(statusCard);
             target.RecomputeStatusFromStatusCards();
+        }
+
+        /// <summary>
+        /// Play the Black Cat from hand onto <paramref name="target"/>.
+        ///
+        /// The Black Cat is an ordinary BLUE card that happens to carry holder bookkeeping, so this
+        /// mirrors <see cref="PlayStatusCardOnTarget"/> — taken from hand WITHOUT discarding, since it
+        /// is transferred, not spent — and then routes through <see cref="AssignBlackCat"/> so
+        /// IsBlackCatHolder and the status row stay in step. Going through AddStatusCard alone would
+        /// put the card on the table with nobody registered as its holder, and Conspiracy step 1 looks
+        /// up the holder, not the card.
+        /// </summary>
+        public void GiveBlackCatTo(Card card, Player target)
+        {
+            if (card == null || target == null) return;
+
+            HandManager.TakeCard(card);
+            target.AssignBlackCat(card);
         }
 
         public bool HasStatus(string name) => StatusCards.Any(c => c.Name == name);
@@ -519,10 +604,6 @@ namespace Salem.Players
             // Stocks: skip turn if any Stocks cards are in front of this player
             skipTurn = StatusCards.Any(c => c is ActionCardSO ac && ac.Op == ActionOp.Stocks);
 
-            // Curse makes accusations easier to trigger (limit -1, min 1)
-            bool hasCurse = StatusCards.Any(c => c.Name == "Curse");
-            if (hasCurse) currentAccusationLimit = (byte)Mathf.Max(1, currentAccusationLimit - 1);
-
             // Asylum blocks Night targeting/elimination
             hasAsylum = StatusCards.Any(c => c.Name == "Asylum");
 
@@ -531,18 +612,32 @@ namespace Salem.Players
                 ClearMatch();
 
             // Derive accusation count from red cards in front of this player
-            byte accusationTotal = 0;
+            int accusationTotal = 0;
             foreach (var c in StatusCards)
+                accusationTotal += AccusationValueOf(c);
+            currentAccusationCount = (byte)Math.Min(255, accusationTotal);
+        }
+
+        /// <summary>
+        /// How many ACCUSATIONS a card in front of THIS player is worth. "Accusation" is the game's
+        /// point unit, not a card type — the cards say so themselves: Evidence "WORTH THREE
+        /// ACCUSATIONS", Witness "WORTH SEVEN ACCUSATIONS", Accusation is the base 1. Non-red cards
+        /// are worth 0.
+        ///
+        /// Single source of truth for BOTH the running total (RecomputeStatusFromStatusCards) and
+        /// Alibi's removal budget (ApplyAlibi), so the two can never disagree. Note it is
+        /// player-relative: Cotton Mather devalues Evidence to 1.
+        /// </summary>
+        public int AccusationValueOf(Card c)
+        {
+            if (c == null || c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) return 0;
+            switch (ac.Op)
             {
-                if (c.Type != Card.CardColor.Red || !(c is ActionCardSO ac)) continue;
-                switch (ac.Op)
-                {
-                    case ActionOp.Accusation: accusationTotal += 1; break;
-                    case ActionOp.Evidence: accusationTotal += (byte)(HasTownHall(TownhallName.CottonMather) ? 1 : 3); break;
-                    case ActionOp.Witness: accusationTotal += 7; break;
-                }
+                case ActionOp.Accusation: return 1;
+                case ActionOp.Evidence:   return HasTownHall(TownhallName.CottonMather) ? 1 : 3;
+                case ActionOp.Witness:    return 7;
+                default:                  return 0;
             }
-            currentAccusationCount = accusationTotal;
         }
 
         // Matchmaker link (two-way)
@@ -586,14 +681,9 @@ namespace Salem.Players
                 return;
             }
 
-            // Mary Warren is immune to Black Cat
-            if (HasTownHall(TownhallName.MaryWarren))
-            {
-                Debug.Log($"[TownHall] Mary Warren ({PlayerNameText}) is immune to Black Cat. Discarding.");
-                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                dm?.AddToDiscardPile(card);
-                return;
-            }
+            // Mary Warren CAN be given and hold the Black Cat (rulebook: she's immune to its ILL
+            // EFFECTS, not refused). Her immunity is applied at Conspiracy step 1
+            // (GamePhaseManager.ConspiracyRoutine skips the reveal when the holder is Mary), NOT here.
 
             if (!StatusCards.Contains(card))
             {
@@ -660,11 +750,13 @@ namespace Salem.Players
             DetermineRole();
             OnTryalCardsChanged?.Invoke();
 
-            // If this player just became a witch (e.g., via Conspiracy swap),
-            // re-evaluate endgame — witches win if all remaining players are now witches
+            // If this player just became a witch (e.g., via Conspiracy swap), re-evaluate endgame —
+            // witches win if all remaining players are now witches. Pass `this` so that, if this
+            // turning is what ends the game (they were the LAST non-witch), they are recorded as the
+            // loser and excluded from the winning witch team (rulebook: "that player loses").
             if (!wasWitch && IsWitch)
             {
-                GameManager.Instance?.EvaluateEndGame();
+                GameManager.Instance?.EvaluateEndGame(this);
             }
         }
 
@@ -705,54 +797,39 @@ namespace Salem.Players
                 if (!TryalCards[i].IsRevealed) RevealTryalCard(i);
         }
 
-        // Called after IsEliminated is set. Discards hand + status cards,
-        // or transfers them to John Proctor holder if one exists.
+        // Called after IsEliminated is set. STATUS cards (red + blue) and the Black Cat are ALWAYS
+        // discarded — "cards in play affecting the eliminated player are eliminated" (rulebook). The
+        // HAND is John Proctor's ability target: John (or a Martha effectively-John) takes UP TO 3
+        // cards FROM THE HAND and the rest are discarded. Because that pick is a networked choice, we
+        // can't resolve it inline here — so if a drafter is alive we LEAVE the hand in place and the
+        // CharacterAbilityDispatcher runs the draft (via OnPlayerEliminated) after this returns; the
+        // draft coroutine discards the leftovers. With no drafter, the hand discards immediately (as
+        // before). See CharacterAbilityDispatcher / JohnProctorAbility.
         public void OnElimination()
         {
-            // Find alive player with John Proctor town hall card
-            var johnProctor = PlayerService.GetAlivePlayers()
-                .FirstOrDefault(p => p != this && p.townhallCard != null
-                    && p.townhallCard.CardName == TownhallName.JohnProctor);
+            var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
 
-            if (johnProctor != null)
+            // HAND — leave for the draft only if a live drafter exists (real John OR a Martha whose
+            // effective ability is John, via HasTownHall). Otherwise discard now.
+            bool hasDrafter = PlayerService.GetAlivePlayers()
+                .Any(p => p != this && p.HasTownHall(TownhallName.JohnProctor));
+            if (hasDrafter)
             {
-                Debug.Log($"[Elimination] {PlayerNameText}'s cards transferred to {johnProctor.PlayerNameText} (John Proctor).");
-                TransferEntireHandTo(johnProctor);
-                // Transfer status cards (excluding Black Cat which is handled separately)
-                var blackCat = RemoveBlackCat(false);
-                foreach (var s in StatusCards.ToList())
-                    johnProctor.AddStatusCard(s);
-                ClearStatusCards();
-                johnProctor.RecomputeStatusFromStatusCards();
-                // Black Cat goes to discard, not to John Proctor
-                if (blackCat != null)
-                {
-                    var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                    if (dm != null) dm.AddToDiscardPile(blackCat);
-                }
+                // Hand stays on this (eliminated) player until the dispatcher's draft coroutine
+                // takes/discards it. Nobody else reads a dead player's hand in the interim.
             }
             else
             {
                 Debug.Log($"[Elimination] {PlayerNameText}'s cards discarded.");
-                // Discard all hand cards
-                var handCards = HandManager.GetCards();
-                var dm = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                foreach (var c in handCards)
-                {
-                    if (dm != null) dm.AddToDiscardPile(c);
-                }
-                HandManager.ClearHand();
-                // Remove Black Cat
-                var blackCat = RemoveBlackCat(false);
-                if (blackCat != null && dm != null)
-                    dm.AddToDiscardPile(blackCat);
-                // Discard status cards (red, blue, Stocks) to discard pile
-                foreach (var sc in StatusCards)
-                {
-                    if (dm != null) dm.AddToDiscardPile(sc);
-                }
-                ClearStatusCardsAndRecompute();
+                BurnHand();   // discard-then-clear (same canonical path Arson uses)
             }
+
+            // BLACK CAT + STATUS cards — always discarded, never transferred (not even to John).
+            var blackCat = RemoveBlackCat(false);
+            if (blackCat != null && dm != null) dm.AddToDiscardPile(blackCat);
+            foreach (var sc in StatusCards)
+                if (dm != null) dm.AddToDiscardPile(sc);
+            ClearStatusCardsAndRecompute();
 
             RecomputeStatusFromStatusCards();
 
@@ -763,22 +840,25 @@ namespace Salem.Players
 
         private void CheckAccusations(Player accuser = null)
         {
-            // Thomas Danforth: threshold reduced by 1 when he is the accuser
+            // Reveal threshold for THIS accusation. Danforth (the ACCUSER) reduces the
+            // TARGET's BASE by 1 BEFORE piety doubling (rulebook). For a non-Danforth accuser,
+            // currentAccusationLimit is already correct (base → piety×2); only the Danforth
+            // case recomputes from the base.
             int effectiveLimit = currentAccusationLimit;
             if (accuser != null && accuser.HasTownHall(TownhallName.ThomasDanforth))
-                effectiveLimit = Math.Max(1, effectiveLimit - 1);
+            {
+                int effBase = Math.Max(1, baseAccusationLimit - 1);                  // −1 on the BASE
+                bool targetHasPiety = StatusCards.Any(c => c.Name == "Piety");
+                effectiveLimit = targetHasPiety ? effBase * 2 : effBase;             // then piety ×2
+            }
 
             if (currentAccusationCount >= effectiveLimit)
             {
                 AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
 
-                // Ann Putnam: draw 2 cards before reveal when she places the final accusation
-                if (accuser != null && accuser.HasTownHall(TownhallName.AnnePutnam))
-                {
-                    var dm2 = UnityEngine.Object.FindFirstObjectByType<Salem.Deck.DeckManager>();
-                    dm2?.DrawMultipleCards(accuser.HandManager, 2);
-                    Debug.Log($"[TownHall] Ann Putnam ({accuser.PlayerNameText}) draws 2 cards before tryal reveal.");
-                }
+                // Anne Putnam's draw is NO LONGER here. Her card is "at the END of your turn, draw two
+                // cards for EACH tryal you revealed this turn" — tallied per actual reveal in
+                // TrialService.OnTrialCardRevealed → GameTurnManager, consumed at EndTurn.
 
                 // Discard all red cards in front of this player
                 DiscardRedStatusCards();
@@ -788,7 +868,7 @@ namespace Salem.Players
                 // Otherwise fall back to random reveal.
                 if (OnAccusationRevealNeeded != null && accuser != null)
                 {
-                    OnAccusationRevealNeeded.Invoke(this, accuser);
+                    OnAccusationRevealNeeded.Invoke(this, accuser, "accusation_reveal");
                 }
                 else
                 {
@@ -799,11 +879,28 @@ namespace Salem.Players
                     }
                 }
 
-                // Abigail Williams: clear her own accusations when she triggers a tryal reveal
+                // Abigail Williams: "If you place the final accusation on a tryal, you MAY discard all
+                // accusations in front of you." Trigger = placing the accusation that CROSSES the
+                // threshold (not the reveal itself). The choice is real — keeping accusations is
+                // legitimate (Scapegoat can transfer them onto another player), so a phone-driven
+                // Abigail is prompted rather than auto-cleared.
+                //
+                // This method is SYNCHRONOUS (ApplyAccusation ← CardEffectManager ← ExecuteCardEffect),
+                // so a networked prompt can't be awaited here. Instead set a pending flag that
+                // NetworkInput.RunTurn consumes on its next loop tick — still her turn, before she can
+                // act again. AI and local-host seats have no prompt UI and auto-clear (same posture as
+                // the other phone-driven abilities).
                 if (accuser != null && accuser.HasTownHall(TownhallName.AbigailWilliams))
                 {
-                    accuser.ResetAccusationCount();
-                    Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations.");
+                    if (accuser.Input is NetworkInput)
+                    {
+                        accuser.PendingAbigailDiscardChoice = true;
+                    }
+                    else
+                    {
+                        accuser.ResetAccusationCount();
+                        Debug.Log($"[TownHall] Abigail Williams ({accuser.PlayerNameText}) clears her own accusations (auto — no prompt UI).");
+                    }
                 }
             }
         }
@@ -825,6 +922,58 @@ namespace Salem.Players
         private void NotifyAccusationChanged()
         {
             AccusationCountChanged?.Invoke(this, currentAccusationCount, currentAccusationLimit);
+        }
+
+        /// <summary>
+        /// True if stripping this player's Piety right now would immediately force a tryal reveal:
+        /// they hold Piety, are at/over their UN-doubled base threshold (7, or 8 for George Burroughs),
+        /// and still have a tryal to lose. Used by the Curse default/AI heuristic to prefer removing
+        /// Piety for tempo, and it is the precondition <see cref="TriggerPietyLossReveal"/> re-checks.
+        /// </summary>
+        public bool PietyRemovalWouldReveal()
+        {
+            return HasStatus("Piety")
+                && currentAccusationCount >= baseAccusationLimit
+                && GetRandomUnrevealedTryalIndex(Rng) != null;
+        }
+
+        /// <summary>
+        /// Rulebook p13: if a player loses Piety while at/above their reveal threshold, they IMMEDIATELY
+        /// reveal a tryal and the player who REMOVED the Piety (<paramref name="remover"/>) chooses which.
+        /// This is a DEDICATED trigger, NOT a re-entry into <see cref="CheckAccusations"/> — a piety-loss
+        /// reveal is not an accusation, so it must not pull in Danforth's −1 or Abigail's discard branch.
+        /// Call AFTER Piety has been removed and <see cref="RecomputeStatusFromStatusCards"/> has run, so
+        /// <c>currentAccusationLimit</c> is already back to the un-doubled base. The reveal routes through
+        /// the SAME path as the normal accusation reveal (the <see cref="OnAccusationRevealNeeded"/>
+        /// chooser → local human picks / random fallback; <see cref="RevealTryalCard"/> with
+        /// <c>fromAccusation:true</c>), so Rebecca Nurse, the multiple-witch-card rule, and win-checks are
+        /// all reused. A NETWORKED remover chooses for real: HandleAccusationRevealChoice hands them off via
+        /// PendingTryalRevealTarget, drained a beat later by NetworkInput.RunTurn, and the prompt carries
+        /// reason "piety_loss_reveal" so the phone's copy differs from a normal accusation reveal.
+        /// (This comment used to say networked removers fell back to random — that gap was closed in the
+        /// Phase 5 close-out; only AI and local-host choosers still pick randomly.)
+        /// </summary>
+        public void TriggerPietyLossReveal(Player remover)
+        {
+            if (currentAccusationCount < currentAccusationLimit) return;
+            if (GetRandomUnrevealedTryalIndex(Rng) == null) return; // no unrevealed tryal to lose
+
+            AccusationThresholdReached?.Invoke(this, currentAccusationCount, currentAccusationLimit);
+
+            // Accusations do not carry over after a tryal is revealed (general rule) — mirror
+            // CheckAccusations: discard the reds first, then reveal.
+            DiscardRedStatusCards();
+            NotifyAccusationChanged();
+
+            if (OnAccusationRevealNeeded != null && remover != null)
+            {
+                OnAccusationRevealNeeded.Invoke(this, remover, "piety_loss_reveal");
+            }
+            else
+            {
+                int? idx = GetRandomUnrevealedTryalIndex(Rng);
+                if (idx.HasValue) RevealTryalCard(idx.Value, fromAccusation: true);
+            }
         }
         #endregion
     }

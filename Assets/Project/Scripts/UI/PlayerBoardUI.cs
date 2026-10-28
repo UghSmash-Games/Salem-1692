@@ -152,7 +152,10 @@ namespace Salem.UI
                 pulseRoutine = null;
             }
 
-            if (isTurn)
+            // isActiveAndEnabled guard: Networked_Game deactivates these legacy boards (the host
+            // screen renders from HostDisplay instead), but TableLayoutController still iterates
+            // them. Starting a coroutine on an inactive GameObject throws every turn.
+            if (isTurn && isActiveAndEnabled)
             {
                 pulseRoutine = StartCoroutine(PulseRoutine());
             }

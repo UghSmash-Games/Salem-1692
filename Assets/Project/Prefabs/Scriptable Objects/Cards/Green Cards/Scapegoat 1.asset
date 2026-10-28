@@ -22,7 +22,7 @@ MonoBehaviour:
   IsPlayed: 0
   target: {fileID: 0}
   LogMessage: '{source} played {card} on {target}.'
-  Op: 0
+  Op: 10
   NeedsTarget: 1
   RequiresSecondTarget: 1
   RulesText: Take all cards in front of any player and place them in front of another

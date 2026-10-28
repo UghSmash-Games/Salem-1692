@@ -28,6 +28,13 @@ namespace Salem.Networking
         private float lastPingTime;
         private bool namespaceConnected;
 
+        /// <summary>
+        /// Diagnostic: logs every Engine.io ping received and pong sent (~every
+        /// 25s). Off by default; set true to confirm keepalive when chasing an
+        /// idle-disconnect. The pong-failure warnings below are always logged.
+        /// </summary>
+        public static bool VerbosePingLogging = false;
+
         // ΓöÇΓöÇΓöÇ Public API ΓÇö State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
         public bool IsConnected => namespaceConnected && ws != null && ws.State == WebSocketState.Open;
@@ -230,7 +237,26 @@ namespace Salem.Networking
         private async void HandlePing()
         {
             lastPingTime = Time.realtimeSinceStartup;
-            await SendRaw("3"); // Pong
+
+            if (VerbosePingLogging)
+                Debug.Log($"[SocketIO] PING ('2') received at t={lastPingTime:F1}s — replying PONG ('3').");
+
+            if (ws == null || ws.State != WebSocketState.Open)
+            {
+                Debug.LogWarning($"[SocketIO] Cannot send PONG — socket not open (state={ws?.State}).");
+                return;
+            }
+
+            try
+            {
+                await ws.SendText("3"); // Pong
+                if (VerbosePingLogging)
+                    Debug.Log("[SocketIO] PONG ('3') sent.");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[SocketIO] Failed to send PONG: {e.Message}");
+            }
         }
 
         private void HandleSocketIOPacket(char socketType, string data)

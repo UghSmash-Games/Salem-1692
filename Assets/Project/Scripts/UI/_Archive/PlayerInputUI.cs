@@ -148,7 +148,8 @@ namespace Salem.UI
                 // Open the picker; exclude the acting player by default
                 targetPicker.OpenLegacy(player, two, (primary, secondary) =>
                 {
-                    ac.target = secondary; // second target, if any
+                    // (dead archive path) secondary is threaded through ExecuteCardEffect by parameter
+                    // now, not written onto the card asset; Card.target was removed.
                     CardEffectManager.Instance.ExecuteCardEffect(ac, primary);
                 });
             }

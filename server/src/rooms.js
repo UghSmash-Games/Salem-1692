@@ -14,9 +14,11 @@ const rooms = new Map();
 
 /**
  * @typedef {Object} PlayerEntry
- * @property {string} socketId
+ * @property {string|null} socketId    - null while the seat is reserved (player disconnected)
  * @property {string} displayName
  * @property {string} playerId  - e.g. 'p0', 'p1', 'p2'
+ * @property {string} token     - seat secret; the ONLY thing that authorizes a rejoin
+ * @property {boolean} connected
  */
 
 /**
@@ -28,6 +30,8 @@ const rooms = new Map();
  * @property {number}        nextPlayerId  - counter for ID assignment
  * @property {number}        createdAt     - Date.now() at creation
  */
+
+const crypto = require('crypto');
 
 // Characters used for room codes (no ambiguous letters like O/0, I/1)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -70,15 +74,54 @@ function createRoom(hostSocketId) {
  * @param {string} code         - Room code
  * @param {string} socketId     - Player's socket ID
  * @param {string} displayName  - Player's chosen display name
- * @returns {{ playerId: string }|null} The assigned player ID, or null if room not found
+ * @returns {{ playerId: string, token: string }|null} The seat, or null if room not found
  */
 function joinRoomAsPlayer(code, socketId, displayName) {
   const room = rooms.get(code);
   if (!room) return null;
 
   const playerId = `p${room.nextPlayerId++}`;
-  room.players.push({ socketId, displayName, playerId });
-  return { playerId };
+  // 🔴 The seat secret. playerId is PUBLIC (it is in every game_state_update), so it cannot be what
+  // proves ownership of a seat — without this, any player could reclaim any seat and be sent that
+  // seat's private_state. Cryptographically random, never broadcast, never sent to the host.
+  const token = crypto.randomBytes(16).toString('hex');
+  room.players.push({ socketId, displayName, playerId, token, connected: true });
+  return { playerId, token };
+}
+
+/**
+ * Reclaim a reserved seat on a NEW socket.
+ *
+ * Returns null for every failure — unknown room, unknown seat, wrong token — so the caller cannot
+ * tell them apart and the event cannot be used to enumerate seats.
+ *
+ * @param {string} code
+ * @param {string} playerId
+ * @param {string} token
+ * @param {string} socketId  - the new socket
+ * @returns {{ playerId: string, displayName: string, token: string, previousSocketId: string|null }|null}
+ */
+function reclaimSeat(code, playerId, token, socketId) {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const entry = room.players.find(p => p.playerId === playerId);
+  if (!entry) return null;
+
+  // Constant-time compare: a length-safe equality check on a secret, so a timing difference cannot
+  // leak how much of a guessed token was correct.
+  const a = Buffer.from(String(token || ''), 'utf8');
+  const b = Buffer.from(entry.token, 'utf8');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+
+  // Newest socket wins. A seat held by a live socket (second tab, or a drop the server has not
+  // noticed yet) rebinds to the newcomer — one socket per seat, always, or private_state would fan
+  // out to two devices.
+  const previousSocketId = entry.socketId && entry.socketId !== socketId ? entry.socketId : null;
+
+  entry.socketId = socketId;
+  entry.connected = true;
+  return { playerId, displayName: entry.displayName, token: entry.token, previousSocketId };
 }
 
 /**
@@ -105,19 +148,27 @@ function removeSocket(socketId) {
     // Host disconnect — destroy entire room
     if (room.hostSocketId === socketId) {
       const allSocketIds = [
-        ...room.players.map(p => p.socketId),
+        ...room.players.filter(p => p.socketId).map(p => p.socketId),
         ...room.mirrors,
       ];
       rooms.delete(code);
       return { type: 'host', code, playerId: null, allSocketIds };
     }
 
-    // Player disconnect
+    // Player disconnect — RESERVE the seat, never delete it.
+    //
+    // ⚠ This used to splice the entry out, which made reconnection impossible: the seat, its
+    // playerId and its identity were gone the instant a phone locked its screen, and the returning
+    // player could only come back as a stranger under a fresh id while the host still held their
+    // tryals under the old one. The entry now survives with socketId null; the HOST decides what a
+    // departure means (free the chair in the lobby, hold it mid-game), because the relay does not
+    // know whether a game is running.
     const playerIdx = room.players.findIndex(p => p.socketId === socketId);
     if (playerIdx !== -1) {
-      const playerId = room.players[playerIdx].playerId;
-      room.players.splice(playerIdx, 1);
-      return { type: 'player', code, playerId, allSocketIds: [] };
+      const entry = room.players[playerIdx];
+      entry.socketId = null;
+      entry.connected = false;
+      return { type: 'player', code, playerId: entry.playerId, allSocketIds: [] };
     }
 
     // Mirror disconnect
@@ -162,7 +213,8 @@ function getAllSocketIds(code) {
   if (!room) return [];
   return [
     room.hostSocketId,
-    ...room.players.map(p => p.socketId),
+    // Reserved seats have no socket — skip them rather than emitting to null.
+    ...room.players.filter(p => p.socketId).map(p => p.socketId),
     ...room.mirrors,
   ];
 }
@@ -200,6 +252,7 @@ module.exports = {
   generateRoomCode,
   createRoom,
   joinRoomAsPlayer,
+  reclaimSeat,
   joinRoomAsMirror,
   removeSocket,
   getRoom,

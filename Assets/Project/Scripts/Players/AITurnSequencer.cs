@@ -75,9 +75,14 @@ namespace Salem.Players
                 }
             }
 
+            // Two-target cards (Robbery/Scapegoat). SelectRandomTarget excludes self but NOT the
+            // primary, so retry until the recipient differs; if it still collides, bail WITHOUT
+            // playing (the card is kept, never eaten). The recipient is passed to ExecuteCardEffect
+            // by parameter — it is NOT written onto action.target, which is a shared project asset.
+            Player secondary = null;
             if (chosen is ActionCardSO action && action.RequiresSecondTarget)
             {
-                var secondary = AITargetingHelper.SelectRandomTarget(driver);
+                secondary = AITargetingHelper.SelectRandomTarget(driver);
                 int guard = 0;
                 while (secondary == primary && guard++ < 4)
                 {
@@ -89,8 +94,6 @@ namespace Salem.Players
                     turnManager.RequestEndTurn(driver);
                     yield break;
                 }
-
-                action.target = secondary;
             }
 
             if (CardEffectManager.Instance == null)
@@ -100,8 +103,27 @@ namespace Salem.Players
                 yield break;
             }
 
-            CardEffectManager.Instance.ExecuteCardEffect(chosen, primary);
-            driver.HandManager?.RemoveCard(chosen);
+            // Will Grigs (AI): "may choose to use alibi cards as if they were witness cards." The AI
+            // has no prompt, so it takes the offensive conversion — the ability's headline use and the
+            // impactful play. Human Grigs is asked via NetworkInput; local play leaves this false
+            // (normal defensive Alibi). Flag is read by CardEffectManager._ops[Alibi].
+            if (chosen is ActionCardSO grigsAc && grigsAc.Op == ActionOp.Alibi
+                && driver.HasTownHall(Salem.Cards.TownhallName.WillGrigs))
+            {
+                driver.GrigsAlibiAsWitness = true;
+            }
+
+            // ExecuteCardEffect OWNS consumption: TakeCard for Red/Blue/Stocks (transferred to the
+            // target's status cards) and RemoveCard for Green (sent to the discard). A rejected play
+            // (e.g. the 2-player Robbery/Scapegoat disable) returns false BEFORE consuming, so the
+            // card is never eaten either way.
+            //
+            // ⚠ Do NOT add a RemoveCard here. The deck holds many references to the SAME
+            // ScriptableObject, so a second List.Remove strips ANOTHER identical card from the hand
+            // and discards it — playing one Accusation while holding two cost the AI both.
+            CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary);
+
+            driver.GrigsAlibiAsWitness = false; // reset the transient mode after the play
 
             if (forceEndTurnOnHuman && driver.IsHuman)
             {

@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using Salem.Cards;
 using Salem.GameFlow;
 using Salem.Players;
 using UnityEngine;
@@ -24,11 +25,29 @@ namespace Salem.Data
         Disconnect,
         Other
     }
-    
+
+    /// <summary>
+    /// Local: single local human + AI (legacy/testing). Networked: every human
+    /// is a remote phone client; no player is "local". Default is Local so the
+    /// existing local/AI game keeps working unchanged.
+    /// </summary>
+    public enum GameMode
+    {
+        Local,
+        Networked
+    }
+
     public static class PlayerService
     {
         private static readonly List<Player> allPlayers = new();
         public static IReadOnlyList<Player> All => allPlayers;
+
+        /// <summary>Current input/player-creation mode. Reset to Local on Clear().</summary>
+        public static GameMode Mode { get; set; } = GameMode.Local;
+
+        // Maps network playerIds (e.g. "p0", "p1") to Player objects in networked
+        // mode. Replaces the old PlayerNameText-as-id stand-in.
+        private static readonly Dictionary<string, Player> byNetworkId = new();
 
         /// <summary>
         /// When true, player input comes from AirConsole phone controllers
@@ -52,8 +71,9 @@ namespace Salem.Data
                 }
                 */
 
-                // Set first non-AI as local player automatically
-                if (!player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
+                // Set first non-AI as local player automatically — LOCAL mode only.
+                // In networked mode every human is remote; no player is local.
+                if (Mode == GameMode.Local && !player.IsLocalPlayer && !(player is AIPlayer) && GetLocalPlayer() == null)
                 {
                     player.IsLocalPlayer = true;
                 }
@@ -61,10 +81,44 @@ namespace Salem.Data
             }
         }
 
+        /// <summary>
+        /// Drop a seat entirely — LOBBY USE ONLY (a player who left before the deal).
+        ///
+        /// ⚠ NEVER call this mid-game. A seat in play holds tryal cards, a hand, a place in the turn
+        /// order and possibly a witch identity; removing it would silently change the win conditions.
+        /// A player who drops mid-game keeps their seat (marked <see cref="Player.IsConnected"/>
+        /// false) and reclaims it on reconnect.
+        /// </summary>
+        public static void Unregister(Player player)
+        {
+            if (player == null) return;
+
+            allPlayers.Remove(player);
+
+            // The id → seat map must go too, or a returning player resolves to a destroyed seat.
+            if (!string.IsNullOrEmpty(player.NetworkId)) byNetworkId.Remove(player.NetworkId);
+        }
+
         public static void Clear()
         {
             allPlayers.Clear();
+            byNetworkId.Clear();
+            Mode = GameMode.Local;
             //IsAirConsoleMode = false; AIRCONSOLE TEMP DISABLED 4/28/26
+        }
+
+        /// <summary>Associate a network playerId with a Player (networked mode).</summary>
+        public static void RegisterNetworkId(string playerId, Player player)
+        {
+            if (string.IsNullOrEmpty(playerId) || player == null) return;
+            byNetworkId[playerId] = player;
+        }
+
+        /// <summary>Resolve a Player from its network playerId, or null.</summary>
+        public static Player GetByNetworkId(string playerId)
+        {
+            if (string.IsNullOrEmpty(playerId)) return null;
+            return byNetworkId.TryGetValue(playerId, out var p) ? p : null;
         }
 
         public static Player GetLocalPlayer()
@@ -98,20 +152,64 @@ namespace Salem.Data
 
             player.IsEliminated = true;
 
+            // Matchmaker cascade — CAPTURE the bond BEFORE OnElimination, which discards the
+            // Matchmaker status card and clears MatchedPlayer on BOTH sides
+            // (ClearStatusCardsAndRecompute → RecomputeStatusFromStatusCards → ClearMatch).
+            // Per rulebook p13, eliminating one matchmaker owner eliminates BOTH — even if the
+            // partner was saved or confessed (EliminateNow reveals the partner regardless).
+            var mmPartner = player.MatchedPlayer;
+            bool mmCascades = mmPartner != null &&
+                              player.HasStatus("Matchmaker") &&
+                              mmPartner.HasStatus("Matchmaker") &&
+                              !mmPartner.IsEliminated;
+
             // Discard hand + status cards (or transfer to John Proctor holder)
             player.OnElimination();
 
-            // Matchmaker cascade: if eliminated player has Matchmaker bond, eliminate partner too
-            if (player.MatchedPlayer != null &&
-                player.HasStatus("Matchmaker") &&
-                player.MatchedPlayer.HasStatus("Matchmaker") &&
-                !player.MatchedPlayer.IsEliminated)
+            // Cascade the partner now, using the captured bond (OnElimination has since cleared
+            // the live references). EliminateNow reveals all the partner's tryals → TrialService
+            // → PlayerService.Eliminate(partner) — the full elimination path (guarded against
+            // re-entrancy by the IsEliminated check at the top of this method).
+            if (mmCascades && !mmPartner.IsEliminated)
             {
-                var partner = player.MatchedPlayer;
+                // #7 cascade exceptions (guards on the cascade victim = mmPartner):
+                //  (a) Mary Warren survives the chain — if the PARTNER is Mary, spare her. (When Mary
+                //      is the initially-eliminated `player`, she is not mmPartner, so her partner
+                //      still dies — "if Mary dies, her partner still dies".)
+                //  (b) both-teams-lose (GENERAL, any cascade): if eliminating the partner would satisfy
+                //      BOTH win conditions at once, only the intended target dies. Mary-check first (cheap).
+                bool partnerIsMary = mmPartner.HasTownHall(TownhallName.MaryWarren);
+                bool bothTeamsLose = !partnerIsMary && GameManager.Instance != null &&
+                                     GameManager.Instance.CascadeWouldEndBothTeams(player, mmPartner);
+
                 player.ClearMatch();
-                partner.ClearMatch();
-                partner.EliminateNow();
+                mmPartner.ClearMatch();
+
+                if (partnerIsMary || bothTeamsLose)
+                {
+                    // Spare the partner — skip the cascade elimination. The now-partnerless Matchmaker
+                    // card PERSISTS in front of them (blue cards persist per rulebook); the bond is
+                    // already cleared by the ClearMatch above, leaving them free to re-link if a new
+                    // Matchmaker is played. Safety against a bad state is the "can't receive a 2nd
+                    // matchmaker" refusal in CardEffectManager, NOT discarding this card.
+                    Debug.Log($"[Matchmaker] partner {mmPartner.PlayerNameText} SPARED " +
+                              $"({(partnerIsMary ? "Mary Warren immune" : "both-teams-lose")}).");
+                }
+                else
+                {
+                    Debug.Log($"[Matchmaker] {player.PlayerNameText} eliminated — matched partner " +
+                              $"{mmPartner.PlayerNameText} is also eliminated.");
+                    mmPartner.EliminateNow();
+                }
             }
+
+            // Cotton Mather / Martha Corey re-resolve on elimination has MOVED to
+            // CharacterAbilityDispatcher.HandleEliminated (Phase 5 #6), which subscribes to
+            // OnPlayerEliminated (fired below). It now handles BOTH the accusation-count revert
+            // (evidence 1→3 when Cotton dies) AND the copied charge/limit re-resolve (George's +1,
+            // Tituba/Parris charges) that couldn't be expressed here. Firing from the event keeps the
+            // same timing — still inside Eliminate, before EvaluateEndGame — for every elimination,
+            // including the matchmaker-cascade ones.
 
             // Re-index turn order after removal
             GameTurnManager.Instance?.OnPlayerEliminated(player);

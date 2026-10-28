@@ -34,6 +34,11 @@ namespace Salem.Deck
         [Tooltip("Populate with cards in Inspector")]
         [SerializeField] private List<TownHallCard> TownhallDeck = new List<TownHallCard>();
         private readonly List<Card> DiscardPile = new List<Card>();
+
+        /// <summary>Public card counts for networked board state (no card data leaked).</summary>
+        public int DeckCount => Deck?.Count ?? 0;
+        public int DiscardCount => DiscardPile?.Count ?? 0;
+
         private IRng Rng => GameManager != null ? GameManager.Rng : _fallbackRng;
         private readonly IRng _fallbackRng = new XorShiftRng(1UL); // only if GM missing
         private Card heldBlackCat;
@@ -137,20 +142,13 @@ namespace Salem.Deck
                 return;
             }
 
-            if (drawnCard != null && drawnCard.Name == "Black Cat")
-            {
-                if (owningPlayer != null)
-                {
-                    owningPlayer.AssignBlackCat(drawnCard);
-                }
-                else
-                {
-                    Debug.LogWarning("[DeckManager] Drew Black Cat but could not determine owning player. Sending to discard.");
-                    AddToDiscardPile(drawnCard);
-                }
-                return;
-            }
-
+            // ⚠ The Black Cat is NOT intercepted here. It used to be assigned to a player the moment
+            // it was drawn, which in networked play meant a RANDOM recipient — the "let the drawer
+            // choose" branch in CardEffectManager was gated on IsLocalPlayer, and no human is local
+            // when every player is remote. It is an ordinary BLUE card: it goes to the hand and is
+            // played on a target like Piety or Asylum (ActionOp.BlackCat → Player.GiveBlackCatTo).
+            // Dawn placement is unaffected — GameSetup holds the cat out of the deck before dealing,
+            // so it only reaches a hand if a Curse discards it and the deck later re-forms.
             handManager.AddCard(drawnCard);
         }
 
@@ -170,6 +168,17 @@ namespace Salem.Deck
                 return;
             }
 
+            // Runtime proxies (e.g. Will Grigs' Alibi-as-Witness) are not real deck cards — destroy
+            // them instead of adding to the discard pile, so ReshuffleDiscardPile can't recycle them
+            // into the deck and inflate the card pool.
+            if (card.IsRuntimeInstance)
+            {
+                // Fully qualified: this file has BOTH `using System;` and `using UnityEngine;`,
+                // so a bare `Object` is ambiguous (CS0104).
+                UnityEngine.Object.Destroy(card);
+                return;
+            }
+
             DiscardPile.Add(card);
         }
 
@@ -177,6 +186,45 @@ namespace Salem.Deck
         /// Returns a read-only view of the discard pile for UI display (e.g., Samuel Parris ability).
         /// </summary>
         public IReadOnlyList<Card> GetDiscardPileCards() => DiscardPile.AsReadOnly();
+
+        /// <summary>
+        /// Read-only view of the draw deck, top (index 0 = next to draw) → bottom. Used by
+        /// Tituba's rearrange ability. The deck list stays private; this is the only reader.
+        /// </summary>
+        public IReadOnlyList<Card> GetDeckCards() => Deck.AsReadOnly();
+
+        /// <summary>
+        /// Reorder the deck from a permutation of the original indices (top→bottom):
+        /// newDeck[i] = oldDeck[permutation[i]]. Used by Tituba's rearrange. Validates that
+        /// the permutation has the right length and uses every index 0..N-1 exactly once; on
+        /// an invalid permutation the deck is left unchanged.
+        /// </summary>
+        public void SetDeckOrder(IReadOnlyList<int> permutation)
+        {
+            if (permutation == null || permutation.Count != Deck.Count)
+            {
+                Debug.LogWarning($"[DeckManager] SetDeckOrder ignored: bad length " +
+                                 $"({permutation?.Count ?? -1} vs deck {Deck.Count}).");
+                return;
+            }
+
+            var seen = new bool[Deck.Count];
+            foreach (int idx in permutation)
+            {
+                if (idx < 0 || idx >= Deck.Count || seen[idx])
+                {
+                    Debug.LogWarning("[DeckManager] SetDeckOrder ignored: not a valid permutation.");
+                    return;
+                }
+                seen[idx] = true;
+            }
+
+            var reordered = new List<Card>(Deck.Count);
+            foreach (int idx in permutation) reordered.Add(Deck[idx]);
+            Deck.Clear();
+            Deck.AddRange(reordered);
+            Debug.Log($"[DeckManager] Deck reordered (Tituba): {Deck.Count} cards.");
+        }
 
         /// <summary>
         /// Draws up to 'count' cards from the discard pile, skipping cards that match the reject predicate.
@@ -201,6 +249,21 @@ namespace Salem.Deck
             }
 
             return drawn;
+        }
+
+        /// <summary>
+        /// Removes a SPECIFIC card (by reference) from the discard pile and adds it to the given hand.
+        /// Used by Samuel Parris's networked discard-pick, where the holder CHOOSES which card to take
+        /// (unlike DrawFromDiscardPile which takes the top N). Returns true if the card was found + taken.
+        /// </summary>
+        public bool TakeSpecificFromDiscard(Card card, HandManager handManager)
+        {
+            if (card == null) return false;
+            int idx = DiscardPile.IndexOf(card); // first matching reference (duplicates are identical SOs)
+            if (idx < 0) return false;
+            DiscardPile.RemoveAt(idx);
+            handManager?.AddCard(card);
+            return true;
         }
 
         public Card ExtractCardFromDeck(string cardName)
@@ -282,9 +345,11 @@ namespace Salem.Deck
 
         public void DiscardTownhallCard(TownHallCard card)
         {
-            // Town Hall cards are one-time use; just discard (no reshuffle needed)
-            if (card != null) return;
-                //Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
+            // Town Hall cards are one-time use; just discard (no reshuffle needed).
+            // Guard was inverted (returned on a non-null card); the body should run
+            // when the card is non-null.
+            if (card == null) return;
+            //Debug.Log($"[DeckManager] Town Hall card '{card.CardName}' discarded.");
         }
 
         public void ShuffleDeck()
