@@ -102,6 +102,16 @@ per-player control.** (Both still enforce the EFFECT server-side — never trust
 VISIBILITY differs.) The base secret-phase interaction (the shared confess/skip or target choice) stays
 identical for everyone regardless; only a public-identity extra control may be role-conditional.
 
+**Protocol version (wire compatibility).** Every join carries a `protocolVersion` (currently **1**,
+constants in `server/src/protocol.js` / `webclient/src/socket/protocol.ts` /
+`Assets/Project/Scripts/Networking/Protocol.cs`). The relay records the HOST's at `create_room` and
+refuses a phone or mirror that disagrees, with `error_msg { code: "protocol_mismatch" }` naming which
+side is behind. The relay arbitrates because the host and the clients never speak directly, and they
+update on wildly different schedules — a Steam host can be months old while the web client is always
+newest. ⚠️ This is NOT the app version: bump it ONLY when an old host genuinely cannot work against
+the new contract, because doing so stops every shipped host build from hosting. A missing field means
+1 (pre-check builds); do not extend that allowance.
+
 **Private state isolation** — tryal cards and role (witch/constable) are NEVER sent
 to the host screen, mirror screens, or other players' phone clients. Enforced at the
 server dispatch layer, not the UI layer.

@@ -11,6 +11,7 @@
 
 import { io, type Socket } from 'socket.io-client';
 import { CLIENT_TO_SERVER } from './events';
+import { PROTOCOL_VERSION } from './protocol';
 import type {
   JoinRoomPayload,
   JoinMirrorPayload,
@@ -50,7 +51,9 @@ export function disconnect(): void {
 // ─── Typed emit helpers (the only client → server messages) ───────
 
 export function joinRoom(payload: JoinRoomPayload): void {
-  socket.emit(CLIENT_TO_SERVER.JOIN_ROOM, payload);
+  // The relay checks this against the host's and refuses a mismatch, so a stale host build cannot
+  // half-work: see docs/protocol.md → Protocol version.
+  socket.emit(CLIENT_TO_SERVER.JOIN_ROOM, { ...payload, protocolVersion: PROTOCOL_VERSION });
 }
 
 /**
@@ -64,7 +67,8 @@ export function rejoinRoom(payload: RejoinRoomPayload): void {
 
 /** Join a room as a passive mirror display (public state only). */
 export function joinMirror(payload: JoinMirrorPayload): void {
-  socket.emit(CLIENT_TO_SERVER.JOIN_MIRROR, payload);
+  // A mirror renders the same public payloads a phone does, so it gets the same check.
+  socket.emit(CLIENT_TO_SERVER.JOIN_MIRROR, { ...payload, protocolVersion: PROTOCOL_VERSION });
 }
 
 export function sendPlayerAction(payload: PlayerActionPayload): void {

@@ -4,12 +4,57 @@ All communication between Unity (host), phone browsers (players), and passive di
 
 ---
 
+## Protocol version
+
+Every join carries a `protocolVersion` integer. The relay compares a joiner's against the HOST's and
+refuses the join on a mismatch.
+
+**Current: `1`.**
+
+🔴 **This is NOT the app version.** `VERSION` / semver describes a *release*; `protocolVersion`
+describes the *wire contract*, and it moves only when an older build can no longer talk to a newer
+one — a removed or renamed event, a changed payload shape, a changed meaning. Most releases will not
+touch it. Bumping it is a deliberate, breaking act: **every Unity host build already in players'
+hands stops being able to host**, by design, because the alternative is those builds half-working in
+ways nobody can diagnose.
+
+**Why the relay arbitrates.** The incompatibility that matters is between the Unity HOST and the
+phone/mirror CLIENTS — they are the two ends exchanging game payloads, and they update on wildly
+different schedules (a Steam build can be months old; the web client is always newest). They never
+speak directly, so neither can check the other. The relay sees both, so it is the only component
+that *can* compare them, even though it never inspects the payloads themselves.
+
+**A missing `protocolVersion` is treated as 1.** Builds shipped before this check existed do not send
+the field, and refusing them would break working installs the day the check landed. This allowance
+is specifically for protocol 1 and should NOT be extended: once a build sends the field, absence
+means "older than the check", which is only ever protocol 1.
+
+| Side | Sends it in | On mismatch |
+|---|---|---|
+| Unity host | `create_room` | the room is still created — the host IS the reference, so there is nothing to compare it against yet |
+| Phone | `join_room` | refused with `error_msg` `{ code: "protocol_mismatch" }` |
+| Mirror | `join_mirror` | refused the same way |
+
+The error names which side is behind, because "incompatible" is not actionable:
+
+```json
+{ "message": "This game's host is running an older version of Salem. The host needs to update.",
+  "code": "protocol_mismatch", "hostProtocol": 1, "yourProtocol": 2 }
+```
+
+⚠️ **Keep the three constants in step** — `server/src/protocol.js`, `webclient/src/socket/protocol.ts`,
+`Assets/Project/Scripts/Networking/Protocol.cs`. They are deliberately plain constants rather than a
+generated file: a build step that can fail silently is a worse failure mode than three numbers a
+reviewer can see, and this number changes very rarely.
+
+---
+
 ## Room Management Events
 
 ### `create_room`
 - **Direction:** client → server
 - **Sender role:** host (Unity only)
-- **Payload:** _(none)_
+- **Payload:** `{ protocolVersion: number }` — see Protocol version above; absent means 1
 - **Response:** `room_created` → host
 
 ### `room_created`
@@ -19,15 +64,16 @@ All communication between Unity (host), phone browsers (players), and passive di
 ### `join_room`
 - **Direction:** client → server
 - **Sender role:** player
-- **Payload:** `{ code: string, displayName: string }`
-- **Response:** `joined` → player
+- **Payload:** `{ code: string, displayName: string, protocolVersion?: number }`
+- **Response:** `joined` → player, or `error_msg` `{ code: "protocol_mismatch" }` if it disagrees
+  with the host's
 - **Side effect:** `player_joined` → host
 
 ### `join_mirror`
 - **Direction:** client → server
 - **Sender role:** mirror
-- **Payload:** `{ code: string }`
-- **Response:** `joined` → mirror
+- **Payload:** `{ code: string, protocolVersion?: number }`
+- **Response:** `joined` → mirror, or `error_msg` `{ code: "protocol_mismatch" }`
 
 ### `rejoin_room`
 - **Direction:** client → server

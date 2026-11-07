@@ -1184,3 +1184,125 @@ describe('a whole-table disconnect', () => {
     expect((await waitFor(returning, 'joined')).playerId).toBe(absent.playerId);
   });
 });
+
+// ─── Protocol version ──────────────────────────────────────────
+
+describe('protocol version', () => {
+  /** A host that declares `protocol`, and the room code it opened. */
+  async function hostAt(protocol) {
+    const host = trackClient(createClient());
+    await waitForConnect(host);
+    host.emit('create_room', protocol === undefined ? undefined : { protocolVersion: protocol });
+    const { code } = await waitFor(host, 'room_created');
+    return { host, code };
+  }
+
+  test('a matching player joins normally', async () => {
+    const { code } = await hostAt(1);
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    phone.emit('join_room', { code, displayName: 'Alice', protocolVersion: 1 });
+    expect((await waitFor(phone, 'joined')).playerId).toBe('p0');
+  });
+
+  test('a NEWER phone against an OLDER host is refused, and told the host is behind', async () => {
+    // The real scenario: a months-old Steam build hosting, against a web client that redeployed
+    // this morning. The message has to name the side that can actually act.
+    const { code } = await hostAt(1);
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    phone.emit('join_room', { code, displayName: 'Alice', protocolVersion: 2 });
+    const err = await waitFor(phone, 'error_msg');
+
+    expect(err.code).toBe('protocol_mismatch');
+    expect(err.message).toMatch(/host is running an older version/i);
+    expect(err.hostProtocol).toBe(1);
+    expect(err.yourProtocol).toBe(2);
+  });
+
+  test('an OLDER phone against a NEWER host is told to reload instead', async () => {
+    const { code } = await hostAt(2);
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    phone.emit('join_room', { code, displayName: 'Alice', protocolVersion: 1 });
+    const err = await waitFor(phone, 'error_msg');
+
+    expect(err.code).toBe('protocol_mismatch');
+    expect(err.message).toMatch(/your device is running an older version/i);
+  });
+
+  test('a refused join leaves NO seat behind', async () => {
+    // Checked before the seat is created: a half-seated player would occupy a slot, appear in the
+    // host's roster, and never respond to anything.
+    const { host, code } = await hostAt(1);
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    const noJoin = expectNoEvent(host, 'player_joined');
+    phone.emit('join_room', { code, displayName: 'Alice', protocolVersion: 9 });
+    await waitFor(phone, 'error_msg');
+    await noJoin;
+
+    // And the seat is genuinely free for a compatible client.
+    const good = trackClient(createClient());
+    await waitForConnect(good);
+    good.emit('join_room', { code, displayName: 'Bob', protocolVersion: 1 });
+    expect((await waitFor(good, 'joined')).playerId).toBe('p0');
+  });
+
+  test('a mirror is checked too', async () => {
+    // A mirror renders the same public payloads a phone does, so a shape change breaks it the same
+    // way — it must not silently connect and show a blank board.
+    const { code } = await hostAt(1);
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+
+    mirror.emit('join_mirror', { code, protocolVersion: 2 });
+    expect((await waitFor(mirror, 'error_msg')).code).toBe('protocol_mismatch');
+  });
+
+  test('a mirror that matches still joins', async () => {
+    const { code } = await hostAt(1);
+    const mirror = trackClient(createClient());
+    await waitForConnect(mirror);
+
+    mirror.emit('join_mirror', { code, protocolVersion: 1 });
+    expect((await waitFor(mirror, 'joined')).roomCode).toBe(code);
+  });
+
+  test('builds from BEFORE the check are treated as protocol 1, not refused', async () => {
+    // The migration allowance. Hosts and phones already in the wild send no protocolVersion, and
+    // refusing them would have broken working installs the day this landed.
+    const { code } = await hostAt(undefined);           // host sends no field
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    phone.emit('join_room', { code, displayName: 'Alice' });   // phone sends no field either
+    expect((await waitFor(phone, 'joined')).playerId).toBe('p0');
+  });
+
+  test('an old host still accepts a current (protocol 1) phone', async () => {
+    const { code } = await hostAt(undefined);
+    const phone = trackClient(createClient());
+    await waitForConnect(phone);
+
+    phone.emit('join_room', { code, displayName: 'Alice', protocolVersion: 1 });
+    expect((await waitFor(phone, 'joined')).playerId).toBe('p0');
+  });
+
+  test('a garbage protocolVersion falls back to 1 rather than refusing everyone', async () => {
+    // Defensive: a malformed value must not become an accidental lockout, and must not be trusted
+    // as a number either.
+    const { code } = await hostAt(1);
+    for (const bad of ['two', null, 0, -1, 1.5]) {
+      const phone = trackClient(createClient());
+      await waitForConnect(phone);
+      phone.emit('join_room', { code, displayName: `P${bad}`, protocolVersion: bad });
+      const joined = await waitFor(phone, 'joined');
+      expect(joined.playerId).toBeTruthy();
+    }
+  });
+});

@@ -27,6 +27,7 @@ const rooms = new Map();
  * @property {string}        hostSocketId
  * @property {PlayerEntry[]} players
  * @property {string[]}      mirrors       - socket IDs only
+ * @property {number}        protocolVersion - the HOST's wire version; joiners are compared to it
  * @property {number}        nextPlayerId  - counter for ID assignment
  * @property {number}        createdAt     - Date.now() at creation
  */
@@ -54,13 +55,17 @@ function generateRoomCode() {
 /**
  * Create a new room with the given socket as host.
  * @param {string} hostSocketId
+ * @param {number} [protocolVersion=1] - the host's wire version (see src/protocol.js)
  * @returns {string} The room code
  */
-function createRoom(hostSocketId) {
+function createRoom(hostSocketId, protocolVersion = 1) {
   const code = generateRoomCode();
   rooms.set(code, {
     code,
     hostSocketId,
+    // The host is the REFERENCE every joiner is checked against — it is the build that cannot be
+    // updated from here, so the room speaks whatever it speaks and clients must match.
+    protocolVersion,
     players: [],
     mirrors: [],
     nextPlayerId: 0,

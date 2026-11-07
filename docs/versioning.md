@@ -86,11 +86,23 @@ in is identifiable only if its version maps to a commit — `git checkout v1.0.0
 source that produced it. That is also why `VERSION` is committed rather than generated: the tag and
 the file agree, and both are in the history.
 
-## Not built yet: a compatibility check
+## The compatibility check (built)
 
-Nothing currently *enforces* version agreement — a host three majors behind will connect happily and
-fail in whatever way the protocol change implies. The honest fix, when it is worth the protocol
-surface, is a `protocolVersion` sent at `create_room` and `join_room`, with the relay refusing (or
-the phone warning) on a MAJOR mismatch. Until then the visible version strings are what turn "it's
-broken" into "you are on 1.0.0 and the server is on 2.1.0", which is most of the diagnostic value for
-a game with this few players.
+A separate `protocolVersion` integer — currently **1** — travels with every join. The relay records
+the HOST's at `create_room` and refuses any phone or mirror that disagrees, naming which side is
+behind. Full contract in [protocol.md](protocol.md) → *Protocol version*.
+
+**It is deliberately not the semver above.** `VERSION` describes a release; `protocolVersion`
+describes the wire, and moves only when an older build genuinely cannot talk to a newer one. Most
+releases will never touch it.
+
+🔴 **Bumping it breaks every host build already in players' hands, on purpose.** That is the whole
+point: a stale host that connects fine and then mis-renders a seat or drops a prompt is far worse
+than one that says "the host needs to update". Bump it only alongside a MAJOR version, and only when
+an old host truly cannot work against the new contract. Changing all three constants
+(`server/src/protocol.js`, `webclient/src/socket/protocol.ts`,
+`Assets/Project/Scripts/Networking/Protocol.cs`) is the deliberate friction that makes you stop and
+consider that.
+
+⚠️ **A missing `protocolVersion` counts as 1**, so builds shipped before the check keep working. That
+allowance is for protocol 1 only — do not extend it.

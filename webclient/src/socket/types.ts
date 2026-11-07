@@ -269,7 +269,10 @@ export interface ErrorMsgPayload {
   /** Machine code for errors the client must ACT on rather than merely display:
    *  `rejoin_failed` (the stored seat is stale) | `seat_taken` (another device claimed this seat).
    *  Absent on plain join failures. */
-  code?: 'rejoin_failed' | 'seat_taken';
+  code?: 'rejoin_failed' | 'seat_taken' | 'protocol_mismatch';
+  /** protocol_mismatch only — which side is behind. Diagnostic; the message already says. */
+  hostProtocol?: number;
+  yourProtocol?: number;
 }
 
 // ─── Client → Server payloads ─────────────────────────────────────

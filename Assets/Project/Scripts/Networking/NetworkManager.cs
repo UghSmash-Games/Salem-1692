@@ -264,7 +264,14 @@ namespace Salem.Networking
         public void CreateRoom()
         {
             if (!GuardConnected("CreateRoom")) return;
-            _ = socketClient.Emit("create_room");
+
+            // The host declares the wire version the room will speak; the relay then refuses any
+            // phone or mirror that disagrees. Sent as JSON rather than a bare emit so the field has
+            // somewhere to live — see docs/protocol.md → Protocol version.
+            _ = socketClient.Emit("create_room", JsonUtility.ToJson(new CreateRoomMsg
+            {
+                protocolVersion = Protocol.Version,
+            }));
         }
 
         public void SendGameStateUpdate(GameStateUpdateMsg msg)

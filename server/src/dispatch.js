@@ -24,6 +24,7 @@ const {
   getPlayers,
   getMirrors,
 } = require('./rooms');
+const { claimedProtocol, protocolMismatch } = require('./protocol');
 
 /**
  * Register all socket event handlers on the given Socket.io server.
@@ -34,8 +35,11 @@ function registerDispatch(io) {
     // ─── Room Management ───────────────────────────────────────
 
     // Host (Unity) creates a room
-    socket.on('create_room', () => {
-      const code = createRoom(socket.id);
+    socket.on('create_room', (data) => {
+      // The host sets the room's wire version; every joiner is then checked against it. Nothing to
+      // compare the host itself to — it is the reference, and the one build that cannot be updated
+      // from here.
+      const code = createRoom(socket.id, claimedProtocol(data));
       socket.role = 'host';
       socket.roomCode = code;
       socket.join(code);
@@ -45,6 +49,18 @@ function registerDispatch(io) {
     // Player (phone browser) joins a room
     socket.on('join_room', (data) => {
       if (!data || !data.code || !data.displayName) return;
+
+      // Checked BEFORE the seat is created, so a refused join leaves no half-seated player behind.
+      // Named distinctly from the `room` fetched further down, which is looked up again only after
+      // the seat exists.
+      const joiningRoom = getRoom(data.code);
+      if (joiningRoom) {
+        const mismatch = protocolMismatch(joiningRoom.protocolVersion ?? 1, claimedProtocol(data));
+        if (mismatch) {
+          socket.emit('error_msg', mismatch);
+          return;
+        }
+      }
 
       const result = joinRoomAsPlayer(data.code, socket.id, data.displayName);
       if (!result) {
@@ -147,6 +163,17 @@ function registerDispatch(io) {
     // Mirror (passive display) joins a room
     socket.on('join_mirror', (data) => {
       if (!data || !data.code) return;
+
+      // A mirror renders the same public payloads a phone does, so a shape change breaks it the
+      // same way — it gets the same check rather than a silently blank board.
+      const mirrorRoom = getRoom(data.code);
+      if (mirrorRoom) {
+        const mismatch = protocolMismatch(mirrorRoom.protocolVersion ?? 1, claimedProtocol(data));
+        if (mismatch) {
+          socket.emit('error_msg', mismatch);
+          return;
+        }
+      }
 
       const success = joinRoomAsMirror(data.code, socket.id);
       if (!success) {

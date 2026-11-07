@@ -27,6 +27,16 @@ namespace Salem.Networking
         public string displayName;
     }
 
+    /// <summary>
+    /// Sent with create_room. Declares the wire version this host build speaks, which becomes the
+    /// room's reference for every joiner (docs/protocol.md → Protocol version).
+    /// </summary>
+    [Serializable]
+    public class CreateRoomMsg
+    {
+        public int protocolVersion;
+    }
+
     [Serializable]
     public class PlayerLeftMsg
     {
