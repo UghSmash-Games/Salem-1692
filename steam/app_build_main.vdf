@@ -7,8 +7,8 @@
 // paths that look right from the repo are the most common reason an upload grabs the wrong folder.
 "appbuild"
 {
-	// ⚠ REPLACE: your main App ID from Steamworks.
-	"appid"	"0000000"
+	// Main app. Depot 5409771 holds the Windows build.
+	"appid"	"5409770"
 
 	// Shown in the Steamworks build list. Stamped with the version so a store build maps to a git
 	// tag — the whole point of tagging v1.0.0.
@@ -30,8 +30,8 @@
 
 	"depots"
 	{
-		// ⚠ REPLACE: the depot ID under your main App ID (usually appid + 1).
-		"0000001"
+		// Depot 5409771, under app 5409770.
+		"5409771"
 		{
 			"FileMapping"
 			{

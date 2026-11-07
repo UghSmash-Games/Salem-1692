@@ -9,12 +9,12 @@ remembered sequence of clicks.
 
 ## One-time setup
 
-**1. Fill in the four IDs.** Both scripts ship with `0000000` placeholders:
+**1. The IDs are filled in** and committed:
 
-| File | `appid` | depot |
+| File | App | Depot |
 |---|---|---|
-| `steam/app_build_main.vdf` | your main App ID | usually App ID + 1 |
-| `steam/app_build_playtest.vdf` | the **Playtest** App ID | usually Playtest App ID + 1 |
+| `steam/app_build_main.vdf` | **5409770** (main) | 5409771 |
+| `steam/app_build_playtest.vdf` | **5526150** (Playtest) | 5526151 |
 
 🔴 **The Playtest is a separate app**, created by Steam when you enable Playtest on the store page —
 it has its own App ID and its own depot. Putting the main App ID in the playtest script would ship a

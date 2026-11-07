@@ -7,10 +7,10 @@
 // paths that look right from the repo are the most common reason an upload grabs the wrong folder.
 "appbuild"
 {
-	// ⚠ REPLACE: the PLAYTEST App ID — a SEPARATE app Steam creates when you enable Playtest.
+	// Playtest app — SEPARATE from the main app (5409770). Depot 5526151 holds the same build.
 	// It is NOT your main App ID, and uploading the main ID here would ship a playtest build to
 	// everyone who owns the game.
-	"appid"	"0000000"
+	"appid"	"5526150"
 
 	// Shown in the Steamworks build list. Stamped with the version so a store build maps to a git
 	// tag — the whole point of tagging v1.0.0.
@@ -32,8 +32,8 @@
 
 	"depots"
 	{
-		// ⚠ REPLACE: the depot under the PLAYTEST App ID (usually playtest appid + 1).
-		"0000001"
+		// Depot 5526151, under app 5526150.
+		"5526151"
 		{
 			"FileMapping"
 			{
