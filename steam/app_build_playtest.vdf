@@ -1,0 +1,55 @@
+// SteamPipe build script — Salem 1692 (PLAYTEST app)
+//
+// Upload with:
+//   steamcmd +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
+//
+// ⚠ Paths must be ABSOLUTE or relative to steamcmd's own directory, NOT to this file. Relative
+// paths that look right from the repo are the most common reason an upload grabs the wrong folder.
+"appbuild"
+{
+	// ⚠ REPLACE: the PLAYTEST App ID — a SEPARATE app Steam creates when you enable Playtest.
+	// It is NOT your main App ID, and uploading the main ID here would ship a playtest build to
+	// everyone who owns the game.
+	"appid"	"0000000"
+
+	// Shown in the Steamworks build list. Stamped with the version so a store build maps to a git
+	// tag — the whole point of tagging v1.0.0.
+	"desc"	"Salem 1692 Playtest v1.0.0"
+
+	// Build logs. Gitignored; keep them, they name the file when a depot upload fails.
+	"buildoutput"	"..\\Builds\\SteamOutputPlaytest"
+
+	// The folder that actually ships.
+	"contentroot"	"..\\Builds\\Windows"
+
+	// 🔴 EMPTY ON PURPOSE. A value here would push the build LIVE the moment the upload finishes.
+	// Upload first, verify in Steamworks, then set the branch live from the web UI — that extra
+	// click is the only thing standing between a bad build and everyone's library.
+	"setlive"	""
+
+	"preview"	"0"
+	"local"	""
+
+	"depots"
+	{
+		// ⚠ REPLACE: the depot under the PLAYTEST App ID (usually playtest appid + 1).
+		"0000001"
+		{
+			"FileMapping"
+			{
+				"LocalPath"	"*"
+				"DepotPath"	"."
+				"recursive"	"1"
+			}
+
+			// 🔴 Unity names this folder "DoNotShip" and means it: Burst debug symbols, tens of MB,
+			// useless to players. It is created next to the build every time, so excluding it here
+			// is the only thing that reliably keeps it out of the depot.
+			"FileExclusion"	"*_BurstDebugInformation_DoNotShip*"
+
+			// Debug symbols and Unity's IL2CPP leftovers — same reasoning.
+			"FileExclusion"	"*.pdb"
+			"FileExclusion"	"*_BackUpThisFolder_ButDontShipItWithYourGame*"
+		}
+	}
+}
