@@ -54,6 +54,14 @@ namespace Salem.UI.HostDisplay
         [SerializeField] private TMP_Text joinUrlText;
         [SerializeField] private TMP_Text displayUrlText;
 
+        [Tooltip("Line above the JOIN url. This address is REQUIRED — it is each player's controller.")]
+        [SerializeField] private string joinCaption = "EVERY PLAYER OPENS THIS — PHONE OR TABLET";
+        [Tooltip("Line above the DISPLAY url. Optional: a second screen for a room that cannot see " +
+                 "this one. Never a player's controller.")]
+        [SerializeField] private string displayCaption = "OPTIONAL SECOND SCREEN — SMART TV OR LAPTOP";
+        [Tooltip("Caption size as a percentage of the url's font size, so the address stays dominant.")]
+        [SerializeField, Range(40, 100)] private int captionSizePercent = 62;
+
         [Header("Roster")]
         [SerializeField] private Transform seatContainer;
         [Tooltip("Row prefab: a single TMP_Text. One per joined seat.")]
@@ -203,9 +211,31 @@ namespace Salem.UI.HostDisplay
             // read as a broken address people then try to type.
             bool haveBase = !string.IsNullOrWhiteSpace(baseUrl);
             if (joinUrlText != null)
-                joinUrlText.text = haveBase ? string.Format(joinUrlFormat, baseUrl) : "";
+                joinUrlText.text = haveBase ? Caption(joinCaption, string.Format(joinUrlFormat, baseUrl)) : "";
             if (displayUrlText != null)
-                displayUrlText.text = haveBase ? string.Format(displayUrlFormat, baseUrl) : "";
+                displayUrlText.text = haveBase ? Caption(displayCaption, string.Format(displayUrlFormat, baseUrl)) : "";
+        }
+
+        /// <summary>
+        /// A URL with a smaller, dimmer line above it saying what the address is FOR.
+        ///
+        /// 🔴 TWO ADDRESSES THAT LOOK ALIKE DO DIFFERENT JOBS. The lobby used to print both bare, so
+        /// nothing on screen distinguished the one every player MUST open on their own phone from the
+        /// one that is an optional extra screen. A room full of people reading two near-identical
+        /// URLs will send some of them to the wrong one — and /display gives a phone a spectator
+        /// board with no controls, which looks like the game is broken rather than like a wrong turn.
+        ///
+        /// Rendered INTO the existing URL labels rather than as new objects, so this needs no scene
+        /// wiring and cannot end up half-connected. Rich text keeps the caption visually subordinate:
+        /// the address stays the biggest thing, because that is what people are typing.
+        /// </summary>
+        private string Caption(string caption, string url)
+        {
+            if (string.IsNullOrWhiteSpace(caption)) return url;
+
+            // The alpha is reset before the URL so only the caption is dimmed — TMP tags persist
+            // until they are explicitly closed or overridden.
+            return $"<size={captionSizePercent}%><alpha=#B4>{caption}<alpha=#FF></size>\n{url}";
         }
 
         /// <summary>

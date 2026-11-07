@@ -29,6 +29,12 @@ export function MirrorJoinScreen() {
         <p className="text-sm uppercase tracking-[0.3em] text-candle">
           Mirror Display
         </p>
+        {/* The two addresses differ by one word, so people arrive here by mistake. Say what this
+            screen is before they type a code into it — a phone that joins as a display gets a
+            spectator board with no controls, which reads as a broken game rather than a wrong turn. */}
+        <p className="max-w-xs text-center text-sm text-parchment/70">
+          A shared screen for a TV, laptop or spare tablet. It shows the table — never your own cards.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex w-full max-w-xs flex-col gap-4">
@@ -63,6 +69,15 @@ export function MirrorJoinScreen() {
           Watch Game
         </button>
       </form>
+
+      {/* The way out for someone who meant to play. A plain anchor, not a router link: this is a
+          deliberate departure from the mirror, and a full load leaves no mirror state behind. */}
+      <p className="text-center text-sm text-parchment/70">
+        Here to play?{' '}
+        <a href="/join" className="font-semibold text-candle underline underline-offset-2">
+          Join the game on your phone
+        </a>
+      </p>
     </div>
   );
 }
