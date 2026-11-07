@@ -42,12 +42,26 @@ steamcmd +login <builder-account> +quit
 
 Build first (**File → Build Profiles → Build** into `D:\Test Builds`), then:
 
-```bat
-set SC="D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe"
+**PowerShell** (the default terminal — note the leading `&`, which is how PowerShell runs a quoted
+executable path):
 
-%SC% +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_main.vdf" +quit
-%SC% +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
+```powershell
+& "D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe" +login ughsmash_games `
+    +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
+
+& "D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe" +login ughsmash_games `
+    +run_app_build "D:\GitHub\Salem-1692\steam\app_build_main.vdf" +quit
 ```
+
+**cmd.exe**, if you prefer it:
+
+```bat
+"D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe" +login ughsmash_games ^
+    +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
+```
+
+⚠️ `set SC=...` and `%SC%` are **cmd syntax** and silently do nothing in PowerShell — the variable
+is never set and `%SC%` is passed through as a literal. Hence the full paths above.
 
 Both point at the **same** content root — `D:\Test Builds` — because the playtest and the main
 game are the same binary, just different Steam apps.
