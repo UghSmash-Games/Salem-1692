@@ -17,8 +17,7 @@
  * rather than appear to succeed.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -90,15 +89,17 @@ if (unityFound === version) {
   note(false, 'ProjectSettings.asset (bundleVersion)', unityFound);
 
   if (!checkOnly) {
-    let editorRunning = false;
-    try {
-      editorRunning = execSync('tasklist /FI "IMAGENAME eq Unity.exe"', { encoding: 'utf8' })
-        .toLowerCase().includes('unity.exe');
-    } catch {
-      // Not Windows, or tasklist unavailable — fall through and write.
-    }
+    // Unity writes these while an Editor has THIS project open, and removes them on exit.
+    //
+    // ⚠ Checking for a process named unity.exe instead was a false positive generator: Unity leaves
+    // lightweight helper processes around (a 26MB, no-window one was blocking this script with the
+    // Editor genuinely closed), and it would also fire when the Editor had a DIFFERENT project open,
+    // which cannot affect this file at all. A lock the Editor itself maintains is the real signal.
+    const editorHasProject =
+      existsSync(join(root, 'Temp/UnityLockfile')) ||
+      existsSync(join(root, 'Library/EditorInstance.json'));
 
-    if (editorRunning) {
+    if (editorHasProject) {
       console.error(
         '\n✗ The Unity Editor is running. It holds ProjectSettings.asset in memory and rewrites it\n' +
         '  on exit, so an edit now would be silently reverted. Close Unity and re-run, or set\n' +
