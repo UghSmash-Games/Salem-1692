@@ -15,10 +15,10 @@
 	"desc"	"Salem 1692 v1.0.0"
 
 	// Build logs. Gitignored; keep them, they name the file when a depot upload fails.
-	"buildoutput"	"..\\Builds\\SteamOutput"
+	"buildoutput"	"D:\\GitHub\\Salem-1692\\Builds\\SteamOutput"
 
 	// The folder that actually ships.
-	"contentroot"	"..\\Builds\\Windows"
+	"contentroot"	"D:\\Test Builds"
 
 	// 🔴 EMPTY ON PURPOSE. A value here would push the build LIVE the moment the upload finishes.
 	// Upload first, verify in Steamworks, then set the branch live from the web UI — that extra

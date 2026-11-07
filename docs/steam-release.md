@@ -20,8 +20,13 @@ remembered sequence of clicks.
 it has its own App ID and its own depot. Putting the main App ID in the playtest script would ship a
 playtest build to everyone who owns the game.
 
-**2. Install steamcmd** (not currently on this machine):
-<https://developer.valvesoftware.com/wiki/SteamCMD> — unzip somewhere stable, e.g. `C:\steamcmd`.
+**2. steamcmd** — already present, inside the Steamworks SDK:
+
+```
+D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe
+```
+
+Verified it launches and self-updates.
 
 **3. A builder account.** Use a Steamworks account with *Edit App Metadata* / *Publish* rights, not
 your personal account. Steam Guard will prompt on first login from a new machine; log in once
@@ -35,15 +40,21 @@ steamcmd +login <builder-account> +quit
 
 ## Uploading
 
-Build first (**File → Build Profiles → Build** into `Builds/Windows/`), then:
+Build first (**File → Build Profiles → Build** into `D:\Test Builds`), then:
 
 ```bat
-steamcmd +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_main.vdf" +quit
-steamcmd +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
+set SC="D:\steamworks_sdk_165\sdk\tools\ContentBuilder\builder\steamcmd.exe"
+
+%SC% +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_main.vdf" +quit
+%SC% +login <builder-account> +run_app_build "D:\GitHub\Salem-1692\steam\app_build_playtest.vdf" +quit
 ```
 
-Both point at the **same** `Builds/Windows` content root — the playtest and the main game are the
-same binary, just different Steam apps.
+Both point at the **same** content root — `D:\Test Builds` — because the playtest and the main
+game are the same binary, just different Steam apps.
+
+⚠️ **The content root is OUTSIDE the repo.** `D:\Test Builds` is whatever was last built
+there, so a git checkout alone does not reproduce a store build. Check the version stamp in the
+corner of the host screen matches the tag you are shipping, before uploading.
 
 ⚠️ **Paths in a VDF are relative to steamcmd, not to the VDF.** Absolute paths, as above, avoid the
 most common SteamPipe mistake: an upload that succeeds against the wrong folder.
@@ -65,9 +76,9 @@ Unity emits a folder next to every build literally named
 `Salem 1692_BurstDebugInformation_DoNotShip`. The depot config excludes it, along with `*.pdb` and
 `*_BackUpThisFolder_ButDontShipItWithYourGame*`.
 
-Verified against the current build: the exclusion matches that folder, and what remains is exactly
-`Salem 1692.exe`, `Salem 1692_Data`, `UnityPlayer.dll`, `UnityCrashHandler64.exe`, `MonoBleedingEdge`
-and `D3D12` — 111 MB.
+Verified against the actual build in `D:\Test Builds`: the exclusion matches that folder, and what
+remains is exactly `Salem 1692.exe`, `Salem 1692_Data`, `UnityPlayer.dll`, `UnityCrashHandler64.exe`,
+`MonoBleedingEdge` and `D3D12` — 111 MB.
 
 ⚠️ **The whole folder ships together.** The `.exe` alone will not start; `Salem 1692_Data` is not
 optional. SteamPipe handles this correctly by uploading the content root recursively — this matters
@@ -112,7 +123,7 @@ before promoting to main.
 
 - [ ] `node scripts/set-version.mjs <version>` — all three tiers agree
 - [ ] Tests green: server `npx jest --runInBand`, webclient vitest single-thread
-- [ ] Unity build into `Builds/Windows/`, launched once and verified
+- [ ] Unity build into `D:\Test Builds`, launched once and verified
 - [ ] `desc` updated in both VDFs
 - [ ] Upload to **Playtest** first, set live, play one game
 - [ ] Upload to **main**, set live
