@@ -6,6 +6,7 @@
 import { useState, type FormEvent } from 'react';
 import { connect, joinRoom } from '../socket/socketClient';
 import { useGameStore } from '../store/gameStore';
+import { APP_VERSION_LABEL } from '../version';
 
 export function JoinScreen() {
   const joinError = useGameStore((s) => s.session.joinError);
@@ -80,6 +81,11 @@ export function JoinScreen() {
           Join Game
         </button>
       </form>
+
+      {/* Small and dim on purpose: nobody needs it until something goes wrong, and then it is the
+          first question asked. The three tiers update on different schedules, so "which build?"
+          cannot be answered from the host's version alone. */}
+      <p className="text-xs text-parchment/40">{APP_VERSION_LABEL}</p>
     </div>
   );
 }

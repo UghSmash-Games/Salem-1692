@@ -1,6 +1,6 @@
 {
   "name": "salem-1692-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Socket.io relay server for Salem 1692 multiplayer",
   "scripts": {

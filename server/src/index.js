@@ -6,6 +6,10 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { registerDispatch } = require('./dispatch');
 
+// Read from package.json so the relay cannot drift from what was deployed — scripts/set-version.mjs
+// stamps every tier from the repo's VERSION file.
+const { version: VERSION } = require('../package.json');
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -26,9 +30,11 @@ const io = new Server(httpServer, {
 
 registerDispatch(io);
 
-// Health check
+// Health check. Carries the version so you can tell WHICH relay is live without reading deploy
+// logs — the three tiers update on different schedules, so "is the server current?" is a real
+// question with a real answer here.
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', version: VERSION });
 });
 
 const PORT = process.env.PORT || 3000;

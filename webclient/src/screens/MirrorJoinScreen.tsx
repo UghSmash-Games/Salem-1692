@@ -6,6 +6,7 @@
 import { useState, type FormEvent } from 'react';
 import { connect, joinMirror } from '../socket/socketClient';
 import { useGameStore } from '../store/gameStore';
+import { APP_VERSION_LABEL } from '../version';
 
 export function MirrorJoinScreen() {
   const joinError = useGameStore((s) => s.session.joinError);
@@ -78,6 +79,8 @@ export function MirrorJoinScreen() {
           Join the game on your phone
         </a>
       </p>
+
+      <p className="text-xs text-parchment/40">{APP_VERSION_LABEL}</p>
     </div>
   );
 }
