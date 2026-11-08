@@ -62,6 +62,7 @@ numbers differ, that difference is the thing worth seeing.
 ```bash
 node scripts/set-version.mjs 1.1.0
 node scripts/set-version.mjs --check        # all three agree
+# move the Unreleased notes in CHANGELOG.md into a 1.1.0 section, dated
 cd server && npx jest --runInBand
 cd ../webclient && node ./node_modules/vitest/vitest.mjs run --pool=threads --poolOptions.threads.singleThread
 git commit -am "Release v1.1.0"

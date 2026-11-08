@@ -139,6 +139,8 @@ before promoting to main.
 - [ ] Tests green: server `npx jest --runInBand`, webclient vitest single-thread
 - [ ] Unity build into `D:\Test Builds`, launched once and verified
 - [ ] `desc` updated in both VDFs
+- [ ] `CHANGELOG.md` entry written — it is the source for the Steamworks patch notes, so
+      write it there and paste, rather than typing notes into Steam and losing them
 - [ ] Upload to **Playtest** first, set live, play one game
 - [ ] Upload to **main**, set live
 - [ ] Relay deployed if it changed (`fly deploy … --ha=false`), between sessions

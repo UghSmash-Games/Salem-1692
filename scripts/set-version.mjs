@@ -120,6 +120,7 @@ if (checkOnly) {
 }
 
 console.log(`\n✓ Version ${version} stamped. Next:`);
+console.log('    move CHANGELOG.md [Unreleased] into a ' + version + ' section, dated');
 console.log('    git commit -am "Release v' + version + '"');
 console.log('    git tag -a v' + version + ' -m "v' + version + '"');
 console.log('    git push && git push --tags');
