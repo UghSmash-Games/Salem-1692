@@ -7,6 +7,17 @@ remembered sequence of clicks.
 
 ---
 
+## Release log
+
+What actually shipped, and when. Steamworks shows builds per app; this shows a version across both,
+next to the tag it came from.
+
+| Version | Date | Playtest (5526150) | Main (5409770) | Tag |
+|---|---|---|---|---|
+| 1.0.0 | 2026-11-07 | ✅ uploaded & released | ✅ uploaded & released | `v1.0.0` |
+
+---
+
 ## One-time setup
 
 **1. The IDs are filled in** and committed:
