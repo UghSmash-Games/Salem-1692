@@ -119,6 +119,10 @@ namespace Salem.UI.HostDisplay
             // one line to port. (Worded to keep the §8 boundary grep free of comment-only hits.)
             if (!Input.GetKeyDown(KeyCode.Escape)) return;
 
+            // While the splash owns the screen, Escape SKIPS it (HostSplashScreen handles that) and
+            // must not also open the quit dialog behind the video — one keypress, one meaning.
+            if (HostSplashScreen.IsPlaying) return;
+
             // Escape never dismisses the game-over panel — there is nothing to go back TO, and
             // closing it would leave a finished game on screen with no way to act on it.
             if (gameOverShown) return;
