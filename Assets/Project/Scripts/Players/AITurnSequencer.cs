@@ -67,7 +67,14 @@ namespace Salem.Players
             Player primary = null;
             if (chosen.RequiresTarget || (chosen is ActionCardSO actionCard && actionCard.NeedsTarget))
             {
-                primary = AITargetingHelper.SelectRandomTarget(driver);
+                // Targeted by what the card DOES. Alibi, Asylum and Piety purely help whoever
+                // receives them, so a random pick regularly handed them to the opponent the AI was
+                // trying to beat — and a witch could just as easily accuse her own partner. See
+                // AIKnowledge for what the AI is allowed to know while deciding this.
+                primary = AIKnowledge.IsBeneficialToTarget(chosen.Op)
+                    ? AIKnowledge.PickBeneficialTarget(driver)
+                    : AIKnowledge.PickHarmfulTarget(driver);
+
                 if (primary == null)
                 {
                     turnManager.RequestEndTurn(driver);
@@ -75,18 +82,18 @@ namespace Salem.Players
                 }
             }
 
-            // Two-target cards (Robbery/Scapegoat). SelectRandomTarget excludes self but NOT the
-            // primary, so retry until the recipient differs; if it still collides, bail WITHOUT
+            // Two-target cards (Robbery/Scapegoat). The pick excludes self and known allies but NOT
+            // the primary, so retry until the recipient differs; if it still collides, bail WITHOUT
             // playing (the card is kept, never eaten). The recipient is passed to ExecuteCardEffect
             // by parameter — it is NOT written onto action.target, which is a shared project asset.
             Player secondary = null;
             if (chosen is ActionCardSO action && action.RequiresSecondTarget)
             {
-                secondary = AITargetingHelper.SelectRandomTarget(driver);
+                secondary = AIKnowledge.PickHarmfulTarget(driver);
                 int guard = 0;
                 while (secondary == primary && guard++ < 4)
                 {
-                    secondary = AITargetingHelper.SelectRandomTarget(driver);
+                    secondary = AIKnowledge.PickHarmfulTarget(driver);
                 }
 
                 if (secondary == null || secondary == primary)

@@ -1049,11 +1049,19 @@ namespace Salem.GameFlow
                 {
                     if (acting)
                     {
-                        // AI picks a random other player and confirms immediately;
-                        // NightResolver validates eligibility.
-                        var candidates = alivePlayers.Where(x => x != null && x != p).ToList();
-                        if (candidates.Count > 0)
-                            OnSubmit(p, candidates[rng.NextInt(0, candidates.Count)].PlayerNameText, true);
+                        // The choice depends on which phase this is — a night victim, the black cat
+                        // and a constable's shield are three different decisions, and the old code
+                        // made all three by picking a random name. That let an AI witch vote to kill
+                        // her own partner. See AIKnowledge, which also defines what the AI is allowed
+                        // to know while choosing. NightResolver still validates eligibility.
+                        var choice = promptType switch
+                        {
+                            "constable_save" => AIKnowledge.PickProtectTarget(p),
+                            "black_cat" => AIKnowledge.PickBlackCatTarget(p),
+                            _ => AIKnowledge.PickNightVictim(p),
+                        };
+
+                        if (choice != null) OnSubmit(p, choice.PlayerNameText, true);
                     }
                     // non-acting AI has no phone — nothing to mask
                 }
