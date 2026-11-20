@@ -3,6 +3,7 @@ using System.Linq;
 using Salem.Cards;
 using Salem.Data;
 using Salem.GameFlow;
+using UnityEngine;
 
 namespace Salem.Players
 {
@@ -63,22 +64,31 @@ namespace Salem.Players
         /// <summary>
         /// Someone to do something unpleasant to: an accusation, Stocks, Arson, a Curse.
         ///
-        /// Only one rule, deliberately — never a known ally. Beyond that it stays random, because a
-        /// townsperson genuinely cannot tell a witch from a neighbour, and an AI that always picked
-        /// the "best" target would be reading something it should not have.
+        /// Never a known ally, then weighted by <see cref="AISuspicion"/> — who has been coming
+        /// after this seat and the people it knows are on its side. Still weighted, not optimal:
+        /// a townsperson genuinely cannot tell a witch from a neighbour, so the read is a lean, and
+        /// every legal target keeps a real chance of being picked.
+        ///
+        /// The small accusation-pressure term is tempo rather than suspicion: pushing a player who
+        /// is already close to the threshold actually turns a card over, where spreading accusations
+        /// evenly turns none.
         /// </summary>
         public static Player PickHarmfulTarget(Player self)
         {
             var pool = LegalTargets(self).Where(p => !IsKnownAlly(self, p)).ToList();
-            return Random(pool);
+            return AISuspicion.WeightedPick(pool,
+                p => AISuspicion.Hostility(self, p) + Pressure(p) * 0.4f);
         }
 
         /// <summary>
-        /// Someone to help. A witch helps her coven; anyone else helps whoever is closest to being
-        /// revealed, which is the one coherent reading available from public information alone.
+        /// Someone to help. A witch helps her coven; anyone else helps whoever it least suspects,
+        /// preferring those already under public pressure — the one coherent reading available from
+        /// public information alone.
         ///
-        /// A townsperson handing Piety to a witch is still possible here, and that is correct — the
-        /// information to avoid it does not exist in that seat. It is a mistake a person would make.
+        /// A townsperson handing Piety to a witch is still perfectly possible here, and that is
+        /// correct: the information to avoid it does not exist in that seat. It is a mistake a person
+        /// would make, which is the bar — not a mistake no person would make, which was the old
+        /// uniform-random behaviour.
         /// </summary>
         public static Player PickBeneficialTarget(Player self)
         {
@@ -88,40 +98,53 @@ namespace Salem.Players
             var allies = pool.Where(p => IsKnownAlly(self, p)).ToList();
             if (allies.Count > 0) return MostAccused(allies);
 
-            return MostAccused(pool);
+            // Trust is the inverse of suspicion, so the sign flips. Pressure still counts: a gift
+            // is worth most to whoever is closest to losing a tryal.
+            return AISuspicion.WeightedPick(pool,
+                p => -AISuspicion.Hostility(self, p) + Pressure(p) * 0.5f);
         }
 
         /// <summary>
-        /// The witches' night victim.
+        /// The witches’ night victim — the townsperson doing them the most damage.
         ///
         /// 🔴 Never a fellow witch. This is the single worst thing the old random pick did: in a
         /// five-player game with two witches, an AI witch voted to murder her own partner roughly a
         /// quarter of the time, and the table watched the witches lose to themselves.
+        ///
+        /// Suspicion weighs heavily here — a night kill is the witches’ one decisive move per round,
+        /// so it goes to whoever has been hunting the coven hardest rather than a name out of a hat.
         /// </summary>
         public static Player PickNightVictim(Player self)
         {
             var pool = LegalTargets(self).Where(p => !IsKnownAlly(self, p)).ToList();
-            return Random(pool);
+            return AISuspicion.WeightedPick(pool, p => AISuspicion.Hostility(self, p) * 1.5f);
         }
 
         /// <summary>
         /// Where the black cat goes at dawn. Never onto a fellow witch — its holder reveals a tryal
-        /// when conspiracy is drawn, which is a cost, not a gift.
+        /// when conspiracy is drawn, which is a cost, not a gift — and otherwise onto whoever this
+        /// seat most suspects.
         /// </summary>
         public static Player PickBlackCatTarget(Player self)
         {
             var pool = LegalTargets(self).Where(p => !IsKnownAlly(self, p)).ToList();
-            return Random(pool);
+            return AISuspicion.WeightedPick(pool, p => AISuspicion.Hostility(self, p));
         }
 
         /// <summary>
         /// Who the constable protects. Public information only — the constable has no idea who the
-        /// witches are, so it shields whoever is under the most public pressure.
+        /// witches are, so it shields whoever is under the most public pressure, biased away from the
+        /// players it suspects, because a gavel spent on a witch is a gavel wasted.
         ///
         /// ⚠ Never itself: the rulebook forbids it (p7) and the host voids a self-pick anyway, which
         /// would silently waste the gavel.
         /// </summary>
-        public static Player PickProtectTarget(Player self) => MostAccused(LegalTargets(self));
+        public static Player PickProtectTarget(Player self)
+        {
+            var pool = LegalTargets(self);
+            return AISuspicion.WeightedPick(pool,
+                p => Pressure(p) - AISuspicion.Hostility(self, p) * 0.7f);
+        }
 
         // ─── helpers ──────────────────────────────────────────────
 
@@ -132,6 +155,18 @@ namespace Salem.Players
 
             int best = pool.Max(p => p.currentAccusationCount);
             return Random(pool.Where(p => p.currentAccusationCount == best).ToList());
+        }
+
+        /// <summary>
+        /// How close a player is to turning a tryal over, 0..1 — public board only. Normalized
+        /// against that player’s OWN limit, since Piety, Danforth and George Burroughs all move it;
+        /// a raw count would read George’s 7-of-8 as more urgent than a normal seat’s 7-of-7.
+        /// </summary>
+        private static float Pressure(Player p)
+        {
+            if (p == null) return 0f;
+            int limit = Mathf.Max(1, p.currentAccusationLimit);
+            return Mathf.Clamp01(p.currentAccusationCount / (float)limit);
         }
 
         private static Player Random(List<Player> pool) =>

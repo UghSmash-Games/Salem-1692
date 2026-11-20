@@ -32,10 +32,9 @@ namespace Salem.Players
                 yield break;
             }
 
-            if (thinkDelay > 0f)
-            {
-                yield return new WaitForSeconds(thinkDelay);
-            }
+            // Reading the board. See AIPacing for why this is realtime and why the jitter is
+            // multiplicative (the autopilot harness passes 0 and must stay instant).
+            yield return AIPacing.Think(thinkDelay);
 
             var cards = driver.HandManager?.GetCards();
             if (cards == null || cards.Count == 0)
@@ -71,7 +70,12 @@ namespace Salem.Players
                 // receives them, so a random pick regularly handed them to the opponent the AI was
                 // trying to beat — and a witch could just as easily accuse her own partner. See
                 // AIKnowledge for what the AI is allowed to know while deciding this.
-                primary = AIKnowledge.IsBeneficialToTarget(chosen.Op)
+                // Scapegoat joins the gift cards here: its primary target LOSES every accusation
+                // in front of them (they move to the recipient), so aiming it at an enemy was
+                // doing that enemy a favour.
+                bool helpsPrimary = AIKnowledge.IsBeneficialToTarget(chosen.Op)
+                                    || chosen.Op == ActionOp.Scapegoat;
+                primary = helpsPrimary
                     ? AIKnowledge.PickBeneficialTarget(driver)
                     : AIKnowledge.PickHarmfulTarget(driver);
 
@@ -82,18 +86,30 @@ namespace Salem.Players
                 }
             }
 
-            // Two-target cards (Robbery/Scapegoat). The pick excludes self and known allies but NOT
-            // the primary, so retry until the recipient differs; if it still collides, bail WITHOUT
-            // playing (the card is kept, never eaten). The recipient is passed to ExecuteCardEffect
-            // by parameter — it is NOT written onto action.target, which is a shared project asset.
+            // Two-target cards, and the two are NOT symmetric — which half helps and which half
+            // hurts depends on the card:
+            //   Robbery   t.TransferEntireHandTo(u)  — t is robbed, u receives the hand.
+            //   Scapegoat t.TransferAllStatusesTo(u) — t is unburdened, u inherits the accusations.
+            // So Robbery’s PRIMARY is the victim and its recipient is a beneficiary, while Scapegoat
+            // is the other way round. Picking "harmful" for both roles — which is what this did —
+            // meant the AI handed a stolen hand to an opponent, and shifted accusations off one
+            // opponent onto another. Same class of self-sabotage as the beneficial-card bug.
             Player secondary = null;
             if (chosen is ActionCardSO action && action.RequiresSecondTarget)
             {
-                secondary = AIKnowledge.PickHarmfulTarget(driver);
+                bool recipientGains = chosen.Op == ActionOp.Robbery;   // Scapegoat: recipient suffers
+                secondary = recipientGains
+                    ? AIKnowledge.PickBeneficialTarget(driver)
+                    : AIKnowledge.PickHarmfulTarget(driver);
+
+                // The pick does not exclude the primary, so retry until the two differ; if they
+                // still collide, bail WITHOUT playing — the card is kept, never eaten.
                 int guard = 0;
                 while (secondary == primary && guard++ < 4)
                 {
-                    secondary = AIKnowledge.PickHarmfulTarget(driver);
+                    secondary = recipientGains
+                        ? AIKnowledge.PickBeneficialTarget(driver)
+                        : AIKnowledge.PickHarmfulTarget(driver);
                 }
 
                 if (secondary == null || secondary == primary)
@@ -128,6 +144,10 @@ namespace Salem.Players
             // ⚠ Do NOT add a RemoveCard here. The deck holds many references to the SAME
             // ScriptableObject, so a second List.Remove strips ANOTHER identical card from the hand
             // and discards it — playing one Accusation while holding two cost the AI both.
+            // Decided — now a shorter beat before it lands, so the turn reads as two moments
+            // rather than one dead pause followed by an instant play.
+            yield return AIPacing.Beat(thinkDelay);
+
             CardEffectManager.Instance.ExecuteCardEffect(chosen, primary, secondary);
 
             driver.GrigsAlibiAsWitness = false; // reset the transient mode after the play

@@ -94,7 +94,12 @@ namespace Salem.Systems
                 CharacterAbilityDispatcher.Instance.ResetForNewGame();
             }
 
-            // 5. Drop the relay connection. The scene's own NetworkManager becomes the new singleton
+            // 5. Forget the previous game's suspicion ledger, which keys on Player references and
+            //    would otherwise both hold destroyed seats alive and start the new game with
+            //    grudges nobody had earned.
+            Salem.Players.AISuspicion.ResetForNewGame();
+
+            // 6. Drop the relay connection. The scene's own NetworkManager becomes the new singleton
             //    on reload and opens a fresh room; every phone meanwhile gets `room_closed` and
             //    returns to the join screen with its stored seat cleared.
             if (NetworkManager.Instance != null)

@@ -1061,7 +1061,15 @@ namespace Salem.GameFlow
                             _ => AIKnowledge.PickNightVictim(p),
                         };
 
-                        if (choice != null) OnSubmit(p, choice.PlayerNameText, true);
+                        if (choice != null)
+                        {
+                            // Playtest visibility: without this there is no way to tell whether the
+                            // suspicion model is driving the choice or the weighted pick just rolled
+                            // the same name a coin flip would have.
+                            Debug.Log($"[AI] {promptType}: {p.PlayerNameText} → {choice.PlayerNameText}. " +
+                                      AISuspicion.Describe(p));
+                            OnSubmit(p, choice.PlayerNameText, true);
+                        }
                     }
                     // non-acting AI has no phone — nothing to mask
                 }

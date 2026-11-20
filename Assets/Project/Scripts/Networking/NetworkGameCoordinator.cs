@@ -368,6 +368,11 @@ namespace Salem.Networking
             // mid-phase change could resolve a round early.
             TimerSettings.Lock();
 
+            // Belt and braces: AppLifecycle.RestartGame already clears this, but statics survive an
+            // Editor domain reload, so a game begun without going through a restart would inherit
+            // the last session's grudges.
+            Salem.Players.AISuspicion.ResetForNewGame();
+
             OnGameStarted?.Invoke();
 
             gamePhaseManager.BeginGame();
