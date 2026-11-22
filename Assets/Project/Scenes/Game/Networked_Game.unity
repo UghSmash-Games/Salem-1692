@@ -6966,7 +6966,7 @@ MonoBehaviour:
   source: {fileID: 1239087356}
   dawnClip: {fileID: 0}
   nightClip: {fileID: 0}
-  volume: 0.5
+  volume: 1
   fadeSeconds: 2
 --- !u!82 &1239087356
 AudioSource:
@@ -8405,6 +8405,9 @@ MonoBehaviour:
   displayUrlFormat: '{0}/display'
   joinUrlText: {fileID: 271115749}
   displayUrlText: {fileID: 1324211757}
+  joinCaption: "EVERY PLAYER OPENS THIS \u2014 PHONE OR TABLET"
+  displayCaption: "OPTIONAL SECOND SCREEN \u2014 SMART TV OR LAPTOP"
+  captionSizePercent: 62
   seatContainer: {fileID: 606896168}
   seatRowPrefab: {fileID: 6536113024205966375, guid: 2c6701885098c184a970f66d0ce67fdd, type: 3}
   waitingFormat: "{0} JOINED \xB7 {1} NEEDED TO BEGIN"
@@ -8473,12 +8476,12 @@ MonoBehaviour:
   - kind: card_played
     valueFilter: 
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: bf61b860ec867c742be04d8e5bb97999, type: 3}
     volume: 1
   - kind: cards_drawn
     valueFilter: 
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: a9b52dbb88895b7419e633cf3ea85117, type: 3}
     volume: 1
   - kind: tryal_revealed
     valueFilter: 
@@ -8488,22 +8491,22 @@ MonoBehaviour:
   - kind: player_eliminated
     valueFilter: 
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: fa3e8de2b5bc46445b2c961d4d31d24f, type: 3}
     volume: 1
   - kind: phase_changed
     valueFilter: Night
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: 24b80b24a7d64c5469da922d8cd2adf2, type: 3}
     volume: 1
   - kind: game_over
     valueFilter: Witches
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: 967760bbadf42664b86ff3c934e51845, type: 3}
     volume: 1
   - kind: game_over
     valueFilter: Villagers
     cardNameFilter: 
-    clip: {fileID: 0}
+    clip: {fileID: 8300000, guid: 29c4e52c5e5581e458267f561fd52fa4, type: 3}
     volume: 1
   ambienceSource: {fileID: 412189049}
   dayAmbience: {fileID: 0}
