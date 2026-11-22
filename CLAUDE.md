@@ -512,3 +512,4 @@ and the confirmation animation still plays.
 - Rulebook: @docs/Salem_Rulebook.pdf
 - Socket protocol spec: @docs/protocol.md
 - Phase 5 character spec (source of truth): @docs/character-spec.md
+- Parked ideas (not bugs, not deferred phase work): @docs/backlog.md

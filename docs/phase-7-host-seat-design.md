@@ -306,7 +306,50 @@ never an export step to build, because the Unity sprites reference plain image f
 | IN EFFECT panel (+ rules text) | `InEffectPanel` + `cardDescriptions.ts` | ✅ skips eliminated, as the host does |
 | Header: `TABLE code · N SOULS`, phase pill | `MirrorHeader` | ✅ SOULS = seats dealt, living AND dead |
 | Event log · night/dawn · reveal · toast | existing components | ✅ |
+| **Host-screen AUDIO** (10 event cues, day bed, dawn/night beds) | none | ❌ **OPEN** — the only known parity gap. See below. |
 | Lobby (room code + URLs) | none | ✅ closed (2026-08-24) — nothing to show: a mirror can only connect once someone gave it the code, so it would display a fact its operator already used to get there. Revisit only if the mirror ever becomes discoverable without the code. |
+
+### Audio parity — OPEN (logged 2026-11-21)
+
+**The host screen has sound and the mirror does not.** `HostAudioManager` fires ten one-shot cues
+(accusation / evidence / witness / generic card, Draw 2, tryal revealed, elimination, night begins,
+and the two win stings) plus a looping day bed, and `HostPhaseAmbience` runs the dawn/night beds.
+None of it exists in the web client, so a second room watching a mirror plays the game in silence.
+
+**This is a parity item, not polish, by the same argument as every row above.** Audio is a broadcast
+to everyone in the room: the night sting and the tryal-flip beat tell the host room *when something
+happened* and *roughly what*, which is public information the mirror room simply does not receive.
+It is a weaker asymmetry than a hidden accusation counter — nobody loses a deduction over a missing
+whoosh — but it is the same kind, and the rule at the bottom of this section says new public host
+elements go in both or get written down. It was foreseen and never recorded: `GameEventKind.CardsDrawn`
+exists partly "so the AUDIO layer has a public event to hang the card-draw cue on, and so a mirror can
+eventually play the identical cue."
+
+✅ **No protocol work.** Exactly as with the visual parity build, the mirror ALREADY receives every
+input the cues are derived from — `game_event` (kind / cardName / value) and `game_state_update.phase`.
+The gap is entirely client-side playback.
+
+What the build would need:
+- The cue table ported as data, matched top-to-bottom with the same first-match-wins semantics, so
+  the two renderers cannot drift on *which* sound a given event maps to.
+- Two crossfading loop sources mirroring the `HostAudioManager` duck / `HostPhaseAmbience` hand-off.
+- ⚠ **A browser gesture gate.** Autoplay is blocked until the viewer interacts, so a mirror tab
+  opened and left alone would stay silent regardless — the display flow needs an explicit
+  "enable sound" affordance. Unity has no equivalent, so this is the one place the two players
+  genuinely cannot be made identical without the mirror operator doing something.
+- ⚠ **Mirror audio must stay driven by `game_event` only** — never by a phone's own private state.
+  The closed-vocabulary argument that protects the event log protects the cues for free: there is no
+  event kind for a secret action, so no cue can be conditioned on one. Do not reach for
+  `private_state` to make a phone "feel" more responsive.
+
+⚠ **Phones are a separate question and NOT part of this.** A per-player device making noise is not
+mirror parity — it is a new channel, and a sound on one phone and not another during a secret phase
+would be exactly the differential signal the masking model exists to prevent. If phone audio is ever
+built, every phone plays identically or none does.
+
+**Blocked on the same thing as the host:** 13 of 13 clip slots in `Networked_Game.unity` are empty, so
+there is nothing to port yet. Building mirror playback before the clips exist would mean two silent
+implementations instead of one.
 
 **Side seats are SHORTER than top/bottom seats, deliberately.** The board is a fixed 100vh with no
 scrolling, and at 9–12 players the sides hold 2 seats — four legs then want four seat-heights of
