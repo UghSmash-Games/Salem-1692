@@ -200,12 +200,33 @@ namespace Salem.UI.HostDisplay
             roomCodeText.text = string.IsNullOrEmpty(code) ? roomCodePlaceholder : code;
         }
 
+        /// <summary>
+        /// The web-client base URL this host will actually print, with the launch-time override
+        /// applied — empty when none is configured.
+        ///
+        /// A launch-time override wins over the Inspector value, so a BUILT host can be pointed at the
+        /// deployed web client without a rebuild (-clienturl / SALEM_CLIENT_URL). The scene field
+        /// stays the fallback, which is what the Editor normally uses for LAN testing.
+        ///
+        /// Public because <see cref="HostTitleScreen"/>'s instructions page shows the same two
+        /// addresses this panel does, and resolving it twice is how the lobby and the in-game header
+        /// came to be able to disagree (see DeploymentConfig's docblock). One resolution, one answer.
+        /// </summary>
+        public string ResolvedBaseUrl =>
+            Salem.Networking.DeploymentConfig.ClientBaseUrlOverride() ?? baseUrl ?? "";
+
+        /// <summary>Formats the player-join address, or "" when no base URL is configured.</summary>
+        public string JoinUrl => Format(joinUrlFormat);
+
+        /// <summary>Formats the second-screen address, or "" when no base URL is configured.</summary>
+        public string DisplayUrl => Format(displayUrlFormat);
+
+        private string Format(string fmt) =>
+            string.IsNullOrWhiteSpace(ResolvedBaseUrl) ? "" : string.Format(fmt, ResolvedBaseUrl);
+
         private void RenderUrls()
         {
-            // A launch-time override wins over the Inspector value, so a BUILT host can be pointed at
-            // the deployed web client without a rebuild (-clienturl / SALEM_CLIENT_URL). The scene
-            // field stays the fallback, which is what the Editor normally uses for LAN testing.
-            string baseUrl = Salem.Networking.DeploymentConfig.ClientBaseUrlOverride() ?? this.baseUrl;
+            string baseUrl = ResolvedBaseUrl;
 
             // An unset baseUrl leaves both blank rather than printing "/join" on a TV, which would
             // read as a broken address people then try to type.

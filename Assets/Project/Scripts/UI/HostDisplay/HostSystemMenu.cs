@@ -123,6 +123,12 @@ namespace Salem.UI.HostDisplay
             // must not also open the quit dialog behind the video — one keypress, one meaning.
             if (HostSplashScreen.IsPlaying) return;
 
+            // Same contract with the title screen, which already shows a QUIT button and handles
+            // Escape itself (backing out of its instructions page). Stacking a second "QUIT SALEM?"
+            // dialog on top of a visible QUIT button is the kind of thing that makes a front door
+            // feel broken.
+            if (HostTitleScreen.IsShowing) return;
+
             // Escape never dismisses the game-over panel — there is nothing to go back TO, and
             // closing it would leave a finished game on screen with no way to act on it.
             if (gameOverShown) return;
