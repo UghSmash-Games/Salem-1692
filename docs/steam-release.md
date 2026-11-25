@@ -15,6 +15,7 @@ next to the tag it came from.
 | Version | Date | Playtest (5526150) | Main (5409770) | Tag |
 |---|---|---|---|---|
 | 1.0.0 | 2026-11-07 | ✅ uploaded & released | ✅ uploaded & released | `v1.0.0` |
+| 1.1.0 | 2026-11-25 | ✅ uploaded & released | ✅ uploaded & released | `v1.1.0` |
 
 ---
 
